@@ -169,20 +169,6 @@
   <p>He stayed. Not because he was trapped, but because he believed himself <em class="k">the only man who knew the rift was there.</em> If he went away too, there would be no one left to watch it.</p>
   <p>So it was for thirty years. Thirty-one great snows fell and melted away. By slow degrees he passed from <em class="k">the man who measured the forest</em> to <em class="k">a man who belonged to it.</em></p>
 
-  <h3>The Rooms</h3>
-  <h4>The Entry</h4>
-  <p>Push open the great door, and this is the first room. On the left, a wall hung with every tool for going out; on the right, a bench for changing boots; a lamp overhead, and behind the curtain at the back, the water closet. This was the border where man and forest held their parley: take off the boots, and the wildness stays outside; pull them on, and be a hunter once again.</p>
-  <h4>The Water Closet</h4>
-  <p>Behind the curtain: the only room in the cabin with a door of its own.</p>
-  <h4>The Kitchen</h4>
-  <p>The whole north wall is given to the cast-iron stove and the woodpile; across from them stand the dry sink and racks hung with pots and plates. It is the weightiest room in the house — every breath of living warmth sets out from here.</p>
-  <h4>The Dining Corner</h4>
-  <p>A corner against the east wall: a narrow board, nailed to the wall, that folds up and down, and two wooden stools.</p>
-  <h4>The Parlour</h4>
-  <p>The middle of the cabin. The long settee faces the stove, the low table stands upon the rug, the bookcase and cupboard keep to the walls, and the writing desk has been moved to the window. Here is where the Surveyor truly lived.</p>
-  <h4>The Loft</h4>
-  <p>Up the wooden ladder, under the roof: the place for sleeping, with a bed, a night table, a low wardrobe and a rocking chair. The warm air gathers up here; it is the warmest place in the house.</p>
-
   <h3>Epilogue · Where He Went</h3>
   <p>Gather up all the threads, and look —</p>
   <p><em class="k">His way out of the door never varied:</em> gloves and cap from the shelf; the greatcoat from the coat rail; boots on at the bench; the lantern; the axe from the wall; and out. For thirty-one years, every time, just so.</p>
@@ -230,20 +216,6 @@
   <p>但他在森林深处发现了一处地图上不存在的地方——老树根下土地裂开，散发出一种让指南针乱转、松针焦黑的气息。他在地图上标了一个“✕”，旁注<em class="k">“勿入”</em>。回到小屋后，他写了一份报告附上坐标寄出去，石沉大海。也许是邮差没来取，也许是大地封冻太早。他攒了一叠信，最终都填进了炉门。</p>
   <p>他留了下来。不是被困，是觉得自己是<em class="k">唯一知道那道裂口存在的人</em>。如果他也走了，就再没有人盯着它。</p>
   <p>从此三十年。三十一场大雪落下又化掉。他从<em class="k">“丈量森林的人”</em>慢慢变成了<em class="k">“属于森林的人”</em>。</p>
-
-  <h3>各个房间</h3>
-  <h4>玄关</h4>
-  <p>推开大门，进门的第一个空间。左边一面墙挂满了出门用的家伙，右边一张换鞋凳，头顶一盏灯，深处的布帘后面是卫生间。这是人与森林交涉的边境——脱下靴子，把野性留在门外；穿上靴子，准备再次成为猎人。</p>
-  <h4>卫生间</h4>
-  <p>布帘后面，木屋里唯一有自己门的房间。</p>
-  <h4>厨房</h4>
-  <p>北边一整面墙是铸铁炉和柴堆，对面是干洗槽柜和挂满锅碗的架子。这是全屋最有分量的房间，所有活着的气息都从这里出发。</p>
-  <h4>餐桌</h4>
-  <p>靠东墙的一个角落。墙壁上钉着一块可以翻上翻下的窄桌板，两张木凳。</p>
-  <h4>客厅</h4>
-  <p>小屋正中间的空间。长沙发对着炉子方向，矮茶几在地毯上，书架和柜子靠墙，书桌搬到了窗边。这是测绘员真正生活的中心。</p>
-  <h4>阁楼</h4>
-  <p>木梯通上去，在屋顶下面。睡觉的地方，放床、床头柜、矮柜和一把摇椅。暖空气聚在上面，这是全屋最暖的地方。</p>
 
   <h3>终章：他去了哪里</h3>
   <p>把所有线索收拢来看——</p>
@@ -1330,6 +1302,7 @@ loader.load('cabin.glb', async (gltf) => {
     }
   });
   await yieldFrame();
+  await swapSoftProps(gltf.scene);
   splitParts(gltf.scene);
   const model = await mergeByLayerAndMaterial(gltf.scene); // Rhino 导出时已换算成米
   T('merge');
@@ -1863,7 +1836,7 @@ function infoOf(name) {
   if (name.startsWith('take_')) return TAKE_INFO[name.replace(/_\d+$/, '')] || null;
   if (name.startsWith('toilet_door_')) return ['Folding Door', 'Water Closet', 'Folds back against the wall to save room.'];
   if (/^(living|loft)_cabinet_door_/.test(name)) return infoOf(name.replace(/_door_\d$/, ''));
-  const sub = { dry_sink_door_: 'dry_sink', desk_drawer: 'loft_desk', bedside_drawer: 'loft_bedside_table', dining_leaf: 'dining_wall_table', loft_gate: 'loft_rail', entry_toilet_lid: 'entry_toilet', stove_reservoir_lid: 'stove_reservoir', slop_pail_lid: 'sink_slop_pail', entry_noren_rod: 'entry_noren', stove_firebox: 'stove_fire', stove_iron_body: 'stove_iron' };
+  const sub = { dry_sink_door_: 'dry_sink', desk_drawer: 'loft_desk', bedside_drawer: 'loft_bedside_table', dining_leaf: 'dining_wall_table', loft_gate: 'loft_rail', entry_toilet_lid: 'entry_toilet', stove_reservoir_lid: 'stove_reservoir', slop_pail_lid: 'sink_slop_pail', entry_toilet_rear_lid: 'entry_toilet', entry_washstand_tank_lid: 'entry_washstand', entry_noren_rod: 'entry_noren', stove_firebox: 'stove_fire', stove_iron_body: 'stove_iron' };
   for (const [pre, host] of Object.entries(sub)) if (name.startsWith(pre)) return infoOf(host);
   if (name === 'stove_door') return ['Stove Door', 'Kitchen', 'Cast iron with a window of glass, to watch the fire.'];
   if (name.startsWith('hall_pendant_')) return ['Pendant Lamp', 'Parlour', 'Hung down from the rafters.'];
@@ -2249,6 +2222,24 @@ function updateLook(p, dt) {
 // 合并前先把卫生间两扇门板、炉门从所在图层里拆出来，各成一个图层，才能单独转动；灯泡/灯罩的材质每盏灯克隆一份，才能单独发光。
 const GLOW = /bulb|lamp_glass|lantern_glass|flame/;
 const isLamp = (n) => n === 'entry_porch_lamp' || n === 'wall_lamp' || n === 'entry_lantern' || n.startsWith('ceiling_light_') || n.startsWith('hall_pendant_');
+// 软物件在 Blender 里单独做（../blender/scripts/towel_glb.py 等），加载时换掉 Rhino 导出的原物件；挂在原图层下，点选/卡片照旧。材质按名字借 cabin 里的
+const SOFT_PROPS = { loft_hanging_towel: 'props/loft_towel.glb' };
+async function swapSoftProps(root) {
+  const mats = new Map();
+  root.traverse((o) => { if (o.isMesh) for (const m of [].concat(o.material)) mats.set(m.name, m); });
+  await Promise.all(Object.entries(SOFT_PROPS).map(async ([name, url]) => {
+    const layer = root.getObjectByName(name);
+    const g = layer && await loader.loadAsync(url).catch((e) => console.warn(url, e));
+    if (!g) return; // 加载失败就留着原物件
+    layer.clear();
+    g.scene.updateMatrixWorld(true);
+    g.scene.traverse((o) => {
+      if (!o.isMesh) return;
+      const m = new THREE.Mesh(o.geometry.clone().applyMatrix4(o.matrixWorld), mats.get(o.material.name) || o.material);
+      m.name = o.name; layer.add(m);
+    });
+  }));
+}
 function splitParts(root) {
   root.updateMatrixWorld(true);
   const pull = (from, to, test) => {
@@ -2287,6 +2278,8 @@ function splitParts(root) {
   pull('entry_toilet', 'entry_toilet_lid', (o) => /^toilet_lid/.test(o.name));
   pull('stove_reservoir', 'stove_reservoir_lid', (o) => /^reservoir_lid($|_hinge_leaf|_knob)/.test(o.name));
   pull('sink_slop_pail', 'slop_pail_lid', (o) => /^pail_lid/.test(o.name));
+  pull('entry_toilet', 'entry_toilet_rear_lid', (o) => /^toilet_rear_lid/.test(o.name));
+  pull('entry_washstand', 'entry_washstand_tank_lid', (o) => /^wash_tank_(lid|knob)/.test(o.name));
   splitWaterFx(pull); // 龙头手柄、阀体、壶盖（见 setupWaterFx）
   // 挂在墙上的东西：钉子、支架、挂杆、挂钩这些固定在墙上的五金件并进 wall_fixings（不在 INFO 里 = 不可选，pick 时射线直接穿过），
   // 点地图/锅/枪只描物件本身。衣帽架的钉子也算；衣帽架的木钉、挂钩是衣帽架自己的，留着
@@ -2338,12 +2331,15 @@ function splitParts(root) {
   }
 }
 
+const smooth01 = (x) => { x = Math.min(1, Math.max(0, x)); return x * x * (3 - 2 * x); }; // 分段动画用（壶的提梁先倒、壶盖再掀）
 // 门：pivot 是合页轴（x, z），angle(k) 给出关上程度 k（0 开 → 1 关）时的转角；折叠门的 B 板挂在 A 板的折页上
 const DOORS = {
   door_wood: { pivot: [-0.49, 1.9], angle: (k) => k * Math.PI / 2 },
   toilet_door_A: { pivot: [-0.636, 0.825], angle: (k) => k * Math.PI / 2 },
-  toilet_door_B: { pivot: [-0.978, 0.825], parent: 'toilet_door_A', angle: (k) => k * Math.PI },
-  stove_door: { pivot: [1.588, -1.207], angle: (k) => -k * Math.PI / 4 },
+  // B 板反向转 2 倍：两板像手风琴一样对折，B 的外沿沿门洞滑，不往卫生间里扫大弧（同向转会撞到马桶上坐着的人）
+  toilet_door_B: { pivot: [-0.978, 0.825], parent: 'toilet_door_A', angle: (k) => -k * Math.PI },
+  // 炉门：Rhino 里半开 45°；第一次关上之后，再开就开到 90°（wide），之后在关 / 90° 之间切换
+  stove_door: { pivot: [1.588, -1.207], angle(k) { if (k >= 1) this.wide = true; return this.wide ? Math.PI / 4 - k * Math.PI / 2 : -k * Math.PI / 4; } },
   // 柜门（box = 拆图层用的 x0,x1,z0,z1 范围；k=1 是开）。客厅柜第 3 扇 Rhino 里是开着的，k=1 是关，加载时关上
   living_cabinet_door_1: { from: 'living_cabinet', box: [-1.5, -1.36, -0.48, -0.07], pivot: [-1.415, -0.478], angle: (k) => k * Math.PI / 2 },
   living_cabinet_door_2: { from: 'living_cabinet', box: [-1.5, -1.36, -0.07, 0.31], pivot: [-1.415, 0.302], angle: (k) => -k * Math.PI / 2 },
@@ -2366,6 +2362,14 @@ const DOORS = {
   entry_toilet_lid: { pivot: [-1.564, 0.612, 1.259], axis: 'z', angle: (k) => -k * Math.PI / 2, slide: (k) => [0, k * 0.022, 0] }, // 马桶盖 Rhino 里掀着，k=1 盖上（抬 2cm 落在座圈上）
   stove_reservoir_lid: { pivot: [1.088, 0.873, -1.42], axis: 'z', angle: (k) => -k * Math.PI * 0.53 }, // 炉边水箱盖，合页在靠炉一侧
   slop_pail_lid: { pivot: [-0.59, 0.56, -1.565], slide: (k) => [0, k * 0.12, 0], axis: 'z', angle: (k) => k * 0.35 }, // 污水桶盖：提起来、歪一点
+  // 马桶后箱盖：通风管（x≈−1.62, z 1.259）从盖子中间穿上去，翻不开 → 顺着管子提起 12cm、歪一点（同污水桶盖）
+  entry_toilet_rear_lid: { pivot: [-1.62, 0.82, 1.259], slide: (k) => [0, k * 0.12, 0], axis: 'x', angle: (k) => k * 0.1 },
+  // 洗脸架水箱盖：合页在贴墙的后沿（z 1.718），前沿翻起 80°
+  entry_washstand_tank_lid: { pivot: [-0.85, 2.013, 1.718], axis: 'x', angle: (k) => k * 1.4 },
+  // 水壶：提梁立着横跨壶盖，先把提梁放倒到壶嘴一侧（−n），再从另一侧（+n）的合页翻开壶盖。
+  // 转轴 u 沿两个提梁耳 (1.27,−1.512)→(1.35,−1.288) 的方向（斜的，axis 给向量）；n = (0.942,0,−0.336) 水平垂直于 u
+  stove_kettle_lid: { pivot: [1.3665, 1.004, -1.42], axis: [0.336, 0, 0.942], angle: (k) => -1.7 * smooth01((k - 0.35) / 0.65) },
+  stove_kettle_bail: { pivot: [1.31, 0.973, -1.40], axis: [0.336, 0, 0.942], follow: 'stove_kettle_lid', angle: (k) => 1.45 * smooth01(k / 0.4) },
 };
 // 灯：光源放在灯泡/火苗位置（稍微往屋里挪），亮度按灯的大小给
 const LAMPS = {
@@ -2396,10 +2400,10 @@ function setupToggles() {
   }
   for (const name of Object.keys(DOORS)) {
     if (!pivots[name]) continue;
-    const d = DOORS[name], pv = pivots[name], key = d.parent || name; // 折叠门两块板共用一个开关
+    const d = DOORS[name], pv = pivots[name], key = d.parent || d.follow || name; // 折叠门两块板共用一个开关；follow = 跟着别人的开关动（壶的提梁）
     if (!toggles.has(key)) toggles.set(key, { on: false, k: 0, parts: [] });
     toggles.get(key).parts.push((k) => {
-      if (d.angle) pv.rotation[d.axis || 'y'] = d.angle(k);
+      if (d.angle) { if (Array.isArray(d.axis)) pv.quaternion.setFromAxisAngle(new THREE.Vector3(...d.axis), d.angle(k)); else pv.rotation[d.axis || 'y'] = d.angle(k); } // axis 给向量 = 斜轴
       if (d.slide) pv.position.copy(pv.userData.base).add(new THREE.Vector3(...d.slide(k))); // 父级都没旋转，世界方向 = 本地方向
       if (d.scale) pv.scale.set(...d.scale(k)); // 绕合页点缩放（门帘卷起）
       if (d.also) d.also(k);
@@ -2459,13 +2463,14 @@ Object.assign(DOORS, {
   stove_reservoir_tap: { pivot: [0.95, 0.69, -1.189], angle: (k) => k * Math.PI / 2 }, // T 形手柄拧 90°（从上看逆时针 = 开）
   entry_washstand_tap: { pivot: [-0.85, 1.528, 1.586], angle: (k) => k * Math.PI * 0.75 }, // 十字手轮拧 135°
 });
-const WATER_SUB = { stove_reservoir_tap: 'stove_reservoir', stove_reservoir_faucet: 'stove_reservoir', entry_washstand_tap: 'entry_washstand', entry_washstand_faucet: 'entry_washstand', stove_kettle_lid: 'stove_kettle' };
+const WATER_SUB = { stove_reservoir_tap: 'stove_reservoir', stove_reservoir_faucet: 'stove_reservoir', entry_washstand_tap: 'entry_washstand', entry_washstand_faucet: 'entry_washstand', stove_kettle_lid: 'stove_kettle', stove_kettle_bail: 'stove_kettle' };
 function splitWaterFx(pull) { // splitParts 里调：会转的手柄、龙头其余部分、会跳的壶盖各拆成一个图层（新名字都不是 glb 部件名）
   pull('stove_reservoir', 'stove_reservoir_tap', (o) => /^reservoir_faucet_(handle|stem)/.test(o.name));
   pull('stove_reservoir', 'stove_reservoir_faucet', (o) => /^reservoir_faucet_/.test(o.name));
   pull('entry_washstand', 'entry_washstand_tap', (o) => /^wash_tap_(handle|stem)/.test(o.name));
   pull('entry_washstand', 'entry_washstand_faucet', (o) => /^wash_tap_/.test(o.name));
   pull('stove_kettle', 'stove_kettle_lid', (o) => /^kettle_(lid|knob)/.test(o.name));
+  pull('stove_kettle', 'stove_kettle_bail', (o) => /^kettle_bail/.test(o.name)); // 提梁：掀壶盖前先放倒（DOORS）
 }
 // 壶嘴口 [1.098, 1.033, −1.326] 朝 −x 斜上；壶盖坐在 y 1.0、半径 7cm
 const KETTLE = { spout: [1.098, 1.033, -1.326], dir: [-0.52, 0.85, 0], lid: [1.31, 1.0, -1.4], lidR: 0.07, boil: 7 };
@@ -2556,10 +2561,10 @@ function setupWaterFx() {
     toggles.set(d.faucet, { on: false, k: 0, parts: [], click: () => { t.on = !t.on; } }); // 点阀体/软管 = 拧手柄
     water.taps.push(tap);
   }
-  // 水壶：壶身、壶盖都是 click（点一下烧开，烧着时再点就停）
+  // 水壶：壶身、提梁是 click（点一下烧开，烧着时再点就停）；壶盖走 DOORS 掀开 / 盖上
   kettle.rig = fxRig('stove_kettle_lid');
   const boil = () => { if (kettle.on && kettle.t > 0.3) kettle.on = false; else { kettle.on = true; kettle.t = 0; } };
-  for (const n of ['stove_kettle', 'stove_kettle_lid']) if (layers.get(n)) toggles.set(n, { on: false, k: 0, parts: [], click: boil });
+  for (const n of ['stove_kettle', 'stove_kettle_bail']) if (layers.get(n)) toggles.set(n, { on: false, k: 0, parts: [], click: boil });
   // 白气：大部分从壶嘴斜着冲出来再上升散开，四分之一从壶盖缝一圈冒出来（同烟囱烟的写法）
   Object.assign(steamU, { uTime: U.uTime, uScale: U.uScale });
   kettle.fx = points(STEAM_N, `uniform float uTime, uAmt, uScale; attribute vec3 seed; varying float vA;
@@ -2611,7 +2616,7 @@ function updateWaterFx(dt) {
   kettle.fx.visible = kettle.amt > 0.005;
   // 壶盖：被蒸汽顶起一边、落回去「咔嗒」——只取正弦的正半截，一跳一跳；歪的方向慢慢转。转轴过盖子中心，再抬 R·sin 让低的一边始终搭在壶口上
   if (!kettle.rig) return;
-  const a = Math.max(0, (kettle.amt - 0.3) / 0.7), tt = U.uTime.value;
+  const a = (toggles.get('stove_kettle_lid')?.k || 0) > 0.001 ? 0 : Math.max(0, (kettle.amt - 0.3) / 0.7), tt = U.uTime.value; // 壶盖掀着就不跳
   if (a > 0.001) {
     const jolt = Math.pow(Math.max(0, Math.sin(tt * 27)), 3) * (0.6 + 0.4 * Math.sin(tt * 4.3)) * a;
     const tilt = 0.07 * jolt, lift = 0.0012 * jolt, C = KETTLE.lid, n = _fx.n.set(Math.cos(tt * 1.7), 0, Math.sin(tt * 1.7));
@@ -2709,7 +2714,9 @@ function updateRocker(dt) {
     r.quaternion.setFromAxisAngle(n, th).multiply(_rk.q.setFromAxisAngle(_fpU, B.yaw)); }
 }
 const toggleOf = (name) => toggles.get(name === 'stove_firebox' ? 'stove_fire' : name) || toggles.get(DOORS[name]?.parent);
-function toggle(name) { const t = toggleOf(name); if (t.click) return t.click(); t.on = !t.on; } // click：不是开/关，点一下触发一次动作（摇椅）
+// 有人坐在马桶上时折叠门不动（像从里面闩上了）：坐着的人脚伸到 x −0.82~−0.93，门折到一半（k 0.4–0.5）会扫到脚；改成往玄关那边折也不行：打开时两块板贴在隔墙上，会撞衣帽架挂杆（y 1.65–1.75）
+const wcBusy = () => [...people.values()].some((q) => q.seat === 'entry_toilet' && q.mode === 'sit');
+function toggle(name) { const t = toggleOf(name); if (t.click) return t.click(); if (/^toilet_door_/.test(name) && wcBusy()) return; t.on = !t.on; } // click：不是开/关，点一下触发一次动作（摇椅）
 let toggleT = 0;
 function updateToggles() {
   const now = performance.now(), dt = Math.min(0.1, (now - (toggleT || now)) / 1000); toggleT = now;
