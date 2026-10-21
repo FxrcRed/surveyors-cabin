@@ -59,6 +59,13 @@
   #roomNote { position: fixed; bottom: 120px; left: 50%; transform: translateX(-50%); z-index: 5; width: min(520px, calc(100vw - 32px)); pointer-events: none; text-align: center;
     font-style: italic; font-size: 14px; line-height: 1.6; color: #f4efe6; text-shadow: 0 1px 3px rgba(0,0,0,.8), 0 0 10px rgba(0,0,0,.5); opacity: 0; transition: opacity 1.2s; }
   #roomNote.on { opacity: 1; }
+  #quest { position: fixed; top: 82px; left: 50%; transform: translateX(-50%); z-index: 5; width: min(520px, calc(100vw - 32px)); pointer-events: none; text-align: center;
+    font-style: italic; font-size: 15px; line-height: 1.6; color: #f4efe6; text-shadow: 0 1px 3px rgba(0,0,0,.8), 0 0 10px rgba(0,0,0,.5); opacity: 0; transition: opacity 1.2s; }
+  #quest.on { opacity: 1; }
+  #quest .zh { display: block; margin-top: 2px; font-size: 13px; }
+  #quest.end { font-size: 22px; letter-spacing: 2px; }
+  #quest.end .zh { font-size: 16px; }
+  #journal .jreset { text-align: center; margin-top: 56px; }
   #veil { position: fixed; inset: 0; z-index: 1; background: #000; opacity: 0; pointer-events: none; } /* 出屋路线穿结构时压黑 */
   /* Journal：整页阅读，序章 / 测绘员 / 各房间 / 终章 */
   #journal { position: fixed; inset: 0; z-index: 20; background: rgba(22,18,14,.86); overflow-y: auto; color: #efe7d8; -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px); }
@@ -126,6 +133,7 @@
   #wxPanel[hidden] { display: none; }
   #wxPanel button { padding: 5px 2px; font-size: 11px; }
   #wxPanel button.on { background: rgba(232,200,154,.3); border-color: #e8c89a; }
+  @media (max-width: 600px) { #quest { top: 66px; font-size: 13px; } body:has(#card:not([hidden])) #quest { opacity: 0; } }
   @media (max-width: 600px) { #card { left: 16px; top: 92px; transform: none; width: calc(100vw - 32px); max-height: calc(100vh - 300px); } #roomNote { bottom: 110px; font-size: 13px; } #rooms { right: 8px; gap: 2px; } #rooms button { font-size: 13px; padding: 2px 6px; } #rooms button .zh { font-size: 10px; } #rooms.bottom { gap: 0 4px; } #skyPresets { grid-template-columns: repeat(3, 1fr); } }
 </style>
 </head>
@@ -154,6 +162,7 @@
     <button id="jBtn">❦ Journal</button></div>
 </div>
 <div id="roomNote"></div>
+<div id="quest"></div>
 <div id="journal" hidden><button class="x" aria-label="Close">×</button><div class="page">
   <h2>The Surveyor's Papers</h2>
   <p class="sub">being the story of the cabin in the woods, and of the man who kept it</p>
@@ -476,8 +485,8 @@ function updateSky(dt) {
   skyU.uTime.value += dt;
   if (sky.goal !== null) { // 点了时段按钮：沿较短方向快速转过去
     let d = ((sky.goal - sky.hour) % 24 + 36) % 24 - 12;
-    const step = Math.sign(d) * Math.min(Math.abs(d), dt * 6);
-    sky.hour += step; if (Math.abs(d - step) < 1e-3) { sky.hour = sky.goal; sky.goal = null; }
+    const step = Math.sign(d) * Math.min(Math.abs(d), dt * (sky.goalRate || 6)); // goalRate：游戏里天慢慢黑下来（小时/秒）
+    sky.hour += step; if (Math.abs(d - step) < 1e-3) { sky.hour = sky.goal; sky.goal = null; sky.goalRate = 0; }
   } else if (sky.play) sky.hour += dt * sky.rate;
   sky.hour = ((sky.hour % 24) + 24) % 24;
   applySky();
@@ -1321,6 +1330,7 @@ loader.load('cabin.glb', async (gltf) => {
   setupToggles();
   setupFire();
   for (const n of ['loft_gate', ...Object.keys(DOORS).filter((n) => DOORS[n].closeOnLoad)]) { const d = toggles.get(n); if (d) { d.on = true; d.k = 1; for (const p of d.parts) p(1); } } // 和故事一致：大门保持 Rhino 里敞开的样子、阁楼横杆放下；开着建模的柜门初始关上
+  gameInit(); // 游戏第 1 天：冷炉子、炉膛里的信、时刻、Journal（要在 loadPeople 之前：书记员按进度决定站哪）
 
   const box = new THREE.Box3().setFromObject(model);
   const size = box.getSize(new THREE.Vector3()), center = box.getCenter(new THREE.Vector3());
@@ -1345,6 +1355,7 @@ loader.load('cabin.glb', async (gltf) => {
   const s = sun.shadow.camera; s.left = s.bottom = -r; s.right = s.top = r; s.near = 0.1; s.far = r * 5;
   s.updateProjectionMatrix();
   window.cabin = { scene, camera, controls, model, box, renderer, layers, toggles, cover, wx, sky, roofWx, closeView, select, meshes, people, THREE, get held() { return held; }, get hand() { return hand; }, get HAND() { return HAND; }, wake: (id, a) => wakePerson(id, a), get drops() { return drops; }, hov: () => [hovered, hoverDirty, !!fly, !!intro, pointer.lastEvent && pointer.lastEvent.clientX] }; // 调试用
+  window.cabin.game = game;
   T('setup');
   const peopleReady = loadPeople().catch(console.error); // 和种树一起加载，预热前要到齐（材质一起编译）
   await yieldFrame();
@@ -1635,6 +1646,7 @@ const INFO = {
   loft_rug: ['Rug', 'Loft', 'Thicker than the parlour\'s.'],
   loft_hanging_towel: ['Towel', 'Loft', 'Hung on a cord, for drying the hands.'],
   person_man: ['The Inspector', 'Parlour', 'Keeping the stove going, in the hollow of the settee.'],
+  stove_letter: ['Unburnt Letter', 'Kitchen', ''], // 游戏第 1 天：炉膛灰里的纸片（makeLetter），卡片由 gameSeen 换成信
   person_woman: ['The Clerk', 'Loft', ''], // 区域、说明加载时按她坐哪儿填（PEOPLE 里的 pick）
 };
 // 合并卡片（2026-10-21 按 story-zh.md 定稿约 60→40 张）：这些图层点开是同一张卡
@@ -1808,8 +1820,10 @@ const PEOPLE = [
   { id: 'person_woman', url: 'characters/woman.glb', scale: 0.896, mode: 'sit', sitBack: 0.324, sitUp: 0.49,
     hand: 'characters/hand_woman.glb', handMat: { HandSleeve: 'MI_Peasant' },
     seatActs: { loft_rocking_chair: { idle: 'Sitting_Read_Loop', props: ['Book', 'Cushion'] }, loft_chair: { idle: 'Sitting_Write_Loop', props: ['Notebook', 'Pen'] } },
-    pick: () => (/[?&]woman=desk/.test(location.search) ? false : /[?&]woman=read/.test(location.search) || Math.random() < 0.5) ? { seat: 'loft_rocking_chair', area: 'Loft', desc: 'Reading the Surveyor\'s papers in the rocking chair.' }
-      : { seat: 'loft_chair', area: 'Parlour', desc: 'Copying out his bearings at the desk.' } },
+    // 游戏（2026-10-21 用户定）：白天站在一楼地图前、在楼下转（planWander），天黑才走去书桌坐下写调查记录；重开页面时已经天黑就直接坐在书桌前。
+    pick: () => /[?&]woman=read/.test(location.search) ? { seat: 'loft_rocking_chair', area: 'Loft', desc: 'Reading the Surveyor\'s papers in the rocking chair.' }
+      : /[?&]woman=desk/.test(location.search) || game.night ? { seat: 'loft_chair', area: 'Parlour', desc: 'Writing up the day at the desk.' }
+      : { stand: 'books', face: [-1.72, -1.1], area: 'Parlour', desc: 'Looking the house over, room by room.' } },
 ];
 const MOODS = {
   sit: { idle: 'Sitting_Idle_Loop', extra: ['Sitting_Talking_Loop'], hit: [0, 0.85, -0.2, 0.95] },
@@ -1820,11 +1834,12 @@ const people = new Map(); // id → { root, mixer, acts, cur, mode, next, hit, t
 async function loadPeople() {
   await Promise.all(PEOPLE.map(async (P) => {
     const gltf = await loader.loadAsync(P.url);
-    const pk = P.pick ? P.pick() : null; if (pk) { P.seat = pk.seat; INFO[P.id][1] = pk.area; INFO[P.id][2] = pk.desc; }
+    const pk = P.pick ? P.pick() : null; if (pk) { P.seat = pk.seat || null; if (pk.stand) P.mode = 'stand'; INFO[P.id][1] = pk.area; INFO[P.id][2] = pk.desc; }
     const root = new THREE.Group(); root.name = P.id; // 名字 = INFO 的键，点选、高亮都按这个图层名
     root.add(gltf.scene);
     root.scale.setScalar(P.scale || 1);
     if (P.pos) { root.position.set(...P.pos); root.rotation.y = P.yaw; }
+    else if (pk && pk.stand) { const [x, z] = NAV[pk.stand]; root.position.set(x, 0.25, z); root.rotation.y = Math.atan2(pk.face[0] - x, pk.face[1] - z); } // 起居室木台 0.25
     else { const a = seatPose({ root, sitBack: P.sitBack, sitUp: P.sitUp }, P.seat); root.position.set(a.x, a.y, a.z); root.rotation.y = SEATS[P.seat].yaw; }
     const props = ['Book', 'Cushion', 'Notebook', 'Pen'].map((n) => gltf.scene.getObjectByName(n)).filter(Boolean);
     const showProps = (seat) => { const want = (P.seatActs && P.seatActs[seat]?.props) || []; for (const o of props) o.visible = want.includes(o.name); }; // 道具：看书露书和背后靠垫，写字只露本子和笔，站着全收起
@@ -1943,7 +1958,7 @@ const ACTIVITIES = {
   desk: (p) => [...sitTasks(p, 'loft_chair'), ['idle', 15 + Math.random() * 15], ...riseTasks(p, 'loft_chair')],
   wc: (p) => [...sitTasks(p, 'entry_toilet'), ['idle', 8 + Math.random() * 8], ...riseTasks(p, 'entry_toilet')],
 };
-const ROUTINES = { person_man: { home: 'living_sofa', acts: ['stove', 'desk', 'wc'] }, person_woman: { plan: (p, act) => planWoman(p, act) } }; // 她的 home = 打开页面时坐的那张（p.home）
+const ROUTINES = { person_man: { home: 'living_sofa', acts: ['stove', 'desk', 'wc'] }, person_woman: { plan: (p, act) => (game.night ? [] : planWoman(p, act)) } }; // 她的 home = 打开页面时坐的那张（p.home）；游戏里天黑后坐在书桌前不再起来
 function planOuting(p, id, act) {
   const R = ROUTINES[id], home = R.home, r = p.root;
   const t = riseTasks(p); // 先从现在的座位起来
@@ -2002,6 +2017,154 @@ function wakePerson(id, act) {
   const acts = R.acts.filter((a) => a !== p.lastAct && !(a === 'desk' && seatTaken('loft_chair', p)) && !(a === 'wc' && seatTaken('entry_toilet', p)));
   act = act || acts[Math.floor(Math.random() * acts.length)];
   p.lastAct = act; p.tasks = planOuting(p, id, act);
+}
+// —— 三日调查小游戏 · 第 1 天（2026-10-21）：生起冷炉子 → 屋里找齐线索（点到对应物件就算）→ 书记员说一句 → 天黑，她走到书桌坐下写调查记录 → 点书桌（或她）读 → 「第 2 天 · 待续」。
+// 屏幕上只给一行任务提示（不显示「线索 2/5」），进度靠 Journal 解锁体现。进度只存天数和已找到的线索（localStorage，读写都包 try/catch，读不到就从头来）；网址加 ?reset 或 Journal 最下面「从头再来」清掉。
+// 线索：fire 生火（点炉膛柴点着）、letter 炉膛灰里没烧完的信（stove_letter；先生火的话生火时顺手翻出来）、map 墙上地图、drawer 书桌抽屉、log 书架（工作日志前段）、
+// took = coat + boots + lantern 三样都看过（「他什么都没带」）。找齐 DAY1_NEED → startNight；夜里点书桌 / 书记员 → notes1。
+const GAME_KEY = 'cabin.game.v1';
+const DAY1_NEED = ['fire', 'letter', 'map', 'drawer', 'log', 'took'];
+const game = (() => {
+  if (/[?&]reset\b/.test(location.search)) try { localStorage.removeItem(GAME_KEY); } catch (e) { /* 读写不了就当没存过 */ }
+  let s = null; try { s = JSON.parse(localStorage.getItem(GAME_KEY)); } catch (e) { s = null; }
+  const g = { day: (s && s.day) || 1, found: new Set(s && Array.isArray(s.found) ? s.found : []), night: false, dusk: false };
+  g.night = DAY1_NEED.every((k) => g.found.has(k));
+  return g;
+})();
+function saveGame() { try { localStorage.setItem(GAME_KEY, JSON.stringify({ day: game.day, found: [...game.found] })); } catch (e) { /* 存不了就只在这次打开里有效 */ } }
+// Journal「第一天」：键 → [英标题, 中标题, 英, 中]，按这个顺序列出已找到的
+const DAY1_TEXT = {
+  fire: ['The Cold Stove', '冷了的炉子', 'The stove was stone cold, the ash cold; not a spark of red beneath it. We lit it again.', '炉子冷透了，灰是凉的，底下一点红也没有。我们重新生了火。'],
+  letter: ['The Unburnt Letter', '没烧完的信', GAME_TEXT.letter[1], GAME_TEXT.letter[2]],
+  map: ['The ✕ on the Map', '地图上的 ✕', 'Deep in the woods he drew a great ✕, and beside it wrote "Do Not Enter". The contours round it have been drawn and rubbed out and drawn again.', '林子深处画了一个巨大的 ✕，旁注“勿入”。周围的等高线画了又擦、擦了又画。'],
+  drawer: ['The Desk Drawer', '书桌抽屉', 'An unfinished draft in the drawer; its last line a string of bearings, to three places of decimals.', '抽屉里一张没画完的草稿，最后一行是一串坐标，精确到小数点后三位。'],
+  log: ['Field Log, First Part', '工作日志 · 前段', GAME_TEXT.logIntro[1] + '\n\n' + GAME_TEXT.log1[1], GAME_TEXT.logIntro[2] + '\n\n' + GAME_TEXT.log1[2]],
+  took: ['He Took Nothing', '他什么都没带', 'His greatcoat on its peg, his boots by the tray, his lantern where it always hung. He went out with nothing.', '大衣挂在钉子上，靴子立在托盘边，提灯挂在老地方。他出门什么都没带。'],
+  notes1: ['Inquiry Notes, Night of Day 1', '调查记录 · 第 1 天夜里', GAME_TEXT.notes1[1], GAME_TEXT.notes1[2]],
+};
+const QUEST = { // 屏幕上那一行任务提示：[英, 中]
+  fire: ['The stove is stone cold. Light the fire first.', '炉子冷透了。先把火生起来。'],
+  look: ['He left things behind in the house.', '屋里还有他留下的东西。'],
+  dusk: ['Night is coming on.', '天快黑了。'],
+  night: ['Night. The clerk is writing up the day at the desk.', '天黑了。书记员在书桌前写今天的调查记录。'],
+  end: ['Day the Second — to be continued.', '第 2 天 · 待续'],
+};
+const CLERK_SAYS = ['The clerk: "This house is newer than the reports made it."', '书记员：“这屋子比报告里写的新。”'];
+// 换掉的卡片：[标题, 区域, 中文标题, 英, 中, 说明]
+const LETTER_CARD = ['Unburnt Letter', 'Kitchen', '没烧完的信', GAME_TEXT.letter[1], GAME_TEXT.letter[2]];
+const LOG_CARD = ['Field Log', 'Parlour', '工作日志', DAY1_TEXT.log[2], DAY1_TEXT.log[3]];
+const NOTES_CARD = ['Inquiry Notes', 'Parlour', '调查记录', GAME_TEXT.notes1[1], GAME_TEXT.notes1[2], 'In the clerk\'s hand, the ink still wet.'];
+function questNow() { const f = game.found; return f.has('notes1') ? 'end' : game.dusk ? 'dusk' : game.night ? 'night' : f.has('fire') ? 'look' : 'fire'; }
+function showQuest() {
+  const el = $('quest'), k = questNow(), zh = document.createElement('span');
+  el.textContent = QUEST[k][0]; zh.className = 'zh'; zh.textContent = QUEST[k][1]; el.append(zh);
+  el.classList.toggle('end', k === 'end'); el.classList.add('on');
+}
+function gameSeen(name) { // select 里调：这次点的东西算不算线索；返回要换上的卡片或 null
+  const f = game.found, title = infoOf(name)?.[0], got = [];
+  const add = (k) => { if (!f.has(k)) { f.add(k); got.push(k); } };
+  let over = null;
+  if (name === 'stove_fire' || name === 'stove_firebox') {
+    if (toggles.get('stove_fire')?.on) { add('fire'); if (!f.has('letter')) { add('letter'); over = LETTER_CARD; } } // 生火前先扒开灰：信就压在底下
+  } else if (name === 'stove_letter') { add('letter'); over = LETTER_CARD; }
+  else if (title === 'Map') add('map');
+  else if (name.startsWith('desk_drawer')) add('drawer');
+  else if (title === 'Bookcase') { add('log'); over = LOG_CARD; }
+  else if (title === 'Coat Rail & Greatcoat') add('coat');
+  else if (title === 'Boots & Bench') add('boots');
+  else if (title === 'Lantern') add('lantern');
+  if (game.night && !game.dusk && (title === 'Writing Desk, Chair & Wall Lamp' || name === 'person_woman')) { add('notes1'); over = NOTES_CARD; }
+  else if (name === 'person_woman') { const z = STORY_ZH['The Clerk|Loft']; over = ['The Clerk', 'Parlour', z[0], STORY['The Clerk|Loft'], z[1].replace(/^[^。]*。/, ''), INFO.person_woman[2]]; } // 白天她没在读遗稿：去掉中文第一句「在摇椅上读……」
+  if (['coat', 'boots', 'lantern'].every((k) => f.has(k))) add('took');
+  if (f.has('letter')) { const g = layers.get('stove_letter'); if (g) g.visible = false; } // 信拿出来了
+  if (!got.length) return over;
+  saveGame(); renderJournal();
+  if (got.includes('took')) showRoomNote([DAY1_TEXT.took[2], DAY1_TEXT.took[3]]);
+  if (!game.night && DAY1_NEED.every((k) => f.has(k))) startNight(got.includes('took'));
+  showQuest();
+  return over;
+}
+function startNight(late) { // 线索找齐：书记员说一句 → 天色转到夜里、她走去书桌 → 壁灯亮起（late：刚弹出「他什么都没带」，等它读完）
+  game.night = game.dusk = true;
+  const t0 = late ? 6000 : 1500;
+  setTimeout(() => showRoomNote(CLERK_SAYS), t0);
+  setTimeout(() => { sky.play = false; sky.goal = 21; sky.goalRate = 1; clerkToDesk(); }, t0 + 3500);
+  setTimeout(() => { game.dusk = false; const w = toggles.get('wall_lamp'); if (w) w.on = true; showQuest(); }, t0 + 10500);
+}
+function clerkToDesk() { // 天黑：书记员走到书桌坐下写（正在走的那一段走完再去；书桌被人占着就等）
+  const p = people.get('person_woman'); if (!p) return;
+  p.home = 'loft_chair'; INFO.person_woman[1] = 'Parlour'; INFO.person_woman[2] = 'Writing up the day at the desk.';
+  p.after = () => { if (seatTaken('loft_chair', p)) return false; goHome(p, 'person_woman'); return true; };
+}
+const WANDER = ['books', 'map', 'dish', 'stove']; // 第 1 天白天她只在楼下转（书桌留到夜里）
+function planWander(p) {
+  const r = p.root, names = WANDER.filter((s) => s !== p.lastSpot), s = names[Math.floor(Math.random() * names.length)], node = SPOTS[s].node;
+  p.lastSpot = s; p.roam = 20 + Math.random() * 25;
+  return [...routeTasks(r.position.x, r.position.y, r.position.z, node), ['walk', ...NAV[node]], ...SPOTS[s].tasks()];
+}
+// 没烧完的信：炉门里那条灰面（y 0.482；柴从 z −1.30 往里），一张纸片，后沿稍翘、斜着放；canvas 画纸色、炭笔字行、一边烧掉的焦边
+const LETTER = { at: [1.385, 0.488, -1.262], size: [0.14, 0.0875], rot: [-Math.PI / 2 + 0.14, 0, 0.35] };
+function makeLetter() {
+  const W = 256, H = 160, c = document.createElement('canvas'), x = c.getContext('2d'), R = rng(19);
+  c.width = W; c.height = H;
+  const burn = []; // 烧掉的那一边：从上沿右边斜到下沿中间，往外鼓、锯齿
+  for (let i = 0; i <= 24; i++) { const t = i / 24; burn.push([W * (0.8 - 0.4 * t) + Math.sin(Math.PI * t) * W * 0.14 + (R() - 0.5) * 14, 6 + (H - 12) * t + (R() - 0.5) * 6]); }
+  const line = () => { x.beginPath(); burn.forEach(([px, py], i) => (i ? x.lineTo(px, py) : x.moveTo(px, py))); };
+  x.fillStyle = '#c4b28a'; x.fillRect(0, 0, W, H);
+  x.strokeStyle = 'rgba(45,35,28,.8)'; x.lineWidth = 1.6; // 字行：一段一段的短横
+  for (let y = 26; y < H - 14; y += 15) for (let px = 16; px < W - 20;) { const w = 6 + R() * 22; x.beginPath(); x.moveTo(px, y + (R() - 0.5) * 2); x.lineTo(px + w, y + (R() - 0.5) * 2); x.stroke(); px += w + 4 + R() * 6; }
+  x.lineJoin = 'round';
+  for (const lw of [64, 48, 34, 22]) { x.strokeStyle = 'rgba(92,52,18,.3)'; x.lineWidth = lw; line(); x.stroke(); } // 焦黄：几层半透明叠出由浅到深
+  x.strokeStyle = '#1a120c'; x.lineWidth = 10; line(); x.stroke(); // 焦黑
+  for (let i = 0; i < 26; i++) { x.fillStyle = `rgba(${70 + R() * 30 | 0},${66 + R() * 26 | 0},${62 + R() * 20 | 0},${0.12 + R() * 0.3})`; x.beginPath(); x.arc(R() * W * 0.8, H * (0.35 + R() * 0.7), 4 + R() * 16, 0, 7); x.fill(); } // 压在上面的炉灰
+  x.globalCompositeOperation = 'destination-in'; x.fillStyle = '#000'; x.beginPath(); // 裁成纸的形状（填充色要不透明，否则整张变半透明被 alphaTest 丢掉） x.moveTo(6, 6); for (const [px, py] of burn) x.lineTo(px, py); x.lineTo(6, H - 6); x.closePath(); x.fill();
+  const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 4;
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(...LETTER.size), new THREE.MeshStandardMaterial({ map: tex, alphaTest: 0.5, side: THREE.DoubleSide, roughness: 0.95 }));
+  m.rotation.set(...LETTER.rot); m.receiveShadow = true;
+  const g = new THREE.Group(); g.name = 'stove_letter'; g.position.set(...LETTER.at); g.add(m);
+  scene.add(g); layers.set('stove_letter', g); meshes.push(m); indoorShade(g);
+}
+function setupJournal() { // 把 Journal 按 h3 分节（中英各一份）好按进度锁；开场后面插「第一天」，最底下加「从头再来」
+  const page = journal.querySelector('.page'), zh = page.querySelector('div.zh'), KEYS = ['open', 'prologue', 'surveyor', 'epilogue', 'after'];
+  for (const [box, lang] of [[page, 'en'], [zh, 'zh']]) {
+    let i = -1, cur = null;
+    for (const el of [...box.children]) {
+      if (el === zh) break;
+      if (el.tagName === 'H3') { cur = document.createElement('div'); cur.dataset.sec = KEYS[++i]; el.before(cur); }
+      if (cur) cur.append(el);
+    }
+    const day = document.createElement('div'); day.className = 'jday'; day.dataset.lang = lang;
+    box.querySelector('[data-sec="open"]').after(day);
+  }
+  const p = document.createElement('p'), b = document.createElement('button');
+  p.className = 'jreset'; b.textContent = 'Begin Again · 从头再来'; p.append(b); page.append(p);
+  b.onclick = () => {
+    if (!confirm('Forget all that has been found, and begin the first day again?\n忘掉找到的一切，从第一天重新开始？')) return;
+    try { localStorage.removeItem(GAME_KEY); } catch (e) { /* 清不掉也重开 */ }
+    location.reload();
+  };
+  renderJournal();
+}
+function renderJournal() { // 开场一直在；找到工作日志才有序章和「测绘员」；终章、后记等通关（第 3 天）
+  const f = game.found, open = { open: true, prologue: f.has('log'), surveyor: f.has('log'), epilogue: false, after: false };
+  for (const d of journal.querySelectorAll('[data-sec]')) d.hidden = !open[d.dataset.sec];
+  for (const box of journal.querySelectorAll('.jday')) {
+    const zh = box.dataset.lang === 'zh', add = (tag, text, cls) => { const e = document.createElement(tag); e.textContent = text; if (cls) e.className = cls; box.append(e); };
+    box.textContent = '';
+    add('h3', zh ? '第一天' : 'The First Day');
+    const keys = Object.keys(DAY1_TEXT).filter((k) => f.has(k));
+    if (!keys.length) add('p', zh ? '还什么都没记下。' : 'Nothing written down yet.', 'coda');
+    for (const k of keys) { const t = DAY1_TEXT[k]; add('h4', zh ? t[1] : t[0]); for (const para of (zh ? t[3] : t[2]).split('\n\n')) add('p', para); }
+    add('p', zh ? '还有一些纸页没找到。' : 'Some pages are still to be found.', 'coda');
+  }
+}
+function gameInit() { // 模型和开关都建好后调（loadPeople 之前）：冷炉子、炉膛里的信、时刻、Journal、任务提示
+  const f = toggles.get('stove_fire');
+  if (f && !game.found.has('fire')) { f.on = false; f.k = 0; for (const q of f.parts) q(0); fire.smoke = 0; }
+  if (!game.found.has('letter')) makeLetter();
+  sky.goal = null; sky.play = false; sky.hour = game.night ? 21 : 15.5; // 下午到，找齐线索时天黑；时间不自己走，免得找着找着天就黑了
+  if (game.night) { const w = toggles.get('wall_lamp'); if (w) w.on = true; }
+  setupJournal(); showQuest();
 }
 // —— 爬梯子（2026-10-20，女调查员；动作 Climb_Ladder_Loop / Ladder_Top / Ladder_Top_Lift 是 Blender 里按梯子尺寸用 IK 摆的，../blender/scripts/climb.py）——
 // 梯子放下（k=1）斜 0.2rad，横档间距 0.28。S = 从最底一档沿梯子往上的距离，根节点 = ladderRoot(S)（面朝西）；一个周期爬 0.56（两档、1.67s），动作时间 = 相位，所以手脚始终对着横档。
@@ -2115,17 +2278,21 @@ function updatePeople(dt) {
 }
 function stepPerson(id, p, dt) {
   if (p.tasks.length) { runTask(p, dt); return; }
+  if (p.after && p.after()) p.after = null; // 排着的下一件事（天黑去书桌）：手头的一段做完再去，返回 false 就下一帧再试
+  if (p.tasks.length) return;
   if (p.player) return; // 玩家在操控：动作由 updateFP 管
   if (ROUTINES[id] && (p.roam -= dt) < 0) { // 隔 1–2.5 分钟自己起来去做点事；不在自己座位上（玩家退出时留在别处）就先回去
     p.roam = 70 + Math.random() * 90;
-    if (p.mode === 'sit' && p.seat === (ROUTINES[id].home || p.home)) wakePerson(id); else goHome(p, id);
+    if (!ROUTINES[id].home && !p.home) p.tasks = planWander(p); // 游戏白天的书记员：没有自己的座位，站着在楼下转
+    else if (p.mode === 'sit' && p.seat === (ROUTINES[id].home || p.home)) wakePerson(id); else goHome(p, id);
     if (p.tasks.length) return;
   }
   const m = moodOf(p), a = p.cur, clip = a && a.getClip();
   if (a && a.loop === THREE.LoopOnce && a.time >= clip.duration - 0.05) { p.play(m.idle); p.next = 10 + Math.random() * 15; return; } // 一次性动作做完回到待机
-  if ((p.next -= dt) > 0 || !m.extra.length) return;
+  const ex = m.extra.filter((n) => p.acts[n]); // 书记员没有 Idle_Talking_Loop（游戏里她白天站着，原来去取它的 loop 每帧报错、卡住后面的天色更新）
+  if ((p.next -= dt) > 0 || !ex.length) return;
   if (clip && clip.name === m.idle) { // 待机一阵后做个小动作，聊天类的做 1–2 遍
-    const n = m.extra[Math.floor(Math.random() * m.extra.length)]; p.play(n, 0.6);
+    const n = ex[Math.floor(Math.random() * ex.length)]; p.play(n, 0.6);
     p.next = p.acts[n].loop === THREE.LoopOnce ? 99 : p.acts[n].getClip().duration * (1 + Math.floor(Math.random() * 2));
   } else { p.play(m.idle, 0.6); p.next = 10 + Math.random() * 15; }
 }
@@ -2700,6 +2867,7 @@ function setupFire() {
     fire.light = new THREE.PointLight(0xff8a3c, 0, 4.5, 2);
     fire.light.position.copy(g.worldToLocal(new THREE.Vector3(...FIRE_LIGHT))); g.add(fire.light); // 一直 visible，只调强度
     toggles.set('stove_fire', { on: true, k: 1, parts: [(k) => { fire.k = k; }] });
+    layers.get('stove_firebox')?.traverse((o) => { if (o.isMesh && o.material.name === 'stove_embers_glow') { fire.embers = o.material; fire.emberCol = o.material.color.clone(); } }); // 炉膛底的余烬板：火灭了变炉灰
   }
   // 烟：Points，位置全在顶点着色器里按「出生后多久」算：上升、散开、随风往 +x 偏、变大变淡
   const geo = new THREE.BufferGeometry(), seed = new Float32Array(SMOKE_N * 2);
@@ -2733,7 +2901,7 @@ function setupFire() {
   smoke.frustumCulled = false; smoke.renderOrder = 2; smoke.name = 'stove_smoke';
   scene.add(smoke); fire.smokeFx = smoke;
 }
-const SMOKE_GRAY = new THREE.Color(0xc4c0b8);
+const SMOKE_GRAY = new THREE.Color(0xc4c0b8), ASH_GRAY = new THREE.Color(0x4a4744);
 function updateFire(dt) {
   fire.t += dt;
   const t = fire.t, k = fire.k;
@@ -2746,7 +2914,9 @@ function updateFire(dt) {
     if (b.e) { m.emissive.copy(b.e); m.emissive.g *= 0.85 + 0.25 * n; m.emissiveIntensity = b.ei * k * (0.65 + 0.7 * n); } // 暗时偏红、亮时偏黄
     m.color.copy(b.col).multiplyScalar(0.15 + 0.85 * k);
   }
-  for (const f of fire.meshes) { // 绕炉膛底部缩放：熄了缩成矮矮一层暗余烬（不切 visible；太矮就点不到、没法再点燃）
+  if (fire.embers) fire.embers.color.copy(ASH_GRAY).lerp(fire.emberCol, k);
+  for (const f of fire.meshes) { // 绕炉膛底部缩放；熄了藏起来（2026-10-21 游戏第 1 天「冷透了」：原来缩成暗红的火苗尖还看得见），点炉膛里的柴照样点得着
+    f.m.visible = !out;
     const sy = (0.35 + 0.65 * k) * (out ? 1 : 0.85 + 0.3 * Math.sin(t * 9 + f.ph) * Math.sin(t * 5.3 + f.ph * 2)), sx = out ? 1 : 1 + 0.06 * Math.sin(t * 11 + f.ph);
     f.m.scale.set(f.s0.x * sx, f.s0.y * sy, f.s0.z * sx);
     f.m.position.set(f.P.x + sx * (f.p0.x - f.P.x), f.P.y + sy * (f.p0.y - f.P.y), f.P.z + sx * (f.p0.z - f.P.z));
@@ -2860,7 +3030,7 @@ function select(name) {
   card.hidden = !name;
   if (!name) return;
   if (people.has(name)) wakePerson(name); // 点人物：起来活动一圈
-  const pa = card.querySelector('#playAs'); pa.hidden = !people.has(name) || lite || !!fp; // 触屏还没做摇杆，先不给
+  const pa = card.querySelector('#playAs'); pa.hidden = !people.has(name) || name === 'person_woman' || lite || !!fp; // 游戏里玩家只当老稽查，书记员是同伴 // 触屏还没做摇杆，先不给
   pa.textContent = name === 'person_woman' ? 'Take Her Place' : 'Take His Place';
   const [title, area, desc] = infoOf(name);
   card.querySelector('h2').innerHTML = '';
@@ -2871,6 +3041,12 @@ function select(name) {
   const zh = STORY_ZH[title + '|' + area];
   card.querySelector('p.zh').textContent = zh ? zh[1] : '';
   if (zh) { const s = card.querySelector('h2 .area'); if (s) { s.append(' · '); const z = document.createElement('span'); z.className = 'zh'; z.textContent = zh[0]; s.append(z); } }
+  const g = gameSeen(name); // 游戏线索：有的换成信 / 日志 / 调查记录的卡片
+  if (g) {
+    const h = card.querySelector('h2'), a = document.createElement('span'), z = document.createElement('span');
+    h.innerHTML = ''; h.append(g[0]); a.className = 'area'; a.textContent = g[1] + ' · '; z.className = 'zh'; z.textContent = g[2]; a.append(z); h.append(a);
+    card.querySelector('p.lead').textContent = g[5] || ''; card.querySelector('p.story').textContent = g[3]; card.querySelector('p.zh').textContent = g[4];
+  }
   card.scrollTop = 0;
 }
 function focusSelected() {
