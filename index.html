@@ -3,18 +3,21 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>The Surveyor's Cabin · 无名测绘员的遗稿</title>
+<title>The Surveyor's Cabin</title>
 <meta name="description" content="A log cabin in a northern forest you can walk into: day and night, seven kinds of weather, and a story behind every object.">
 <meta property="og:title" content="The Surveyor's Cabin">
 <meta property="og:description" content="A log cabin in a northern forest you can walk into: day and night, seven kinds of weather, and a story behind every object.">
 <meta property="og:image" content="https://fxrcred.github.io/surveyors-cabin/docs/social.jpg">
 <meta property="og:url" content="https://fxrcred.github.io/surveyors-cabin/">
 <meta name="twitter:card" content="summary_large_image">
+<script>/* 语言：记住的选择 > 浏览器语言（zh 开头 → 中文）> 英文；CSS 按 html[data-lang] 只显示一种 */ (() => { let l = null; try { l = localStorage.getItem('cabin.lang'); } catch (e) { /* 读不到就按浏览器 */ } if (l !== 'zh' && l !== 'en') l = /^zh/i.test(navigator.language || '') ? 'zh' : 'en'; document.documentElement.dataset.lang = l; document.documentElement.lang = l === 'zh' ? 'zh-CN' : 'en'; if (l === 'zh') document.title = '无名测绘员的遗稿'; })();</script>
 <script>/* 调试：网址带 ?mc 时用 MessageChannel 代替 rAF（浏览器面板隐藏时 rAF 不跑） */ if (/[?&]mc\b/.test(location.search)) window.requestAnimationFrame = (cb) => { const c = new MessageChannel(); c.port1.onmessage = () => cb(performance.now()); c.port2.postMessage(0); };</script>
 <link rel="stylesheet" href="fonts/fonts.css">
 <style>
-  :root { --ink: #2b2620; --paper: #f4efe6; --accent: #8a5a2b; }
-  html, body { margin: 0; height: 100%; overflow: hidden; background: #cfd8dc; font-family: "IM Fell English", Georgia, "Times New Roman", serif; color: var(--ink); }
+  /* 字体只有两种：英文 IM Fell English、中文汇文明朝体（fonts/zh.woff2）。--serif 里中文排第二：IM Fell 没有中文字形，界面上任何中文都会落到汇文明朝，不会掉进系统宋体 / 黑体；中文不用斜体（汇文没有斜体，浏览器会硬拉斜） */
+  :root { --ink: #2b2620; --paper: #f4efe6; --accent: #8a5a2b; --zh: "Huiwen Mincho", "Songti SC", "Noto Serif SC", "Source Han Serif SC", "SimSun", serif;
+    --serif: "IM Fell English", "Huiwen Mincho", Georgia, "Times New Roman", "Songti SC", "SimSun", serif; }
+  html, body { margin: 0; height: 100%; overflow: hidden; background: #cfd8dc; font-family: var(--serif); color: var(--ink); }
   #app { position: fixed; inset: 0; }
   #loader { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; background: var(--paper); transition: opacity .6s; z-index: 10; }
   #loader.done { opacity: 0; pointer-events: none; }
@@ -25,15 +28,31 @@
     color: rgb(calc(30 + 220 * var(--t)), calc(26 + 220 * var(--t)), calc(22 + 220 * var(--t)));
     text-shadow: 0 0 6px rgba(calc(255 - 255 * var(--t)), calc(255 - 255 * var(--t)), calc(255 - 255 * var(--t)), .35); }
   #title h1 { margin: 0; font-family: "IM Fell English SC", "IM Fell English", Georgia, serif; font-weight: normal; font-size: 30px; letter-spacing: 3px; }
-  #title p { margin: 4px 0 0; font-style: italic; font-size: 14px; opacity: .8; }
-  #title .zh { display: block; margin-top: 2px; font-size: 13px; letter-spacing: 3px; }
-  #by { position: fixed; right: 12px; bottom: 8px; z-index: 5; font-size: 11px; color: #fff; opacity: .6; text-shadow: 0 1px 3px rgba(0,0,0,.7); pointer-events: none; }
+  /* 标题中英都显示：英文主标题，下面一行中文（不随语言切换） */
+  html #title h1 .en, html #title h1 .zh { display: block !important; }
+  #title h1 .zh { margin-top: 2px; font-family: var(--zh); font-size: 16px; letter-spacing: 6px; }
+  #by { position: fixed; right: 12px; bottom: 8px; z-index: 5; font-family: "IM Fell English SC", "IM Fell English", Georgia, serif; font-size: 11px; letter-spacing: 1px; color: #fff; opacity: .6; text-shadow: 0 1px 3px rgba(0,0,0,.7); pointer-events: none; }
   button, #card, #tip { letter-spacing: .3px; }
   button { font: inherit; font-size: 13px; padding: 8px 14px; border: 0; border-radius: 6px; background: rgba(255,255,255,.85); color: var(--ink); cursor: pointer; box-shadow: 0 1px 4px rgba(0,0,0,.15); }
   button:hover { background: #fff; }
-  #tip { position: fixed; z-index: 6; pointer-events: none; padding: 4px 8px; border-radius: 4px; font-size: 12px; background: rgba(43,38,32,.85); color: #fff; white-space: nowrap; transform: translate(12px, 12px); }
+  /* 悬停物件名：不要底框，白字 + 深色描边阴影（同字幕），亮暗背景都看得清 */
+  #tip { position: fixed; z-index: 6; pointer-events: none; padding: 0; font-size: 14px; line-height: 1.4; color: #f4efe6; white-space: nowrap; transform: translate(20px, 16px);
+    text-shadow: 0 0 2px rgba(0,0,0,.9), 0 1px 3px rgba(0,0,0,.85), 0 0 10px rgba(0,0,0,.55); }
+  html[data-lang="zh"] #tip, html[data-lang="zh"] #subs, html[data-lang="zh"] #note p { letter-spacing: .5px; }
+  /* 自定义鼠标：小圆点 + 细环，颜色同标题（--t 由 updateTitleColor 一起写，0 黑 → 1 白，外圈反色描边兜底）；
+     只在有鼠标的设备上、动过鼠标后启用（html.cc）；指到可点的物件 / 按钮环放大，按下缩小；指针锁定（第一人称）和鼠标移出窗口时隐藏 */
+  #cur { --t: 1; position: fixed; left: 0; top: 0; z-index: 1000; pointer-events: none; display: none; will-change: transform; transition: opacity .2s; }
+  html.cc #cur { display: block; }
+  html.cc, html.cc * { cursor: none !important; }
+  html.cur-lock #cur, html.cur-out #cur { opacity: 0; }
+  #cur i { position: absolute; left: 0; top: 0; border-radius: 50%; --c: calc(30 + 220 * var(--t)); --k: calc(255 - 255 * var(--t)); }
+  #cur .d { width: 5px; height: 5px; margin: -2.5px 0 0 -2.5px; background: rgb(var(--c), var(--c), var(--c)); box-shadow: 0 0 0 1px rgba(var(--k), var(--k), var(--k), .45); }
+  #cur .r { width: 22px; height: 22px; margin: -12px 0 0 -12px; border: 1px solid rgba(var(--c), var(--c), var(--c), .8);
+    box-shadow: 0 0 0 1px rgba(var(--k), var(--k), var(--k), .22), inset 0 0 0 1px rgba(var(--k), var(--k), var(--k), .22); transition: transform .18s ease, border-color .18s; }
+  html.cur-hot #cur .r, html.cur-ui #cur .r { transform: scale(1.55); border-color: rgb(var(--c), var(--c), var(--c)); }
+  html.cur-down #cur .r { transform: scale(.75); }
   /* 介绍卡片：和底部面板同款（无底框、白字 + 深色阴影、细线框按钮）；放左侧竖向居中，不和标题、底部按钮叠在一起 */
-  #card { position: fixed; left: 24px; top: 50%; transform: translateY(-50%); z-index: 6; width: min(280px, calc(100vw - 48px)); padding: 10px 0;
+  #card { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 22; width: min(440px, calc(100vw - 48px)); padding: 10px 0;
     border-top: 1px solid rgba(244,239,230,.45); border-bottom: 1px solid rgba(244,239,230,.45);
     color: #f4efe6; text-shadow: 0 1px 3px rgba(0,0,0,.75), 0 0 8px rgba(0,0,0,.45); }
   /* 卡片排版：英文只用 IM Fell English 一种（不用小型大写、不用斜体）、中文只用汇文明朝体；四级：标题 21 / 区域 12 / 正文 13.5 / 中文 13，段间距统一 10px，中文译文前一条短细线 */
@@ -48,44 +67,107 @@
   #card p.story, #card p.zh { white-space: pre-line; }
   #card p.zh { margin-top: 14px; padding-top: 12px; border-top: 1px solid rgba(244,239,230,.22); font-size: 13px; line-height: 1.9; opacity: .92; }
   #card .row { margin-top: 14px; }
-  #card { max-height: calc(100vh - 220px); overflow-y: auto; scrollbar-width: thin; }
+  #card { max-height: calc(100vh - 220px); overflow-y: auto; scrollbar-width: none; } /* 不显示滚动条（用户嫌难看），滚轮 / 触摸照样能滚；没到底时底部渐隐提示还有内容 */
+  #card::-webkit-scrollbar { display: none; }
+  #card.more { -webkit-mask-image: linear-gradient(#000 calc(100% - 40px), transparent); mask-image: linear-gradient(#000 calc(100% - 40px), transparent); }
   /* 中文原文接在英文下面：IM Fell 没有中文字形，用汇文明朝体（子集 fonts/zh.woff2），没加载到退回系统宋体 */
-  .zh, #card p.zh, #roomNote .zh { font-family: "Huiwen Mincho", "Songti SC", "Noto Serif SC", "Source Han Serif SC", "SimSun", serif; font-style: normal; letter-spacing: .5px; }
+  .zh, .cn, #card p.zh, #roomNote .zh { font-family: var(--zh); font-style: normal; letter-spacing: .5px; }
+  html[data-lang="zh"] em, .zh em { font-style: normal; } /* 中文里的强调只变色不斜 */
   #roomNote .zh { display: block; margin-top: 2px; font-size: 13px; opacity: .9; }
   #journal div.zh { margin-top: 72px; padding-top: 40px; border-top: 1px solid rgba(239,231,216,.25); font-size: 15.5px; line-height: 1.9; }
   #journal div.zh h2, #journal div.zh h3, #journal div.zh h4 { font-family: inherit; letter-spacing: 3px; }
   #journal div.zh .coda, #journal div.zh .sub { font-style: normal; }
-  /* 进房间时标题下淡入一句开场白 */
-  #roomNote { position: fixed; bottom: 120px; left: 50%; transform: translateX(-50%); z-index: 5; width: min(520px, calc(100vw - 32px)); pointer-events: none; text-align: center;
-    font-style: italic; font-size: 14px; line-height: 1.6; color: #f4efe6; text-shadow: 0 1px 3px rgba(0,0,0,.8), 0 0 10px rgba(0,0,0,.5); opacity: 0; transition: opacity 1.2s; }
-  #roomNote.on { opacity: 1; }
-  #quest { position: fixed; top: 82px; left: 50%; transform: translateX(-50%); z-index: 5; width: min(520px, calc(100vw - 32px)); pointer-events: none; text-align: center;
-    font-style: italic; font-size: 15px; line-height: 1.6; color: #f4efe6; text-shadow: 0 1px 3px rgba(0,0,0,.8), 0 0 10px rgba(0,0,0,.5); opacity: 0; transition: opacity 1.2s; }
-  #quest.on { opacity: 1; }
-  #quest .zh { display: block; margin-top: 2px; font-size: 13px; }
+  /* 文字提示统一区（2026-10-22 第 5 轮）：全部放画面中下方「进屋」上面同一块，底边对齐、多行往上长；同一时间只亮一条主提示：
+     开场字幕 #subs > 物件说明 #note / 房间开场白·书记员的话 #roomNote（这两个新的顶掉旧的）> 任务 #quest（常驻，有别的提示时先让开，提示淡掉再回来）。
+     进度 #prog 是下面一行小字。淡出快（.35s）、淡入等淡出做完再开始，同一位置不叠字 */
+  #roomNote, #quest, #subs, #note { position: fixed; bottom: 150px; left: 50%; transform: translateX(-50%); z-index: 6; width: min(560px, calc(100vw - 32px)); pointer-events: none; text-align: center;
+    font-size: 16px; line-height: 1.7; color: #f4efe6; text-shadow: 0 1px 3px rgba(0,0,0,.85), 0 0 12px rgba(0,0,0,.6); opacity: 0; transition: opacity .35s; }
+  #roomNote.on, #quest.on, #subs.on, #note.on { opacity: 1; transition: opacity .9s .35s; }
+  body:has(#subs.on) :is(#note, #roomNote, #quest, #prog), body:has(#note.on, #roomNote.on) #quest, body:has(#fpHud:not([hidden]):not(.live)) :is(#quest, #note, #roomNote, #prog) { opacity: 0; transition: opacity .35s; }
+  #roomNote .zh, #quest .zh { display: block; margin-top: 2px; font-size: 13px; }
   #quest.end { font-size: 22px; letter-spacing: 2px; }
   #quest.end .zh { font-size: 16px; }
+  #prog { position: fixed; bottom: 124px; left: 50%; transform: translateX(-50%); z-index: 6; width: max-content; max-width: calc(100vw - 32px); pointer-events: none; text-align: center;
+    font-size: 12px; line-height: 1.5; letter-spacing: .6px; color: rgba(244,239,230,.75); text-shadow: 0 1px 3px rgba(0,0,0,.75), 0 0 8px rgba(0,0,0,.45); transition: opacity .35s; }
+  #prog:empty { display: none; }
+  #subs, #opening p { white-space: pre-line; text-wrap: balance; } /* 字幕里的 \n 换行；自动折行时各行长度均匀，不剩一个字孤零零一行 */
+  #note .t { display: block; margin-bottom: 2px; font-style: normal; font-size: 18px; letter-spacing: 1px; }
+  html[data-lang="zh"] #note .t { letter-spacing: 3px; }
+  #note p { margin: 0; white-space: pre-line; }
+  #opening { position: fixed; inset: 0; z-index: 30; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(8,10,8,.55);
+    color: #f4efe6; text-shadow: 0 1px 3px rgba(0,0,0,.8); opacity: 0; transition: opacity .6s; }
+  #opening[hidden] { display: none; }
+  #opening.on { opacity: 1; }
+  #opening .box { width: min(520px, 100%); text-align: center; font-size: 16px; line-height: 1.7; }
+  #opening p { margin: 0 0 10px; }
+  #opening button { margin-top: 12px; font: inherit; font-size: 13px; color: inherit; text-shadow: inherit; background: none; border: 1px solid rgba(244,239,230,.45); border-radius: 6px; padding: 5px 14px; cursor: pointer; }
+  #opening button:hover { background: rgba(255,255,255,.12); }
+  /* 中英切换：只显示一种；中文版里原来当「下一行小字」的 .zh 改成主文字的大小 */
+  html[data-lang="en"] .zh { display: none !important; }
+  html[data-lang="zh"] .en { display: none !important; }
+  html[data-lang="zh"] #quest .zh { margin-top: 0; font-size: inherit; }
+  html[data-lang="zh"] #quest.end .zh { font-size: 22px; letter-spacing: 4px; }
+  html[data-lang="zh"] #roomNote .zh { margin-top: 0; font-size: inherit; opacity: 1; }
+  html[data-lang="zh"] #rooms button .zh { font-size: 15px; letter-spacing: 2px; opacity: 1; }
+  html[data-lang="zh"] #fpHud .help .zh { margin-top: 0; font-size: 12.5px; opacity: 1; }
+  html[data-lang="zh"] #card p.zh { margin-top: 0; padding-top: 0; border-top: 0; font-size: 13.5px; }
+  html[data-lang="zh"] #card h2 .cn { letter-spacing: 2px; }
+  html[data-lang="zh"] #journal .page > :not(.zh):not(.jreset) { display: none; }
+  html[data-lang="zh"] #journal div.zh { margin-top: 0; padding-top: 0; border-top: 0; }
+  /* 中英切换：右下角署名上方，字体字号同署名 */
+  #langBtn { position: fixed; right: 7px; bottom: 26px; z-index: 8; font: inherit; font-family: "IM Fell English SC", "IM Fell English", Georgia, serif; font-size: 11px; letter-spacing: 1px; color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,.7);
+    background: none; border: 0; border-radius: 4px; padding: 2px 5px; cursor: pointer; }
+  #langBtn:hover { background: rgba(255,255,255,.12); }
+  #langBtn { opacity: .6; } #langBtn:hover { opacity: 1; }
+  #langBtn b { font-weight: normal; }
+  html[data-lang="zh"] #langBtn .l-zh, html[data-lang="en"] #langBtn .l-en { display: none; } /* 只显示要切过去的那种：英文版显示 CN，中文版显示 EN */
   #journal .jreset { text-align: center; margin-top: 56px; }
+  #cardBg { position: fixed; inset: 0; z-index: 21; background: rgba(8,10,8,.55); } /* 线索卡片的遮罩：挡住场景点击，只能点 × / Esc 关 */
+  #cardBg[hidden] { display: none; }
   #veil { position: fixed; inset: 0; z-index: 1; background: #000; opacity: 0; pointer-events: none; } /* 出屋路线穿结构时压黑 */
   /* Journal：整页阅读，序章 / 测绘员 / 各房间 / 终章 */
   #journal { position: fixed; inset: 0; z-index: 20; background: rgba(22,18,14,.86); overflow-y: auto; color: #efe7d8; -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px); }
   #journal[hidden] { display: none; }
   #journal .page { max-width: 600px; margin: 0 auto; padding: 56px 16px 80px; font-size: 16px; line-height: 1.75; }
   #journal h2 { font-family: "IM Fell English SC", "IM Fell English", Georgia, serif; font-weight: normal; font-size: 30px; letter-spacing: 3px; text-align: center; margin: 0 0 4px; }
-  #journal .sub { text-align: center; font-style: italic; opacity: .7; margin: 0 0 36px; }
+  #journal .sub { text-align: center; opacity: .7; margin: 0 0 36px; }
   #journal h3 { font-family: "IM Fell English SC", "IM Fell English", Georgia, serif; font-weight: normal; font-size: 20px; letter-spacing: 2px; text-align: center; margin: 44px 0 12px; }
   #journal h3::after { content: "❦"; display: block; font-size: 14px; opacity: .55; margin-top: 4px; }
   #journal h4 { font-family: "IM Fell English SC", "IM Fell English", Georgia, serif; font-weight: normal; font-size: 16px; letter-spacing: 1.5px; margin: 22px 0 4px; }
   #journal p { margin: 0 0 14px; }
   #journal em.k { font-style: italic; color: #e8c89a; }
-  #journal .coda { font-style: italic; opacity: .85; }
+  #journal .coda { opacity: .85; }
   #journal .x { position: fixed; top: 14px; right: 18px; background: none; box-shadow: none; color: #efe7d8; font-size: 26px; padding: 0 8px; }
   #journal .x:hover { background: rgba(255,255,255,.1); }
-  #sky #jBtn { border: 0; font-size: 15px; letter-spacing: 1px; }
+  /* 2026-10-22 遗稿：× 常驻——#journal 自己带 backdrop-filter 会成为 fixed 子元素的包含块，× 跟着内容滚走；模糊挪到 ::before。排版收紧（副标题删了） */
+  #journal { -webkit-backdrop-filter: none; backdrop-filter: none; }
+  #journal::before { content: ""; position: fixed; inset: 0; z-index: -1; pointer-events: none; -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px); }
+  #journal .x { z-index: 1; }
+  #journal .page { padding: 40px 16px 56px; line-height: 1.65; }
+  #journal h2 { margin: 0 0 6px; }
+  #journal h3 { margin: 30px 0 8px; }
+  #journal h4 { margin: 16px 0 2px; }
+  #journal p { margin: 0 0 10px; }
+  #journal div.zh { line-height: 1.8; }
+  /* 居中小弹窗（解锁遗稿、继续 / 重来）：同线索卡片（上下细线、白字深阴影、细线框按钮） */
+  #dlg { position: fixed; inset: 0; z-index: 31; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(8,10,8,.55);
+    color: #f4efe6; text-shadow: 0 1px 3px rgba(0,0,0,.75), 0 0 8px rgba(0,0,0,.45); }
+  #dlg[hidden] { display: none; }
+  #dlg .box { width: min(440px, 100%); padding: 12px 0 14px; line-height: 1.65; border-top: 1px solid rgba(244,239,230,.45); border-bottom: 1px solid rgba(244,239,230,.45); }
+  #dlg h2 { margin: 0; font-weight: normal; font-size: 21px; line-height: 1.25; letter-spacing: .3px; }
+  html[data-lang="zh"] #dlg h2 { letter-spacing: 2px; }
+  #dlg p { margin: 12px 0 0; font-size: 13.5px; white-space: pre-line; }
+  #mmap { position: fixed; left: 16px; bottom: 56px; z-index: 6; width: 72px; height: auto; pointer-events: none; border-radius: 4px; opacity: .88; box-shadow: 0 1px 4px rgba(0,0,0,.35); } /* 迷雾小地图 */
+  @media (max-width: 600px) { #mmap { left: 8px; bottom: 52px; width: 52px; } }
+  #dlg .row { display: flex; gap: 8px; margin-top: 14px; }
+  #dlg button { font: inherit; font-size: 12px; color: inherit; text-shadow: inherit; background: none; box-shadow: none; border: 1px solid rgba(244,239,230,.45); border-radius: 6px; padding: 5px 10px; cursor: pointer; }
+  #dlg button:hover { background: rgba(255,255,255,.12); }
+  #sky #backBtn { font-size: 15px; letter-spacing: 1px; border: 0; }
+  #skyL #jBtn, #skyL #skyBtn { border: 0; font-size: 15px; letter-spacing: 1px; }
   #card .row { display: flex; gap: 8px; }
   #fpHud { position: fixed; inset: 0; z-index: 5; pointer-events: none; }
   #fpHud .dot { position: absolute; left: 50%; top: 50%; width: 6px; height: 6px; margin: -3px 0 0 -3px; border-radius: 50%; background: rgba(244,239,230,.85); box-shadow: 0 0 0 1px rgba(43,38,32,.5); }
-  #fpHud .help { position: absolute; left: 50%; bottom: 112px; transform: translateX(-50%); padding: 6px 12px; border-radius: 6px; background: rgba(43,38,32,.6); color: #f4efe6; font-size: 12.5px; text-align: center; white-space: nowrap; transition: opacity .6s; }
+  #fpHud .help { position: absolute; left: 50%; bottom: 150px; transform: translateX(-50%); padding: 6px 12px; border-radius: 6px; background: rgba(43,38,32,.6); color: #f4efe6; font-size: 12.5px; text-align: center; white-space: nowrap; transition: opacity .6s; }
   #fpHud .help .zh { display: block; margin-top: 2px; font-size: 12px; opacity: .9; }
   #fpHud.live .help { opacity: 0; }
   #fpHud .hint { position: absolute; left: 50%; top: calc(50% + 48px); transform: translateX(-50%); font-size: 12px; color: #f4efe6; text-shadow: 0 1px 2px rgba(0,0,0,.7); white-space: nowrap; }
@@ -97,26 +179,34 @@
   /* 时间面板：底部居中，无底框，白字 + 深色阴影，在亮暗画面上都看得清；面板往上展开 */
   #sky { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); z-index: 7; display: flex; flex-direction: column; align-items: center; gap: 6px;
     color: #f4efe6; text-shadow: 0 1px 3px rgba(0,0,0,.75), 0 0 8px rgba(0,0,0,.45); }
-  #sky button, #sky select { font: inherit; font-size: 12px; color: inherit; text-shadow: inherit; background: none; box-shadow: none; border: 1px solid rgba(244,239,230,.45); border-radius: 6px; padding: 5px 8px; }
-  #sky button:hover { background: rgba(255,255,255,.12); }
-  #sky #skyBtn, #sky #enter { border: 0; font-size: 15px; letter-spacing: 1px; }
+  #sky button, #skyL button, #skyL select { font: inherit; font-size: 12px; color: inherit; text-shadow: inherit; background: none; box-shadow: none; border: 1px solid rgba(244,239,230,.45); border-radius: 6px; padding: 5px 8px; }
+  #sky button:hover, #skyL button:hover { background: rgba(255,255,255,.12); }
+  /* 进屋 / 出门：大号、无框、悬停不加底框；屋外（.glow）只用和标题同款的淡晕影（0 0 6px 反色 .35），不要底部暖光；开场字幕播完前和遗稿一起完全隐藏（.wait） */
+  #sky #enter { position: relative; font-size: 26px; letter-spacing: 4px; padding: 8px 30px; border: 0; transition: opacity .6s; }
+  #sky #enter:hover, #sky #walkBtn:hover { background: none; }
+  #sky #walkBtn { font-size: 18px; letter-spacing: 3px; padding: 4px 20px; border: 0; }
+  #sky #enter.glow { text-shadow: 0 0 6px rgba(0,0,0,.35), 0 1px 3px rgba(0,0,0,.6); }
+  #sky .wait, #skyL .wait { visibility: hidden; opacity: 0; pointer-events: none; }
+  /* 时间、天气：左下角，面板往上展开 */
+  #skyL { position: fixed; left: 16px; bottom: 16px; z-index: 7; display: flex; flex-direction: column; align-items: flex-start; gap: 6px;
+    color: #f4efe6; text-shadow: 0 1px 3px rgba(0,0,0,.75), 0 0 8px rgba(0,0,0,.45); }
   /* 进屋：和时间按钮同款，在它上面；房间按钮在屏幕右侧竖排、竖直居中，按参观顺序从上到下，英文下一行小字中文 */
   #rooms { position: fixed; right: 16px; top: 50%; transform: translateY(-50%); z-index: 7; display: flex; flex-direction: column; align-items: flex-end; gap: 6px;
     color: #f4efe6; text-shadow: 0 1px 3px rgba(0,0,0,.75), 0 0 8px rgba(0,0,0,.45); }
   #rooms[hidden] { display: none; }
   #rooms button { font: inherit; font-size: 15px; letter-spacing: 1px; color: inherit; text-shadow: inherit; background: none; box-shadow: none; border: 0; border-radius: 6px; padding: 3px 8px; text-align: right; opacity: .82; }
   #rooms button .zh { display: block; font-size: 11px; letter-spacing: 2px; opacity: .8; }
-  #rooms button:hover { background: rgba(255,255,255,.12); opacity: 1; }
-  #rooms button.on { color: #e8c89a; opacity: 1; }
-  #rooms button.on::before { content: "❧ "; }
+  #rooms button { transition: color .2s, opacity .2s, transform .2s ease; transform-origin: right center; }
+  #rooms button:hover { background: none; color: #fff; opacity: 1; transform: scale(1.06); } /* 悬停变亮白 + 以右边为原点轻微放大（不往屏幕外挤）、当前房间暖黄，不加底框 / 图标 */
+  #rooms button.on, #rooms button.on:hover { color: #e8c89a; opacity: 1; }
   /* 屋外刚点进屋、还没选房间：列表放进 #sky 里进屋按钮上方，横排居中（窄屏换行）；进了房间再挪回右侧。切换位置时先淡出再淡入 */
   #rooms { transition: opacity .28s ease; }
   #rooms.fade { opacity: 0; pointer-events: none; }
   #rooms.bottom { position: static; transform: none; flex-direction: row; flex-wrap: wrap; justify-content: center; align-items: flex-start; gap: 2px 10px; width: min(760px, calc(100vw - 32px)); }
-  #rooms.bottom button { text-align: center; }
+  #rooms.bottom button { text-align: center; transform-origin: center; }
   #skyPanel { width: min(320px, calc(100vw - 32px)); font-size: 13px; display: flex; flex-direction: column; gap: 10px; }
   #skyPanel[hidden] { display: none; }
-  #skyPanel label { display: flex; flex-direction: column; gap: 4px; font-style: italic; text-align: center; }
+  #skyPanel label { display: flex; flex-direction: column; gap: 4px; text-align: center; }
   #skyPanel input[type=range] { width: 100%; accent-color: #e8c89a; }
   #skyPresets { display: grid; grid-template-columns: repeat(6, 1fr); gap: 4px; }
   #skyPresets button { padding: 4px 2px; font-size: 11px; }
@@ -125,53 +215,89 @@
   #skyPanel select { flex: 1; }
   #skyPanel select option { color: var(--ink); text-shadow: none; }
   /* 天气：按钮和时间按钮并排，面板同款往上展开 */
-  #sky .btns { display: grid; grid-template-columns: 1fr auto 1fr; gap: 18px; }
-  #sky .btns button { white-space: nowrap; } #skyBtn { justify-self: end; } #jBtn { justify-self: start; }
+  #skyL .btns { display: flex; gap: 10px; align-items: baseline; }
+  #skyL .btns button { white-space: nowrap; }
   #skyClock { display: inline-block; text-align: right; font-variant-numeric: tabular-nums; }
-  #sky #wxBtn { border: 0; font-size: 15px; letter-spacing: 1px; }
+  #skyL #wxBtn { border: 0; font-size: 15px; letter-spacing: 1px; }
+  /* 天气图标：抽象细线 SVG（WX_ICON），描边跟文字颜色，阴影用 drop-shadow 补上（SVG 不吃 text-shadow） */
+  #wxIco { display: inline-block; width: 1.2em; height: 1.2em; margin-right: .4em; vertical-align: -.25em; }
+  #wxIco svg { display: block; width: 100%; height: 100%; fill: none; stroke: currentColor; stroke-width: 1.15; stroke-linecap: round; stroke-linejoin: round;
+    filter: drop-shadow(0 1px 1.5px rgba(0,0,0,.75)); }
+  #wxIco svg .f { fill: currentColor; stroke: none; }
+  /* 遗稿：解锁后在天气旁边；章节号 § 用 IM Fell（汇文子集里没有这个字形） */
+  #jBtn .sec { margin-right: .35em; font-family: "IM Fell English", Georgia, serif; }
   #wxPanel { width: min(320px, calc(100vw - 32px)); display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; }
   #wxPanel[hidden] { display: none; }
   #wxPanel button { padding: 5px 2px; font-size: 11px; }
   #wxPanel button.on { background: rgba(232,200,154,.3); border-color: #e8c89a; }
-  @media (max-width: 600px) { #quest { top: 66px; font-size: 13px; } body:has(#card:not([hidden])) #quest { opacity: 0; } }
-  @media (max-width: 600px) { #card { left: 16px; top: 92px; transform: none; width: calc(100vw - 32px); max-height: calc(100vh - 300px); } #roomNote { bottom: 110px; font-size: 13px; } #rooms { right: 8px; gap: 2px; } #rooms button { font-size: 13px; padding: 2px 6px; } #rooms button .zh { font-size: 10px; } #rooms.bottom { gap: 0 4px; } #skyPresets { grid-template-columns: repeat(3, 1fr); } }
+  @media (max-width: 600px) { #subs, #note, #roomNote, #quest:not(.end) { bottom: 140px; font-size: 14px; } #quest.end, #fpHud .help { bottom: 140px; } #fpHud .help { width: calc(100vw - 32px); box-sizing: border-box; white-space: normal; } #prog { bottom: 116px; } #opening .box { font-size: 14px; } }
+  @media (max-width: 600px) { body:has(#card:not([hidden])) :is(#quest, #prog) { opacity: 0; } }
+  @media (max-width: 600px) { #card { left: 16px; top: 50%; transform: translateY(-50%); width: calc(100vw - 32px); max-height: calc(100vh - 160px); } #rooms { right: 8px; gap: 2px; } #rooms button { font-size: 13px; padding: 2px 6px; } #rooms button .zh { font-size: 10px; } #rooms.bottom { gap: 0 4px; } #skyPresets { grid-template-columns: repeat(3, 1fr); } #skyL .btns { flex-direction: column; align-items: flex-start; gap: 0; } #skyName { display: none; } }
 </style>
 </head>
 <body>
 <div id="app"></div>
-<div id="loader"><div>The way through the woods is being prepared…</div><div id="bar"><div></div></div><div id="pct">0%</div></div>
-<div id="title"><h1>The Surveyor's Cabin</h1><p><span class="zh">无名测绘员的遗稿</span></p></div>
-<div id="by">vibe coding by Fxrc</div>
+<div id="loader"><div><span class="en">The way through the woods is being prepared…</span><span class="zh">林间的路正在铺开……</span></div><div id="bar"><div></div></div><div id="pct">0%</div></div>
+<div id="title"><h1><span class="en">The Surveyor's Cabin</span><span class="zh">无名测绘员的遗稿</span></h1></div>
+<button id="langBtn" aria-label="中文 / English"><b class="l-zh">CN</b><b class="l-en">EN</b></button>
+<div id="by">Vibe Coding by Fxrc</div>
 <div id="tip" hidden></div>
+<div id="cur" aria-hidden="true"><i class="r"></i><i class="d"></i></div>
+<script>/* 自定义鼠标（样式见 #cur）：pointermove 只改 transform；触屏 / 笔不启用，碰到触摸就切回系统光标 */ (() => {
+  const el = document.getElementById('cur'), root = document.documentElement, fine = matchMedia('(hover: hover) and (pointer: fine)');
+  const UI = 'button, a, select, input, label, summary, [role="button"]';
+  const cls = (c, v) => root.classList.toggle(c, v);
+  addEventListener('pointermove', (e) => {
+    if (e.pointerType !== 'mouse') { cls('cc', false); return; }
+    if (fine.matches) cls('cc', true);
+    el.style.transform = `translate3d(${e.clientX}px, ${e.clientY}px, 0)`;
+    cls('cur-ui', !!(e.target && e.target.closest && e.target.closest(UI))); cls('cur-out', false);
+    if (!e.buttons) cls('cur-down', false);
+  }, { passive: true });
+  addEventListener('pointerdown', (e) => { if (e.pointerType === 'mouse') cls('cur-down', true); else cls('cc', false); }, { passive: true });
+  addEventListener('pointerup', () => cls('cur-down', false), { passive: true });
+  document.addEventListener('mouseout', (e) => { if (!e.relatedTarget) cls('cur-out', true); });
+  document.addEventListener('pointerlockchange', () => cls('cur-lock', !!document.pointerLockElement));
+})();</script>
 <div id="veil"></div>
-<div id="card" hidden><button class="x" aria-label="Close">×</button><h2></h2><p class="lead"></p><p class="story"></p><p class="zh"></p><div class="row"><button id="focus">Look Closer</button><button id="playAs" hidden>Take His Place</button></div></div>
+<div id="cardBg" hidden></div>
+<div id="card" hidden><button class="x" aria-label="Close">×</button><h2></h2><p class="lead"></p><p class="story en"></p><p class="zh"></p><div class="row"><button id="focus"><span class="en">Look Closer</span><span class="zh">走近看</span></button><button id="playAs" hidden></button></div></div>
 <div id="rooms" hidden></div>
 <div id="sky">
-  <button id="enter">Enter the Cabin</button>
+  <button id="backBtn" hidden><span class="en">Step Back</span><span class="zh">返回</span></button>
+  <button id="enter" class="wait glow"><span class="en">Enter the Cabin</span><span class="zh">进屋</span></button>
+  <button id="walkBtn" hidden><span class="en">Walk the Woods</span><span class="zh">出门走走</span></button>
+</div>
+<div id="skyL">
   <div id="skyPanel" hidden>
-    <label>The Hour<input type="range" id="skyHourIn" min="0" max="24" step="0.05" value="9"></label>
+    <label><span class="en">The Hour</span><span class="zh">时刻</span><input type="range" id="skyHourIn" min="0" max="24" step="0.05" value="9"></label>
     <div id="skyPresets"></div>
     <div class="row"><button id="skyPlay">Stay the Hour</button>
       <select id="skySpeed" aria-label="Pace of the day"><option value="120">A day in 2 min</option><option value="360" selected>A day in 6 min</option><option value="1440">A day in 24 min</option></select></div>
-    <label>Bearing of the Sun<input type="range" id="skyBearing" min="0" max="360" step="1"></label>
-    <label>Strength of the Sun<input type="range" id="skyStrength" min="0" max="2" step="0.05"></label>
+    <label><span class="en">Bearing of the Sun</span><span class="zh">太阳方位</span><input type="range" id="skyBearing" min="0" max="360" step="1"></label>
+    <label><span class="en">Strength of the Sun</span><span class="zh">日光强弱</span><input type="range" id="skyStrength" min="0" max="2" step="0.05"></label>
   </div>
   <div id="wxPanel" hidden></div>
-  <div class="btns"><button id="skyBtn">☼ <span id="skyClock">9:00</span> · <span id="skyName">Forenoon</span></button>
-    <button id="wxBtn">☁ <span id="wxName">Fair</span></button>
-    <button id="jBtn">❦ Journal</button></div>
+  <div class="btns"><button id="skyBtn"><span id="skyClock">9:00</span> · <span id="skyName">Forenoon</span></button>
+    <button id="wxBtn"><span id="wxIco" aria-hidden="true"></span><span id="wxName">Fair</span></button>
+    <button id="jBtn" class="wait"><span class="sec">§</span><span class="en">Journal</span><span class="zh">遗稿</span></button></div>
 </div>
 <div id="roomNote"></div>
 <div id="quest"></div>
+<canvas id="mmap" hidden></canvas>
+<div id="subs"></div>
+<div id="note"></div>
+<div id="prog"></div><!-- 线索进度：提示区下面一行小字（原来在 #sky 里，位置随按钮多少浮动） -->
+<div id="opening" hidden><div class="box"></div></div>
+<div id="dlg" hidden><div class="box"></div></div>
 <div id="journal" hidden><button class="x" aria-label="Close">×</button><div class="page">
   <h2>The Surveyor's Papers</h2>
-  <p class="sub">being the story of the cabin in the woods, and of the man who kept it</p>
 
   <h3>The Two Who Came After</h3>
   <p>For thirty years the reports came down from the north, one each spring, and were filed away unread. Then one spring none came.</p>
   <p>The Survey Office sent two people up the pebbled path: an old inspector who had signed the Surveyor's commission thirty years before, and a young clerk who had read every report he ever sent, though no one had asked her to.</p>
   <p>When they came, the door stood ajar and the porch lamp was burning. There was no one in the house, and the stove was cold.</p>
-  <p>On his desk the clerk found a string of bearings. The last of them falls on a spot where the Office's own map shows nothing at all. Whether he went there, or never went far, they do not yet know. Night is coming on; for now, they will stop here.</p>
+  <p>Night is coming on; for now, they will stop here.</p>
 
   <h3>Prologue · A Man Comes Back Along the Path</h3>
   <p>Where the northern spruce-forest ends, the fog never lifts. Ten thousand spruces, autumn pines and dead trees stand thin near at hand and thicker farther off, until at last they melt into the mist like a dark-green sea without a shore. A pebbled path winds among them, strewn with fallen leaves, coming out of the depths of the fog; at its end lies a yard paved with leaves, and in the yard a log cabin — a pitched roof of shingles, an iron stovepipe thrust up through it, a lamp hung by the porch.</p>
@@ -217,13 +343,12 @@
 
   <div class="zh" lang="zh">
   <h2>无名测绘员的遗稿</h2>
-  <p class="sub">林中小屋完整传奇 · 中文原文</p>
 
   <h3>后来的两个人</h3>
   <p>三十年来，北边每年开春寄回一份报告，归了档，没人读。直到有一年春天，报告没有来。</p>
   <p>测绘局派了两个人沿卵石小路上山：一个是三十年前在他委任状上签字的老稽查，一个是年轻的书记员——他寄回的每一份报告她都读过，虽然没人让她读。</p>
   <p>他们到的时候，大门虚掩着，门廊的灯亮着，屋里没有人，炉子是冷的。</p>
-  <p>书记员在他的书桌上找到一串方位记录。最后一条坐标，在局里的官方地图上什么也没有。他是去了那里，还是根本没走远，他们还不知道。天快黑了，先在这里住下。</p>
+  <p>天快黑了，先在这里住下。</p>
 
   <h3>序章：一个人沿着小路走回来</h3>
   <p>北方针叶林的尽头，雾气常年不散。一万棵云杉、秋松和枯树从近处稀疏地排到远处，越来越密，最后溶进雾里，像一片没有尽头的暗绿色海。林间一条卵石小路弯弯曲曲，两边撒着落叶，从雾的深处通出来，尽头是一块铺满落叶的院子地坪。地坪上立着一座原木小屋——双坡屋顶铺着木瓦，铁皮烟囱从屋顶戳出去，门廊上挂着一盏灯。</p>
@@ -238,27 +363,27 @@
 
   <h3>终章：他去了哪里</h3>
   <p>把所有线索收拢来看——</p>
-  <p><em class=“k”>平时出门的动线是固定的</em>：搁板上拿手套帽子 → 衣帽架取大衣 → 换鞋凳穿靴子 → 提灯 → 墙上取斧头 → 出门。三十年来每一次都这样。</p>
-  <p><em class=“k”>但最后一次，他什么都没带</em>：大衣挂在架上还带着褶皱，靴子在托盘边筒口微张，手套帽子在搁板上原样放着，提灯没动，三根火柴没动，斧头挂在墙上。</p>
+  <p><em class="k">平时出门的动线是固定的</em>：搁板上拿手套帽子 → 衣帽架取大衣 → 换鞋凳穿靴子 → 提灯 → 墙上取斧头 → 出门。三十年来每一次都这样。</p>
+  <p><em class="k">但最后一次，他什么都没带</em>：大衣挂在架上还带着褶皱，靴子在托盘边筒口微张，手套帽子在搁板上原样放着，提灯没动，三根火柴没动，斧头挂在墙上。</p>
   <p>他只做了两件事——</p>
-  <p><em class=“k”>把火压好，炉门关严，让火闷着烧。</em> 然后<em class=“k”>把大门留了条缝，让门廊灯亮着。</em></p>
+  <p><em class="k">把火压好，炉门关严，让火闷着烧。</em> 然后<em class="k">把大门留了条缝，让门廊灯亮着。</em></p>
   <p>他穿着屋里的便鞋，沿着卵石小路，走进了雾里。</p>
   <p>柴堆最上面那块柴截面上的字是早就写好的：“如果我不在了，这些柴够烧到开春。”</p>
   <p>书桌抽屉里那张未完成的地图草稿，最后一行坐标指向的正是“✕”。</p>
   <p>阁楼的床叠得整整齐齐，木梯推回原位，横杆放下——“不必再上了。”</p>
   <p>摇椅空着，怀表停在凌晨三点十七分。</p>
-  <p>他不是仓促离开，<em class=“k”>他是有计划地走的。</em> 柴上的字、压好的炉火、虚掩的大门和门廊灯——都是他留给小屋的遗言。就像一个人把家里收拾干净，关好炉门，留一盏灯，然后出了远门。</p>
+  <p>他不是仓促离开，<em class="k">他是有计划地走的。</em> 柴上的字、压好的炉火、虚掩的大门和门廊灯——都是他留给小屋的遗言。就像一个人把家里收拾干净，关好炉门，留一盏灯，然后出了远门。</p>
   <p>只是这次远门的方向，是地图上那个标着“勿入”的地方。</p>
   <p>三十年前他走进这片森林，是为了在空白地图上画线。后来他发现，有一样东西画不到地图上，因为它也在画他。于是他停下来，和它对看了一辈子。</p>
   <p>三十场大雪，斧柄上刻满了记号，脚印变成了树根的形状。</p>
   <p>他慢慢从“丈量森林的人”变成了“属于森林的人”。</p>
   <p>最后一夜，他在阁楼摇椅上摇了一整夜，听雪从屋顶上滑下去。然后下了阁楼，没穿大衣没换靴子没提灯，沿着卵石小路走进雾里。</p>
-  <p><em class=“k”>他没有带任何东西，因为他觉得自己不需要再回来了。又或者，他觉得去那个地方，带什么都多余。</em></p>
+  <p><em class="k">他没有带任何东西，因为他觉得自己不需要再回来了。又或者，他觉得去那个地方，带什么都多余。</em></p>
   <p>小屋至今还活着。</p>
   <p>天黑灯就亮，溪上的水轮还在转。炉火灭过一次，又被你们生了起来。雨从屋檐滴，雪在屋顶积了又滑。春来冰化，秋去叶落。门垫上的靴印磨进了木纹里，沙发上的凹陷再也不会弹回来。</p>
   <p>好像主人只是出门劈了趟柴，马上就会抖落一身雪花，踩着门垫走进来，在换鞋凳上蹭掉泥，把大衣挂上衣帽架，往炉子里添一根柴，坐到沙发上那块只属于他的凹陷里。</p>
   <p>但他不会再回来了。</p>
-  <p><em class=“k”>他已经在那片雾里，变成了针叶林的一部分。</em></p>
+  <p><em class="k">他已经在那片雾里，变成了针叶林的一部分。</em></p>
   <p>门廊灯还亮着，照亮一条回家的路。</p>
   <p>不是照亮他的。是照亮你的。</p>
 
@@ -497,11 +622,17 @@ function updateSky(dt) {
 
 // 太阳控制面板：时刻滑块、六个时段、流逝开关与速度、太阳方位、太阳强度
 const $ = (id) => document.getElementById(id);
+// 中英切换：lang() 当前语言；lbl 生成中英两份，CSS 只显示当前那份（切换时不用重画）
+const lang = () => document.documentElement.dataset.lang;
+const esc = (t) => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;');
+const lbl = (en, zh) => `<span class="en">${esc(en)}</span><span class="zh">${esc(zh)}</span>`;
+const HOUR_ZH = { Dawn: '黎明', Forenoon: '上午', Noon: '正午', Afternoon: '下午', Dusk: '黄昏', Night: '夜里' };
+const WX_ZH = { Fair: '晴', Overcast: '阴', Rain: '雨', Thunderstorm: '雷雨', Snow: '雪', Blizzard: '暴雪', Fog: '雾' };
 const skyEl = { btn: $('skyBtn'), panel: $('skyPanel'), hour: $('skyHourIn'), clock: $('skyClock'), name: $('skyName'),
   play: $('skyPlay'), speed: $('skySpeed'), bearing: $('skyBearing'), strength: $('skyStrength') };
 const presetBox = $('skyPresets');
 for (const [n, h] of SKY_PRESETS) {
-  const b = document.createElement('button'); b.textContent = n;
+  const b = document.createElement('button'); b.innerHTML = lbl(n, HOUR_ZH[n]); b.dataset.n = n;
   b.onclick = () => { sky.goal = h; };
   presetBox.appendChild(b);
 }
@@ -524,10 +655,10 @@ function syncSkyUI() {
   if (label === skyShown) return;
   skyShown = label;
   skyEl.clock.textContent = `${hh}:${String(mm).padStart(2, '0')}`;
-  skyEl.name.textContent = hourName(sky.hour);
-  skyEl.play.textContent = sky.play ? 'Stay the Hour' : 'Let the Day Pass';
+  skyEl.name.innerHTML = lbl(hourName(sky.hour), HOUR_ZH[hourName(sky.hour)]);
+  skyEl.play.innerHTML = sky.play ? lbl('Stay the Hour', '停在此刻') : lbl('Let the Day Pass', '让时间走');
   if (document.activeElement !== skyEl.hour) skyEl.hour.value = sky.hour.toFixed(2);
-  for (const b of presetBox.children) b.classList.toggle('on', b.textContent === hourName(sky.hour));
+  for (const b of presetBox.children) b.classList.toggle('on', b.dataset.n === hourName(sky.hour));
 }
 
 // ===== 天气：晴、阴、雨、雷雨、雪、暴雪、浓雾 =====
@@ -543,9 +674,20 @@ const WEATHERS = [
   ['Fog',          { cloud: 0.6,  fogK: 1,   near: 0,  far: 24,  rain: 0,   snow: 0,   wind: 0.2, bolt: 0 }],
 ];
 const wx = { name: 'Fair', goal: WEATHERS[0][1], cur: { ...WEATHERS[0][1] }, t: 0, flashes: [], nextBolt: 4, flash: 0 };
+// 天气按钮前的抽象图标：20×20 细线（样式见 #wxIco）。晴 = 圆 + 八道短芒；云系 = 地平线上的半圆（DOME），下面加雨丝 / 闪电 / 雪点；雾 = 三道错开的横线
+const DOME = 'M4 10a6 6 0 0 1 12 0M2.5 10h15', wxDot = (x, y) => `<circle class="f" cx="${x}" cy="${y}" r=".95"/>`;
+const WX_ICON = {
+  Fair: '<circle cx="10" cy="10" r="3.3"/><path d="M10 2.5v2M10 15.5v2M2.5 10h2M15.5 10h2M14.2 5.8l.9-.9M5.8 5.8l-.9-.9M14.2 14.2l.9.9M5.8 14.2l-.9.9"/>',
+  Overcast: '<path d="M4 12a6 6 0 0 1 12 0M2.5 12h15M5.5 15h9"/>',
+  Rain: `<path d="${DOME}M7 12.5l-1 3M10.5 12.5l-1 3M14 12.5l-1 3"/>`,
+  Thunderstorm: `<path d="${DOME}M11 12l-2 3h3l-2 3.5"/>`,
+  Snow: `<path d="${DOME}"/>${wxDot(6.5, 13.5)}${wxDot(10, 16)}${wxDot(13.5, 13.5)}`,
+  Blizzard: `<path d="${DOME}M3 13.2h7"/>${wxDot(13.5, 13.2)}${wxDot(16.5, 15.8)}${wxDot(6, 16.5)}${wxDot(10.5, 17)}`,
+  Fog: '<path d="M3 6.5h14M5.5 10h12M3 13.5h11"/>',
+};
 const wxPanel = $('wxPanel');
 for (const [n, p] of WEATHERS) {
-  const b = document.createElement('button'); b.textContent = n;
+  const b = document.createElement('button'); b.innerHTML = lbl(n, WX_ZH[n]);
   b.onclick = () => { setWeather(n); if (n === 'Thunderstorm' && !(sky.hour >= 20 || sky.hour < 4)) sky.goal = 22; };
   wxPanel.appendChild(b); // 手动选雷雨时如果不是夜里，时间转到 22 点（自动换天气不转）
 }
@@ -554,7 +696,7 @@ let wxTimer = 0;
 function setWeather(n, now) {
   const i = WEATHERS.findIndex((w) => w[0] === n), p = WEATHERS[i][1];
   wx.name = n; wx.goal = p; if (now) wx.cur = { ...p };
-  $('wxName').textContent = n; [...wxPanel.children].forEach((c, k) => c.classList.toggle('on', k === i));
+  $('wxName').innerHTML = lbl(n, WX_ZH[n]); $('wxIco').innerHTML = `<svg viewBox="0 0 20 20">${WX_ICON[n]}</svg>`; [...wxPanel.children].forEach((c, k) => c.classList.toggle('on', k === i));
   clearTimeout(wxTimer);
   wxTimer = setTimeout(() => { const o = WEATHERS.filter((w) => w[0] !== wx.name); setWeather(o[Math.floor(Math.random() * o.length)][0]); }, (120 + Math.random() * 120) * 1000);
 }
@@ -627,31 +769,52 @@ function precipHole(center, top) { precipU.uHole.value.set(center.x, center.z, 2
 // 湿了整体变暗、变光滑；低洼处（低频噪声高的地方）先出水洼：很暗、几乎镜面，下雨时有细小涟漪闪光
 // 积雪从零星的白斑长成整片，雪下面的颜色和粗糙度都被盖掉
 // uDoor = 大门合页 (x, z)、扫过的半径、已扫到的角度（-1 没扫）；uSweep = 扫开的地方还剩几成没被新雪盖回去；uDoorOld = 上一个扇形（下沿角, 上沿角, 剩几成, 当前扇形的下沿角），新一次开关门时旧扇形不突变、继续盖回
-const cover = { uWet: { value: 0 }, uSnow: { value: 0 }, uDoor: { value: new THREE.Vector4(0, 0, 0, -1) }, uSweep: { value: 0 }, uDoorOld: { value: new THREE.Vector4(0, -1, 0, 0) } };
+const cover = { uWet: { value: 0 }, uSnow: { value: 0 }, uDoor: { value: new THREE.Vector4(0, 0, 0, -1) }, uSweep: { value: 0 }, uDoorOld: { value: new THREE.Vector4(0, -1, 0, 0) }, uRain: { value: 0 } }; // uRain = 当前雨量（水洼涟漪）
 function groundCover(sh) {
   Object.assign(sh.uniforms, cover, { uCovT: precipU.uTime });
   sh.vertexShader = 'varying vec2 vCovP;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\nvCovP = (modelMatrix * vec4(position, 1.0)).xz;');
-  sh.fragmentShader = `uniform float uWet, uSnow, uCovT, uSweep; uniform vec4 uDoor, uDoorOld; varying vec2 vCovP;
+  sh.fragmentShader = `uniform float uWet, uSnow, uCovT, uSweep, uRain; uniform vec4 uDoor, uDoorOld; varying vec2 vCovP;
 float doorFan(float da, float lo, float hi) { // 角度 [lo, hi] 的扇形；lo≈0 时往门槛下多盖一点
   return smoothstep(lo < 0.01 ? -0.12 : lo - 0.04, lo < 0.01 ? 0.0 : lo + 0.03, da) * (1.0 - smoothstep(hi - 0.03, hi + 0.04, da)); }
 float ch(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
 float cn(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
   return mix(mix(ch(i), ch(i + vec2(1, 0)), f.x), mix(ch(i + vec2(0, 1)), ch(i + 1.0), f.x), f.y); }
+// 雨点落进水洼的涟漪：三层错开的 0.3m 格子，每格每个周期（0.6–1.2s）按雨量决定落不落一滴，落了就从随机圆心扩散一圈细环（最大半径 9cm），越大越淡。
+// 返回 (环的强度, 世界 xz 上的法线偏转)；远处环比像素还细时按 fwidth 淡掉，不出锯齿。原来是 12cm 方格整格闪（看起来是方块）
+vec3 ripples(vec2 p, float t, float amt) {
+  vec3 s = vec3(0.0);
+  for (int k = 0; k < 3; k++) {
+    float fk = float(k);
+    vec2 q = p / 0.3 + vec2(fk * 0.37, fk * 0.71), c = floor(q), f = fract(q);
+    float h1 = ch(c + fk * 17.0), h2 = ch(c + 3.1 + fk * 29.0), h3 = ch(c + 7.7 + fk * 5.0);
+    float per = 0.6 + 0.6 * h1, cyc = t / per + h2, a = fract(cyc);
+    float on = step(1.0 - 0.75 * amt, ch(c + floor(cyc) * 1.37 + fk));
+    vec2 o = 0.3 + 0.4 * vec2(h3, fract(h3 * 7.3 + h1)), v = f - o;
+    float d = length(v), w = 0.03 + fwidth(d), e = (d - a * 0.3) / w, e2 = (d - a * 0.17) / w;
+    float pr = exp(-e * e * 2.0) + 0.5 * exp(-e2 * e2 * 2.0) * step(0.15, a); // 外圈 + 稍后跟出的内圈
+    float amp = on * (1.0 - a) * (1.0 - a) * min(1.0, 0.045 / w);
+    s.x += pr * amp; s.yz += v / max(d, 1e-3) * (e * exp(-e * e * 2.0)) * amp;
+  }
+  return s;
+}
 ` + sh.fragmentShader.replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>
     float cLow = 0.55 * cn(vCovP / 2.3) + 0.3 * cn(vCovP / 0.9 + 7.0) + 0.15 * cn(vCovP / 0.3);
     diffuseColor.rgb *= 1.0 - 0.35 * uWet;
     roughnessFactor = mix(roughnessFactor, roughnessFactor * 0.55, uWet);
     float pud = smoothstep(1.02 - 0.42 * uWet, 1.06 - 0.42 * uWet, cLow) * step(0.05, uWet);
-    float rip = step(0.985, ch(floor(vCovP / 0.12) + floor(uCovT * 6.0))) * step(0.01, uWet);
+    vec3 rip3 = uRain > 0.01 ? ripples(vCovP, uCovT, min(uRain, 1.0)) : vec3(0.0); float rip = min(rip3.x, 1.0);
     diffuseColor.rgb = mix(diffuseColor.rgb, diffuseColor.rgb * 0.35 + 0.02, pud);
-    roughnessFactor = mix(roughnessFactor, 0.04 + 0.25 * rip, pud);
+    roughnessFactor = mix(roughnessFactor, 0.04 + 0.3 * rip, pud);
+    vec3 ripN = (viewMatrix * vec4(rip3.y, 0.0, rip3.z, 0.0)).xyz * 0.5 * pud; // 环上法线往外/往里歪，水面倒影跟着扭
     float sn = smoothstep(0.0, 0.18, uSnow * 1.2 - 0.6 * cLow - 0.05);
     vec2 dp = vCovP - uDoor.xy; float dr = length(dp), da = atan(dp.y, dp.x); // 开门扫过的扇形里没雪，扇形外沿被推出一圈更厚的雪
     float clr = max(doorFan(da, uDoorOld.w, uDoor.w) * uSweep, doorFan(da, uDoorOld.x, uDoorOld.y) * uDoorOld.z); // 当前扇形 + 上一次开关门扫的旧扇形（继续慢慢盖回）
     sn *= 1.0 - clr * (1.0 - smoothstep(uDoor.z - 0.06, uDoor.z, dr));
     sn = clamp(sn + clr * exp(-pow((dr - uDoor.z - 0.05) / 0.05, 2.0)) * smoothstep(0.02, 0.08, uSnow), 0.0, 1.0);
     diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.86, 0.88, 0.92) * (0.93 + 0.07 * cn(vCovP / 0.2)), sn);
-    roughnessFactor = mix(roughnessFactor, 0.85, sn);`);
+    roughnessFactor = mix(roughnessFactor, 0.85, sn);`).replace('#include <normal_fragment_maps>', '#include <normal_fragment_maps>\n    normal = normalize(normal + ripN * (1.0 - sn));')
+    // 水洼近镜面，直接反射 scene.environment（RoomEnvironment = 一间有方形灯箱的屋子）会照出一块块方形亮斑 → 水洼里换成模糊的环境光（irradiance/π），涟漪的环再亮一点
+    .replace('#include <lights_fragment_maps>', '#include <lights_fragment_maps>\n    radiance = mix(radiance, iblIrradiance * RECIPROCAL_PI * (1.0 + 1.5 * rip), pud * (1.0 - sn));');
 }
 
 const _grey = new THREE.Color();
@@ -681,6 +844,7 @@ function applyWeather(dt) { // 在 applySky 之后：天空/光照按天气压�
   for (const [t0, a, k] of wx.flashes) if (wx.t >= t0) f += a * Math.exp(-(wx.t - t0) * k);
   f = Math.min(f, 1.4) * c.bolt;
   // 积水、积雪：下着就涨，停了干/化；下雨化雪更快
+  cover.uRain.value = c.rain;
   cover.uWet.value = THREE.MathUtils.clamp(cover.uWet.value + dt * (c.rain > 0.05 ? c.rain / 14 : -1 / 10), 0, 1); // Rain 约 25 秒、雷雨约 14 秒积满，停后 10 秒干
   cover.uSnow.value = THREE.MathUtils.clamp(cover.uSnow.value + dt * (c.snow > 0.05 ? c.snow / 9 : c.rain > 0.05 ? -1 / 15 : -1 / 20), 0, 1); // Snow 约 20 秒、暴雪约 9 秒盖满，停后 20 秒化完
   skyU.uFlash.value = f * 0.9;
@@ -712,8 +876,8 @@ function moundGeo() { // 雪堆：沿 z 的半圆柱（长 1、半径 1），两
   }
   g.computeVertexNormals(); return g;
 }
-function slabGeo(L, W) { // 坡上的一层雪：x 沿坡往下 0→L，y 厚度 0→1（缩放成实际厚度），z 沿屋脊；顶面起伏，四边圆一点
-  const g = new THREE.BoxGeometry(L, 1, W, 24, 1, 40).translate(L / 2, 0.5, 0), p = g.attributes.position;
+function slabGeo(L, W) { // 坡上的一层雪：x 沿坡往下 0→L，y 底 0 / 顶 = 厚度系数（fitSlab 换成实际高度），z 沿屋脊；顶面起伏，四边圆一点
+  const g = new THREE.BoxGeometry(L, 1, W, 80, 1, 40).translate(L / 2, 0.5, 0), p = g.attributes.position; // x 4cm 一格，才跟得上一排排瓦（排距 22cm）
   for (let i = 0; i < p.count; i++) {
     const x = p.getX(i), z = p.getZ(i);
     if (p.getY(i) > 0.5) p.setY(i, (0.82 + 0.1 * Math.sin(x * 5 + z * 1.3) * Math.sin(z * 3.7) + 0.08 * Math.sin(z * 11 + x * 7))
@@ -721,11 +885,103 @@ function slabGeo(L, W) { // 坡上的一层雪：x 沿坡往下 0→L，y 厚度
   }
   g.computeVertexNormals(); return g;
 }
-const CHUNK_N = 200; // 滑落时从檐口掉下的雪块
-const chunks = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(1, 0), snowMat, CHUNK_N);
+// 雪板贴瓦（2026-10-22 修穿模）：瓦是一排排厚木瓦，每排下沿（瓦尾）比拟合坡面高 0–15cm（越近屋脊越高，拟合斜率偏缓），
+// 原来平直的雪板（底面 = 坡面 −SINK）被瓦尾从雪里顶出来，看着像雪嵌在木板里。加载时沿坡每 2cm 量瓦顶离坡面多高（垂直坡面）：
+// tile = 实际锯齿（每格取 ±6cm 最大，顶点 4cm 一个，中间不漏），env = 瓦尾连成的包络（±12cm 最大再平滑）。
+// 雪板底面 = tile − SINK（跟着锯齿压进瓦里，山墙端看不到底下的三角空隙），顶面 = mix(tile, env, 填平) + 厚度×起伏：薄雪贴着每排瓦，厚了（15cm）填平成整片。
+function roofProfile(roof, F) {
+  const bin = 0.02, n = Math.ceil((F.len + 0.1) / bin), raw = new Array(n).fill(-1e9), v = new THREE.Vector3(), c = Math.cos(F.ang), s = Math.sin(F.ang);
+  let meshes = []; roof.traverse((m) => { if (m.isMesh && /shingle/i.test((m.material && m.material.name) || '')) meshes.push(m); });
+  if (!meshes.length) roof.traverse((m) => { if (m.isMesh) meshes.push(m); }); // 找不到瓦片材质就用整个屋顶
+  for (const m of meshes) {
+    m.updateMatrixWorld(); const p = m.geometry.attributes.position;
+    for (let i = 0; i < p.count; i++) {
+      v.fromBufferAttribute(p, i).applyMatrix4(m.matrixWorld); const dx = Math.abs(v.x), dy = v.y - F.top;
+      const u = dx * c - dy * s, h = dx * s + dy * c, b = Math.round(u / bin); // u 沿坡距屋脊，h 垂直坡面高出多少
+      if (b >= 0 && b < n) raw[b] = Math.max(raw[b], h);
+    }
+  }
+  for (let b = 0; b < n; b++) if (raw[b] < -1e8) { // 空格按两边插值
+    let a = b - 1, e = b + 1; while (e < n && raw[e] < -1e8) e++;
+    raw[b] = a < 0 ? (e < n ? raw[e] : 0) : e >= n ? raw[a] : raw[a] + (raw[e] - raw[a]) * (b - a) / (e - a);
+  }
+  const win = (a, r, f) => a.map((_, b) => { let x = f === 'max' ? -1e9 : 0, k = 0; for (let j = Math.max(0, b - r); j <= Math.min(n - 1, b + r); j++) { x = f === 'max' ? Math.max(x, a[j]) : x + a[j]; k++; } return f === 'max' ? x : x / k; });
+  const tile = win(raw, 3, 'max'), env = win(win(raw, 6, 'max'), 3, 'avg').map((x, b) => Math.max(x, tile[b]));
+  return { bin, n, tile, env };
+}
+function fitSlab(S, th) { // 按厚度 th 重算这一坡雪板的顶点高度（代替原来的 scale.y）；厚度变化 <3mm 不重算
+  if (Math.abs(th - S.built) < 0.003) return;
+  S.built = th;
+  const P = roofWx.prof, g = S.slab.geometry, p = g.attributes.position, o = S.base, f = THREE.MathUtils.smoothstep(th, 0.02, 0.15);
+  for (let i = 0; i < p.count; i++) {
+    const k = Math.min(P.n - 1, Math.max(0, Math.round(o[i * 3] / P.bin))), t = P.tile[k], y = o[i * 3 + 1];
+    p.setY(i, y < 1e-4 ? t - SINK : t + (P.env[k] - t) * f + th * y);
+  }
+  p.needsUpdate = true; g.computeVertexNormals(); g.computeBoundingSphere(); g.computeBoundingBox();
+}
+// 檐口掉雪（2026-10-22 重做；原来是 20 面硬块、3–11cm 均匀、落地直接消失，像白方块）：雪团 = 凹凸低模球，随机压扁、翻滚，
+// 小的多大的少；下落途中掉粉，大块落地碎成 2–4 小块弹开，小块落地停住、缩进雪里，同时扬一小团雪粉（powder，Points 软圆点）。
+// 雪粉轨迹全在着色器里按时间算，JS 只在生成那一刻写一次属性；没有雪团/雪粉时两样都不画、不更新。
+const CHUNK_N = 260;
+function lumpGeo() { // 半径 ~1 的凹凸雪团：80 面球按方向噪声缩放，法线用方向（看着软，不出棱角）
+  const g = new THREE.IcosahedronGeometry(1, 1), p = g.attributes.position, n = g.attributes.normal, v = new THREE.Vector3();
+  for (let i = 0; i < p.count; i++) {
+    v.fromBufferAttribute(p, i).normalize(); n.setXYZ(i, v.x, v.y, v.z);
+    const r = 1 + 0.3 * Math.sin(v.x * 5 + 1) * Math.sin(v.y * 4 + 2) * Math.sin(v.z * 6) + 0.12 * Math.sin(v.x * 11 + v.z * 9) * Math.sin(v.y * 7);
+    p.setXYZ(i, v.x * r, v.y * r, v.z * r);
+  }
+  return g;
+}
+const chunks = new THREE.InstancedMesh(lumpGeo(), snowMat, CHUNK_N);
 const chunkP = new Float32Array(CHUNK_N * 3), chunkV = new Float32Array(CHUNK_N * 3), chunkS = new Float32Array(CHUNK_N);
-let chunkI = 0;
-chunks.frustumCulled = false;
+const chunkA = new Float32Array(CHUNK_N * 3), chunkR = new Float32Array(CHUNK_N * 3), chunkW = new Float32Array(CHUNK_N * 3);
+const chunkL = new Float32Array(CHUNK_N), chunkG = new Uint8Array(CHUNK_N); // chunkL：<0 在下落，≥0 落地后经过的秒数；chunkG：1 = 碎出来的小块（不再碎）
+let chunkI = 0, chunkLive = 0;
+chunks.frustumCulled = false; chunks.visible = false;
+const POW_N = 700; // 雪粉
+const powU = { uTime: precipU.uTime, uColor: snowFx.material.uniforms.uColor, uScale: precipU.uScale, uFogN: precipU.uFogN, uFogF: precipU.uFogF, uWind: { value: 0 } };
+const powA = { p: new Float32Array(POW_N * 3), v: new Float32Array(POW_N * 3), t: new Float32Array(POW_N * 4).fill(-99) };
+const powder = (() => {
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.BufferAttribute(powA.p, 3));
+  g.setAttribute('aV', new THREE.BufferAttribute(powA.v, 3));
+  g.setAttribute('aT', new THREE.BufferAttribute(powA.t, 4)); // 出生时刻、寿命、大小（米）、随机数
+  const pts = new THREE.Points(g, new THREE.ShaderMaterial({
+    uniforms: powU, transparent: true, depthWrite: false, fog: false,
+    vertexShader: `uniform float uTime, uScale, uFogN, uFogF, uWind; attribute vec3 aV; attribute vec4 aT; varying float vA;
+      void main() {
+        float t = uTime - aT.x, k = t / aT.y;
+        float dr = (1.0 - exp(-3.0 * t)) / 3.0; // 空气阻力：很快慢下来、飘着
+        vec3 p = position + aV * dr + vec3(uWind * t, -0.18 * t * t, 0.0);
+        vec4 mv = viewMatrix * vec4(p, 1.0);
+        gl_Position = projectionMatrix * mv;
+        float d = -mv.z;
+        vA = smoothstep(0.0, 0.06, t) * pow(max(0.0, 1.0 - k), 1.6) * (0.35 + 0.25 * aT.w) * (1.0 - smoothstep(uFogN, uFogF, d));
+        gl_PointSize = min(uScale * aT.z * (1.0 + 2.2 * k) / max(d, 0.1), 90.0); // 散开时越来越大、越来越淡
+        if (k < 0.0 || k > 1.0) gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
+      }`,
+    fragmentShader: `uniform vec3 uColor; varying float vA;
+      void main() {
+        float r = length(gl_PointCoord - 0.5) * 2.0;
+        gl_FragColor = vec4(uColor, vA * exp(-r * r * 3.5) * (1.0 - r * r));
+        #include <colorspace_fragment>
+      }`,
+  }));
+  pts.frustumCulled = false; pts.visible = false; pts.renderOrder = 2; pts.userData.until = -1; pts.userData.i = 0;
+  return pts;
+})();
+function puff(x, y, z, n, spd, up, size, life) { // 扬一团雪粉：n 粒，水平散开速度 spd、向上 up（m/s），大小 size 米，寿命 life 秒
+  const now = precipU.uTime.value, U = powder.userData;
+  for (let j = 0; j < n; j++) {
+    const i = U.i = (U.i + 1) % POW_N, a = Math.random() * 6.283, s = spd * (0.3 + 0.7 * Math.random()), L = life * (0.6 + 0.8 * Math.random());
+    powA.p.set([x + (Math.random() - 0.5) * size, y + Math.random() * size * 0.5, z + (Math.random() - 0.5) * size], i * 3);
+    powA.v.set([Math.cos(a) * s, up * (0.4 + 0.6 * Math.random()), Math.sin(a) * s], i * 3);
+    powA.t.set([now, L, size * (0.5 + Math.random()), Math.random()], i * 4);
+    U.until = Math.max(U.until, now + L);
+  }
+  for (const k of ['position', 'aV', 'aT']) powder.geometry.attributes[k].needsUpdate = true;
+  powder.visible = true;
+}
 const _o = new THREE.Object3D();
 const thickOf = (d) => 0.008 + 0.25 * Math.min(d, 1.2) / 1.2; // 屋面雪厚（米，从瓦片最高处算起）
 const SINK = 0.025; // 雪层底面压进瓦片里多少（瓦片高低不平处不透缝；太深会从山墙端穿进挂瓦条/屋面板）
@@ -756,7 +1012,9 @@ function ridgeGeo(W, nx) { // 屋脊上的一条雪：x 横跨屋脊 -w..w，z �
 }
 function updateRidge(R, F) { // 按当前厚度 R.t 重算屋脊雪的截面：两坡雪面的交线 + 圆顶，盖住屋脊盖瓦（R.prof = 盖瓦/瓦片高出坡面多少）
   const p = R.mesh.geometry.attributes.position, o = R.base, w = R.w, W = F.zL - 0.05, c = 0.1;
-  const Hc = Math.max(0, ((R.t + SINK) * 0.82 - SINK) / Math.cos(F.ang)), k2 = Math.min(1, Hc / 0.12);
+  // 雪板顶面在屋脊雪外沿（x=w）处高出坡面多少（垂直量）：瓦尾垫高的那部分（见 fitSlab）+ 雪厚；垫高部分随 R.t 渐出，屋脊雪不会一冒出来就很厚
+  const P = roofWx.prof, cs = Math.cos(F.ang), kw = Math.min(P.n - 1, Math.round(w / cs / P.bin)), fw = THREE.MathUtils.smoothstep(R.t, 0.02, 0.15);
+  const T = R.t * 0.82 / cs, Hc = Math.max(0, (P.tile[kw] + (P.env[kw] - P.tile[kw]) * fw) / cs * Math.min(1, R.t / 0.05) + T), k2 = Math.min(1, T / 0.12);
   for (let i = 0; i < p.count; i++) {
     const x = o[i * 3] * w, z = o[i * 3 + 2], ax = Math.abs(x), r = Math.min(1, ax / w);
     if (o[i * 3 + 1] < 0.5) { p.setXYZ(i, x, F.top - F.slope * ax - 0.02, z); continue; }
@@ -782,15 +1040,16 @@ function setupRoofWeather() {
   const slope = -(n * sxy - sx * sy) / (n * sxx - sx * sx), top = (sy + slope * sx) / n, ang = Math.atan(slope);
   const len = ex / Math.cos(ang) + 0.04, zL = rb.max.z - rb.min.z, zc = (rb.max.z + rb.min.z) / 2, gy = ground.position.y;
   roofWx.fit = { slope, top, ex, ang, len, zL, zc, eaveY: top - slope * ex, eaveLo };
-  const slabG = slabGeo(len, zL - 0.05), moundG = moundGeo();
+  const slabG = slabGeo(len, zL - 0.05), moundG = moundGeo(), base = Float32Array.from(slabG.attributes.position.array);
+  roofWx.prof = roofProfile(roof, roofWx.fit); // 瓦面沿坡的高低（雪板贴瓦用，见 fitSlab）
   for (const sg of [-1, 1]) {
     const tilt = new THREE.Group(); // 原点在屋脊、x 沿坡往下
     tilt.position.set(0, top, zc); tilt.rotation.set(0, sg > 0 ? 0 : Math.PI, -ang, 'YXZ');
-    const slab = new THREE.Mesh(slabG, patchySnow()); slab.castShadow = slab.receiveShadow = true; slab.visible = false; slab.position.y = -SINK; slab.userData.side = sg;
+    const slab = new THREE.Mesh(slabG.clone(), patchySnow()); slab.castShadow = slab.receiveShadow = true; slab.visible = false; slab.userData.side = sg; // 每坡一份几何（厚度各自算）
     tilt.add(slab); scene.add(tilt);
     const pile = new THREE.Mesh(moundG, snowMat); pile.receiveShadow = true; pile.visible = false;
     pile.position.set(sg * (ex + 0.3), gy, zc); scene.add(pile);
-    roofWx.sides.push({ sg, slab, pile, d: 0, s: -1, v: 0, th: 0, amt: 0 });
+    roofWx.sides.push({ sg, slab, pile, base, built: -1, d: 0, s: -1, v: 0, th: 0, amt: 0 });
   }
   // 屋脊雪：两块雪板从屋脊各自往下铺，顶面在屋脊处是个 V 形缺口（加上雪板上沿收薄），屋脊盖瓦比拟合坡面高 ~11cm，
   // 原来积满了屋脊那条还是露着。单独一条雪盖住屋脊：先量盖瓦/瓦片在屋脊两侧高出坡面多少（prof），雪顶至少高过它
@@ -808,7 +1067,7 @@ function setupRoofWeather() {
   rMesh.material.userData.cov.value = 1; rMesh.position.z = zc; rMesh.visible = false; rMesh.castShadow = rMesh.receiveShadow = true; rMesh.frustumCulled = false;
   scene.add(rMesh);
   roofWx.under = roofUnder; roofWx.ridge = { mesh: rMesh, base: Float32Array.from(rMesh.geometry.attributes.position.array), w, bin, prof, t: 0, built: -1 };
-  scene.add(chunks); for (let i = 0; i < CHUNK_N; i++) chunks.setMatrixAt(i, _o.matrix.makeScale(0, 0, 0));
+  scene.add(chunks, powder); for (let i = 0; i < CHUNK_N; i++) chunks.setMatrixAt(i, _o.matrix.makeScale(0, 0, 0));
   // 檐口滴水：每坡 140 个滴点，着色器里按自由落体从檐口落到地面，循环
   const N = 140, seed = new Float32Array(N * 2 * 2 * 4);
   for (let i = 0; i < N * 2; i++) {
@@ -821,17 +1080,19 @@ function setupRoofWeather() {
   roofWx.drips = new THREE.LineSegments(dg, new THREE.ShaderMaterial({
     uniforms: { uTime: precipU.uTime, uColor: rainFx.material.uniforms.uColor, uAmt: { value: 0 }, uEx: { value: ex + 0.006 }, uEy: { value: eaveLo - 0.005 }, uGy: { value: gy } },
     transparent: true, depthWrite: false,
-    vertexShader: `uniform float uTime, uAmt, uEx, uEy, uGy; attribute vec4 aSeed;
+    vertexShader: `uniform float uTime, uAmt, uEx, uEy, uGy; attribute vec4 aSeed; varying float vA;
       void main() {
         float P = 0.8 + 1.6 * aSeed.w, t = mod(uTime + aSeed.z * P, P); // 每个滴点隔 0.8–2.4 秒落一滴
         float y = uEy - 4.9 * t * t, tail = min(0.3, 0.02 + 0.3 * t);
-        vec3 p = vec3(aSeed.x * uEx, y + tail * float(gl_VertexID % 2), aSeed.y);
+        float e = float(gl_VertexID % 2); // 0 = 水滴头（下端），1 = 拖尾（上端）
+        vec3 p = vec3(aSeed.x * uEx, y + tail * e, aSeed.y);
         gl_Position = projectionMatrix * viewMatrix * vec4(p, 1.0);
+        vA = mix(1.0, 0.12, e) * smoothstep(0.0, 0.12, t) * (0.7 + 0.3 * aSeed.z); // 头实尾虚；刚离开檐口那一下淡入
         if (y < uGy || fract(aSeed.w * 7.13 + aSeed.z * 3.1) > uAmt) gl_Position = vec4(2.0, 2.0, 2.0, 1.0); // 两个端点按同一滴判断，一起丢
       }`,
-    fragmentShader: `uniform vec3 uColor;
+    fragmentShader: `uniform vec3 uColor; varying float vA;
       void main() {
-        gl_FragColor = vec4(uColor * 1.25, 0.9);
+        gl_FragColor = vec4(uColor * vec3(0.86, 0.93, 1.02), 0.42 * vA); // 偏灰蓝、半透明（原来 ×1.25 / 0.9 太白刺眼）
         #include <colorspace_fragment>
       }`,
   }));
@@ -846,10 +1107,14 @@ function setupRoofWeather() {
     roofWx.door = { w, mound, mound2, amt: 0, amt2: 0 };
   }
 }
-function spawnChunk(x, y, z, vx, vy) {
-  const i = chunkI = (chunkI + 1) % CHUNK_N;
-  chunkP.set([x, y, z], i * 3); chunkV.set([vx + (Math.random() - 0.5) * 0.4, vy, (Math.random() - 0.5) * 0.3], i * 3);
-  chunkS[i] = 0.03 + Math.random() * 0.08;
+function spawnChunk(x, y, z, vx, vy, s, gen) { // s 不给 = 随机大小（2.5–14cm，小的多）；gen 1 = 碎块
+  const i = chunkI = (chunkI + 1) % CHUNK_N, R = Math.random;
+  chunkP.set([x, y, z], i * 3); chunkV.set([vx + (R() - 0.5) * 0.4, vy, (R() - 0.5) * 0.3], i * 3);
+  chunkS[i] = s || 0.012 + 0.065 * R() ** 2.5; // 半径 1.2–7.7cm，大多是小团
+  chunkA.set([0.8 + 0.5 * R(), 0.45 + 0.3 * R(), 0.8 + 0.5 * R()], i * 3); // 压扁、各向不一（雪是成片掉的，不是球）
+  chunkR.set([R() * 6.3, R() * 6.3, R() * 6.3], i * 3); chunkW.set([(R() - 0.5) * 8, (R() - 0.5) * 8, (R() - 0.5) * 8], i * 3);
+  chunkL[i] = -1; chunkG[i] = gen || 0; chunks.visible = true;
+  if (!gen) puff(x, y, z, 2, 0.25, 0.05, 0.16, 1.5); // 出檐口时扬起一道粉幕
 }
 function slideSnow(sg) { // 这一坡的雪整片滑下去（积满了随机触发，或者鼠标点一下）
   const S = roofWx.sides.find((x) => x.sg === sg);
@@ -863,14 +1128,14 @@ function updateRoofWeather(dt) {
       S.d = THREE.MathUtils.clamp(S.d + dt * (snowing ? c.snow / 14 : -melt), 0, 1.2);
       if (S.d > 1 && Math.random() < dt * 0.35) slideSnow(S.sg);
       else {
-        S.slab.visible = S.d > 0.02; S.slab.position.x = 0; S.slab.scale.set(1, thickOf(S.d) + SINK, 1);
+        S.slab.visible = S.d > 0.02; S.slab.position.x = 0; S.slab.scale.set(1, 1, 1); if (S.slab.visible) fitSlab(S, thickOf(S.d));
         const cov = S.slab.material.userData.cov.value = THREE.MathUtils.smoothstep(S.d, 0.02, 0.4); // 积雪先成斑块，d≈0.4 连成整片
         S.slab.castShadow = cov > 0.99; // 阴影贴图不挖洞，斑块阶段不投影
       }
     } else { // 滑落：上沿往下退（下沿始终在檐口），滑出檐口的雪变成雪块掉下去、墙边雪堆长高
       S.v += dt * 9.8 * Math.sin(F.ang) * 0.5; const ds = Math.min(S.v * dt, F.len - S.s); S.s += ds;
-      S.slab.position.x = S.s; S.slab.scale.set((F.len - S.s) / F.len, S.th + SINK, 1);
-      const nC = ds / F.len * 260 * S.th / 0.2;
+      S.slab.position.x = S.s; S.slab.scale.set((F.len - S.s) / F.len, 1, 1); fitSlab(S, S.th);
+      const nC = ds / F.len * 170 * S.th / 0.2; // 一坡滑完约 200 团（雪粉另算）
       for (let k = 0; k < nC + Math.random() - 1; k++)
         spawnChunk(S.sg * (F.ex + 0.02), F.eaveY + Math.random() * S.th, F.zc + (Math.random() - 0.5) * F.zL, S.sg * S.v * Math.cos(F.ang), -S.v * Math.sin(F.ang));
       S.amt += ds / F.len * S.th * 1.3;
@@ -890,14 +1155,44 @@ function updateRoofWeather(dt) {
     R.mesh.visible = R.t > 0.004;
     if (R.mesh.visible && Math.abs(R.t - R.built) > 0.002) { R.built = R.t; updateRidge(R, F); }
   }
-  for (let i = 0; i < CHUNK_N; i++) { // 雪块：自由落体，落地就没（雪堆已经按滑落量长了）
-    if (chunkS[i] <= 0) continue;
-    chunkV[i * 3 + 1] -= 9.8 * dt;
-    for (let a = 0; a < 3; a++) chunkP[i * 3 + a] += chunkV[i * 3 + a] * dt;
-    if (chunkP[i * 3 + 1] < gy) chunkS[i] = 0;
-    _o.position.fromArray(chunkP, i * 3); _o.scale.setScalar(chunkS[i]); _o.updateMatrix(); chunks.setMatrixAt(i, _o.matrix);
+  if (chunks.visible) { // 雪团：翻滚下落、掉粉；落到地面/雪堆上大块碎开，小块停住缩进雪里（雪堆已经按滑落量长了）
+    let live = 0;
+    for (let i = 0; i < CHUNK_N; i++) {
+      const s = chunkS[i]; if (s <= 0) continue;
+      const i3 = i * 3; let k = 1;
+      const x = chunkP[i3], Sd = roofWx.sides[x > 0 ? 1 : 0], ph = Sd ? Sd.pile.scale : null; // 落点高度：地面 + 墙边雪堆（半圆截面）
+      const q = ph && Sd.pile.visible ? (x - Sd.pile.position.x) / ph.x : 9, land = gy + (Math.abs(q) < 1 ? ph.y * Math.sqrt(1 - q * q) : 0);
+      if (chunkL[i] < 0) {
+        chunkV[i3 + 1] -= 9.8 * dt;
+        for (let a = 0; a < 3; a++) { chunkP[i3 + a] += chunkV[i3 + a] * dt; chunkR[i3 + a] += chunkW[i3 + a] * dt; }
+        if (s > 0.03 && Math.random() < dt * 8) puff(chunkP[i3], chunkP[i3 + 1], chunkP[i3 + 2], 1, 0.1, 0.05, s * 2.5, 0.9); // 下落途中掉粉
+        if (chunkP[i3 + 1] < land + s * 0.3) { // 着地
+          const px = chunkP[i3], pz = chunkP[i3 + 2];
+          if (s > 0.035 && !chunkG[i]) { // 大块碎成 2–4 小块弹开，自己没了
+            const n = 2 + Math.floor(Math.random() * 3);
+            for (let j = 0; j < n; j++) { const a = Math.random() * 6.283, sp = 0.4 + Math.random() * 0.8;
+              spawnChunk(px, land + s * 0.3, pz, Math.cos(a) * sp, 0.6 + Math.random() * 0.9, s * (0.3 + 0.25 * Math.random()), 1);
+              chunkV[chunkI * 3 + 2] = Math.sin(a) * sp; }
+            chunkS[i] = 0; _o.matrix.makeScale(0, 0, 0); chunks.setMatrixAt(i, _o.matrix);
+            puff(px, land, pz, 8 + Math.round(s * 90), 0.9, 0.5, 0.18 + s, 1.3);
+            continue;
+          }
+          chunkL[i] = 0; chunkP[i3 + 1] = land + s * 0.3; chunkV.fill(0, i3, i3 + 3);
+          puff(px, land, pz, 2 + Math.round(s * 60), 0.5, 0.25, 0.1 + s, 0.9);
+        }
+      } else { // 落地后 0.5–1.1 秒缩进雪里
+        chunkL[i] += dt; k = 1 - chunkL[i] / (0.5 + 0.6 * ((i * 0.618) % 1));
+        chunkP[i3 + 1] = land + s * 0.3 * k;
+        if (k <= 0) { chunkS[i] = 0; _o.matrix.makeScale(0, 0, 0); chunks.setMatrixAt(i, _o.matrix); continue; }
+      }
+      live++;
+      _o.position.fromArray(chunkP, i3); _o.rotation.set(chunkR[i3], chunkR[i3 + 1], chunkR[i3 + 2]);
+      _o.scale.set(s * chunkA[i3] * k, s * chunkA[i3 + 1] * k * k, s * chunkA[i3 + 2] * k); _o.updateMatrix(); chunks.setMatrixAt(i, _o.matrix);
+    }
+    chunks.instanceMatrix.needsUpdate = true; chunks.visible = live > 0;
   }
-  chunks.instanceMatrix.needsUpdate = true;
+  powU.uWind.value = Math.min(c.wind, 6) * 0.25;
+  if (powder.visible && precipU.uTime.value > powder.userData.until) powder.visible = false;
   const dAmt = Math.max(c.rain, cover.uWet.value * 0.35); // 雨停后屋顶还会滴一会儿
   roofWx.drips.visible = dAmt > 0.02; roofWx.drips.material.uniforms.uAmt.value = dAmt;
   // 开门扫雪：门往外转多少，门前扇形里的雪就清掉多少，被推到门板外侧堆成一小条；新雪会慢慢盖回去
@@ -1215,6 +1510,7 @@ function pathSidePoints(rand, n, gap, taken) {
 
 let forestCenter;
 const TREE_K = 1.3; // 所有树整体放大（2026-10-20 用户要 1.3 倍）；靠近小屋的仍按下面的 fit 缩小
+const TREE_XZ = []; // 小屋 120m 内高于 2m 的树：x, z 交替
 function plant(parts, pts, rand, hMin, hMax, y) {
   const tint = new THREE.Color(), m = new THREE.Matrix4(), q = new THREE.Quaternion(), s = new THREE.Vector3(), p = new THREE.Vector3(), up = new THREE.Vector3(0, 1, 0);
   const ims = parts.map(({ geometry, material }) => new THREE.InstancedMesh(geometry, material, pts.length));
@@ -1227,6 +1523,7 @@ function plant(parts, pts, rand, hMin, hMax, y) {
     if (w && room < 160) { let d = 1e9; for (const [px, pz] of pathClear) d = Math.min(d, (px - x) ** 2 + (pz - z) ** 2);
       w *= THREE.MathUtils.clamp((Math.sqrt(d) - 1.3) / ((parts.radius || 0.3) * w), 0.6, 1); }
     m.compose(p.set(x, y, z), q.setFromAxisAngle(up, rand() * Math.PI * 2), s.set(w, h, w));
+    if (h > 2 && room < 115) TREE_XZ.push(x, z); // 第一人称在屋外撞树干用（fpTrees）
     ims.forEach((im) => im.setMatrixAt(i, m));
     // 每棵树按色卡比例随机取一种树冠色，再加 ±8% 明暗
     let u = rand(), c = CROWNS.find(([, p]) => (u -= p) < 0) || CROWNS[0];
@@ -1342,6 +1639,7 @@ loader.load('cabin.glb', async (gltf) => {
   ground.position.y = box.min.y - 0.01;
   matchGround(center);
   extendPath();
+  if (game.day >= 2) day2Setup(); // 第 2 天的木桩、标桩、刻记号的树、石堆、雾里的灯（要等地面高度和小路曲线）
   controls.minDistance = 1;
   controls.maxDistance = 220; // 可以一直拉远看整片森林（雾跟着相机距离变，见渲染循环）
   resetView();
@@ -1366,14 +1664,14 @@ loader.load('cabin.glb', async (gltf) => {
     T('prewarm');
     pct.textContent = '100%'; bar.style.width = '100%';
     document.getElementById('loader').classList.add('done');
-    startIntro();
+    startIntro(); startOpening(); resumeAsk(); if (!opening) { enterBtn.classList.remove('wait'); $('jBtn').classList.remove('wait'); } // 有开场字幕就等播完再出「进屋」「遗稿」
   });
 }, (e) => {
   // GitHub Pages 用 gzip 传，e.total 是压缩后大小（约 16.9MB）而 e.loaded 是解压后字节 → 会超 100%；按解压后约 27.3MB 算，并封顶 99%
   const t = Math.max(e.total || 0, 27.3e6);
   PROG.dl = Math.min(55, e.loaded / t * 55);
   if (!window.__dl && e.loaded >= 27.3e6 * 0.995) { window.__dl = 1; T('downloaded'); }
-}, (err) => { pct.textContent = 'Alas, it could not be loaded: ' + err.message; console.error(err); });
+}, (err) => { pct.innerHTML = lbl('Alas, it could not be loaded: ', '唉，没能加载：') + esc(err.message); console.error(err); });
 
 // 导出的模型有上万个小网格，逐个绘制太慢：按「子图层 + 材质」合并。
 // 每个子图层（一件家具/屋顶/阁楼框架…）一个 Group，名字同 Rhino 图层，方便单独隐藏或点选。
@@ -1429,7 +1727,7 @@ const ROOMS = [
   { name: 'Water Closet', zh: '卫生间', pos: [-0.62, 1.6, 1.0],  tgt: [-1.45, 0.75, 1.35], fov: 72 },
   { name: 'Hall',         zh: '通高厅', pos: [1.2, 1.7, 1.35],   tgt: [0.95, 2.3, -1.5],   fov: 80 },
   { name: 'Parlour',      zh: '起居室', pos: [0.1, 1.6, -0.9],   tgt: [-0.8, 0.6, 0.5],    fov: 75 }, // 茶几上方朝西南看沙发，梯子在左后方约 60° 外
-  { name: 'Kitchen & Dining', zh: '厨房与餐桌', pos: [-0.3, 1.6, 0.4], tgt: [1.2, 0.85, -0.7], fov: 85 }, // 西南角斜看东北：北墙灶台 + 东墙餐桌同框
+  { name: 'Kitchen & Dining', zh: '厨房与餐桌', pos: [-1.0, 1.75, 0.1], tgt: [1.0, 0.95, -1.0], fov: 72 }, // 西边靠墙斜看东北：干洗槽、盘架、挂锅杆、炉子、东墙桌板同框（原 fov 85 广角变形、人物贴脸）
   { name: 'Loft',         zh: '阁楼',   pos: [0.45, 3.25, 1.35], tgt: [-0.9, 2.6, -0.7],   fov: 72 },
 ];
 const INSIDE_FOV = 66, OUTSIDE_FOV = 40;
@@ -1454,15 +1752,16 @@ function aimPlan(a, e, dt) {
 let inside = null; // 当前所在的 ROOMS 项，null = 在屋外
 const enterBtn = document.getElementById('enter'), roomsBox = document.getElementById('rooms');
 for (const r of ROOMS) {
-  const b = document.createElement('button'); b.textContent = r.name; b.dataset.room = r.name;
-  const zh = document.createElement('span'); zh.className = 'zh'; zh.textContent = r.zh; b.append(zh);
+  const b = document.createElement('button'); b.innerHTML = lbl(r.name, r.zh); b.dataset.room = r.name;
   b.onclick = () => goRoom(r);
   roomsBox.appendChild(b);
 }
 function goRoom(r) {
   if (!home) return;
   endIntro(true); // 开场还没飞完就点进屋：先结束开场，否则下面的飞行会被开场覆盖
-  inside = r; select(null); enterBtn.textContent = 'Step Outside';
+  inside = r; select(null); endClose(); enterBtn.innerHTML = lbl('Step Outside', '出门'); enterBtn.classList.remove('glow');
+  if (!game.entered) { game.entered = true; showQuest(); } // 「已找到 n · 还剩 m」进过屋才出现
+  if (STOVE_ROOMS.includes(r.name) && !game.stoveSeen) { game.stoveSeen = true; showQuest(); } // 到了看得见炉子的房间才提「先生火」
   clearTimeout(idleTimer); spin = false;
   const wasInside = !controls.enablePan; // 屋里禁平移：enablePan 还开着 = 这次是从屋外进来
   controls.enablePan = false; controls.enableZoom = false;
@@ -1498,13 +1797,14 @@ function goRoom(r) {
   for (const b of roomsBox.children) b.classList.toggle('on', b.dataset.room === r.name);
   showRoomNote(ROOM_NOTES[r.name]);
 }
-// 进房间：标题下淡入一句开场白，7 秒后淡出
+// 进房间：提示区（画面中下方）淡入一句开场白，7 秒后淡出；书记员的话、「他什么都没带」也走这里
 let noteTimer = 0;
 function showRoomNote(text) {
   const el = $('roomNote'); clearTimeout(noteTimer);
   if (!text) { el.classList.remove('on'); return; }
-  el.textContent = text[0];
-  const zh = document.createElement('span'); zh.className = 'zh'; zh.textContent = text[1]; el.append(zh);
+  if (!$('card').hidden) { noteTimer = setTimeout(() => showRoomNote(text), 500); return; } // 线索卡片开着（如「他什么都没带」跟卡片同时来）：排队，关了再出
+  showNote(null); // 提示区同一时间只放一条：顶掉物件说明
+  el.innerHTML = lbl(text[0], text[1]);
   el.classList.add('on');
   noteTimer = setTimeout(() => el.classList.remove('on'), 7000);
 }
@@ -1530,7 +1830,7 @@ const veilEl = document.getElementById('veil'); // 黑幕（现在没有路线�
 // 停在当前朝向那一侧的鸟瞰位置（距离、仰角同首页），不回首页。原来走过道出大门再绕弧线，太绕。
 const HOME_EL = Math.atan2(0.45, Math.hypot(0.6, 0.75)); // 首页 HOME_DIR 的仰角
 function leaveCabin() {
-  inside = null; select(null);
+  inside = null; select(null); endClose();
   controls.enablePan = true; controls.enableZoom = true; controls.rotateSpeed = 1;
   controls.minDistance = 0; controls.maxDistance = Infinity; // 飞行中目标点起初就在眼前 5cm，最小距离 1m 会把相机往后推进屋顶；飞完再恢复 1–220m
   const f = camera.fov; camera.fov = OUTSIDE_FOV; // 按屋外视场角算首页距离
@@ -1569,10 +1869,9 @@ function placeRooms(mode) {
 }
 enterBtn.onclick = () => {
   if (!home) return;
-  // 屋外点进屋：只在底部展开房间列表，选了哪间才飞（goRoom 里改按钮文字）；列表开着再点 = 收起不进
-  if (inside) { placeRooms(null); enterBtn.textContent = 'Enter the Cabin'; leaveCabin(); }
-  else if (!roomsWant) { placeRooms('bottom'); enterBtn.textContent = 'Stay Outside'; }
-  else { placeRooms(null); enterBtn.textContent = 'Enter the Cabin'; }
+  // 屋外点进屋：直接飞到玄关，飞到了右侧再出房间列表（渲染循环里）
+  if (inside) { placeRooms(null); enterBtn.innerHTML = lbl('Enter the Cabin', '进屋'); enterBtn.classList.add('glow'); leaveCabin(); }
+  else goRoom(ROOMS[0]);
 };
 
 // 平滑移动相机：dir 是从目标指向相机的方向，fill 越小越近
@@ -1613,7 +1912,10 @@ const INFO = {
   entry_bench_stool: ['Boots & Bench', 'Entry', 'Mat, bench, tray and boots: where the snow is stamped off and the boots come off.'],
   entry_lantern: ['Lantern', 'Entry', 'A candle lantern on the peg, to carry out to the woodpile.'],
   entry_coat_rail: ['Coat Rail & Greatcoat', 'Entry', 'Coats are hung here to dry upon coming in.'],
-  entry_umbrella_stand: ['Umbrella Stand & Snowshoes', 'Entry', 'A staff in the stand, and shoes for the deep snow on the wall.'],
+  entry_umbrella_stand: ['Drip Pan', 'Umbrella Stand', 'An iron pan under the umbrella and the stick, to catch the snowmelt.'],
+  wall_snowshoes: ['Snowshoes', 'Entry', 'Shoes for the deep snow, on the wall by the door.'],
+  entry_umbrella: ['Green Umbrella', 'Umbrella Stand', 'A green umbrella on the wall, a compass lashed to its top.'],
+  entry_stick: ['Walking Stick', 'Umbrella Stand', 'His walking stick, standing in the drip pan by the door.'],
   entry_shelf: ['Shelf', 'Entry', 'Gloves, caps and matches — small things wanted on the way out.'],
   wall_axe: ['Axe', 'Entry', 'For splitting wood.'],
   wall_shotgun: ['Shotgun', 'Entry', 'Hung up high, for safety in the hills.'],
@@ -1622,8 +1924,10 @@ const INFO = {
   entry_toilet: ['Compost Privy & Sawdust Pail', 'Water Closet', 'No water to flush; sawdust covers all, and time does the rest.'],
   entry_tp_holder: ['Paper Roll', 'Water Closet', 'Carried in from the post-house each spring.'],
   entry_washstand: ['Washstand & Hand Towel', 'Water Closet', 'Basin and ewer, and a towel on the rail beside.'],
-  entry_cleaning_tools: ['Broom & Pan', 'Water Closet', 'For sweeping out.'],
+  entry_cleaning_tools_broom: ['Broom', 'Water Closet', 'For sweeping out.'],
+  entry_cleaning_tools_pan: ['Dustpan', 'Water Closet', 'Hung on its cord beside the broom.'],
   stove_iron: ['Cast-Iron Stove', 'Kitchen', 'The heart of the cabin.'],
+  stove_wall_thimble: ['Stovepipe & Heat Shield', 'Kitchen', 'Where the pipe goes out through the east wall.'],
   stove_fire: ['The Fire', 'Kitchen', 'Logs burning in the firebox.'],
   stove_kettle: ['Kettle & Reservoir', 'Kitchen', 'Hot water on the stovetop, and warm water in the tank beside it.'],
   firewood_end: ['Woodpile', 'Kitchen', 'Split, seasoned and stacked beneath the stove — enough must be laid by for the whole winter.'], // 柴的端面（firewood_end）和侧面（firewood_split）在 glb 里是两个图层，splitParts 并成一个
@@ -1652,9 +1956,9 @@ const INFO = {
 // 合并卡片（2026-10-21 按 story-zh.md 定稿约 60→40 张）：这些图层点开是同一张卡
 const MERGE = {
   entry_doormat: 'entry_bench_stool', entry_boot_tray: 'entry_bench_stool', entry_boots: 'entry_bench_stool',
-  entry_coat: 'entry_coat_rail', entry_coat_rail_keys: 'entry_coat_rail', wall_snowshoes: 'entry_umbrella_stand',
+  entry_coat: 'entry_coat_rail', entry_coat_rail_keys: 'entry_coat_rail',
   entry_sawdust_bucket: 'entry_toilet', entry_towel_rack: 'entry_washstand',
-  stove_wall_thimble: 'stove_iron', stove_reservoir: 'stove_kettle',
+  stove_reservoir: 'stove_kettle',
   dry_sink_basin_1: 'dry_sink', dry_sink_basin_2: 'dry_sink',
   sink_slop_pail: 'sink_water_bucket', sink_water_bucket_dipper: 'sink_water_bucket',
   wall_pot_rail: 'wall_dish_rack', wall_utensil_rack: 'wall_dish_rack', wall_dish_rack_plates: 'wall_dish_rack', wall_dish_rack_cups: 'wall_dish_rack', wall_dish_rack_towels: 'wall_dish_rack',
@@ -1669,14 +1973,15 @@ const STORY = {
   // 两个调查员（2026-10-20 用户定的故事：报告断了以后测绘局派来调查测绘员失踪的）；2026-10-21 按 story/story-zh.md 定稿重写，多段用 \n\n（卡片 pre-line）
   'The Inspector|Parlour': `Sent up by the Survey Office when the reports stopped coming. Thirty years ago, it was his signature on the Surveyor's commission.`,
   'The Clerk|Loft': `A young clerk of the Survey Office. She had read every report he ever sent, though no one had asked her to.`,
-  'The Clerk|Parlour': `A young clerk of the Survey Office. She had read every report he ever sent, though no one had asked her to. The last bearing in his notes falls on a spot where the Office's own map shows nothing at all.`,
+  'The Clerk|Parlour': `A young clerk of the Survey Office. She had read every report he ever sent, though no one had asked her to.`,
   'Plank Door|Exterior': `A thick plank door, with iron strap-hinges, a latch and a night-bolt: the stoutest guard the cabin has. On the wildest nights the latch would rattle as though the forest meant to come in. Yet in his later years he never barred it fast, but made a habit of leaving it a crack ajar, that whatever was out there might know a fire burned within. When the two of them came, it stood ajar as ever, and a trail of dead leaves had blown in through the gap.`,
   'Snow upon the Roof|Exterior': `Come winter, the snow lay half a yard deep upon the shingles. When the storm had passed he would rap the eaves with a long pole and send it all thundering down — "letting the old house wash her face," he called it. In his journal he wrote: "Snow falling makes all things equal; but when it melts, only where a fire is kept does the bare wood show first."`,
   'Porch Lamp|Exterior': `The cabin's light comes from the brook half a mile off: he set a little water-wheel in the stream to turn an old dynamo, and nailed the wire from tree to tree along the path. So long as the water runs, the lamp burns; only in the dead of winter, when the brook freezes hard, does the current fail, and for those months he lit the lantern.\n\nOne winter he broke his leg in the woods and lay half-frozen in the snow, until the faint glimmer of this lamp, far off, drew him crawling home. After that he changed the wiring, so that it burns whenever the dark comes on. It does not light the way for guests — only for those coming home.`,
   'Boots & Bench|Entry': `Coming in, he stamped his feet on the sailcloth mat, sat on the low bench to pull his boots off, and stood them in the tray to drip. Two boot-prints are worn into the mat, the left deeper than the right — for he always carried logs on his left shoulder, and walked with a slight limp; and the left of the bench is smoother than the right, for he always put on the left boot first. The tread of the snow boots is worn nearly smooth.\n\nThe mud in the tray has long since dried to a crust, and the boots still stand beside it, their tops a little agape. The last time he went out, he did not wear them.`,
   'Lantern|Entry': `A candle lantern on a peg of the coat rail. He took it out to the woodpile, or into the night to see what stirred; and in the months when the brook froze and the current failed, it was the only light in the house. A crack runs across the glass, where the antlers of a startled deer once swept the frame on a snowy night. He never replaced the pane, only bound it round with wire. "Cracked is well enough," said he. "The light leaks through like a blade, and cuts the fog clean."`,
   'Coat Rail & Greatcoat|Entry': `Coats were hung here to dry upon coming in. The handiest peg always held the greatcoat, with ten years of pine-pitch, pipe-smoke and foul weather soaked into it. Its pockets always turned up something curious: a dry pine twig, a stone shaped like a mountain, a survey sketch folded in four. It hangs creased still, like a skin a cicada has just slipped.`,
-  'Umbrella Stand & Snowshoes|Entry': `In the stand is a black umbrella that never kept off the rain, a brass compass lashed to the top of its ribs — his surveying staff. In his last years he would not shelter from the rain: "In the woods it is only manners to let the rain fall on your head."\n\nThe snowshoes hang on the wall beside it, so as not to sink in the deep snow. The first year he knew not how to use them, and floundered half a day through waist-deep drifts to reach the cabin. Then he learned: spread the weight wide, and one does not sink. It was, said he, the forest's first lesson — "Do not fight it. Learn to lay yourself out."`,
+  'Green Umbrella|Umbrella Stand': `On the wall hangs a green umbrella that never kept off the rain, a brass compass lashed to the top of its ribs — his surveying staff. In his last years he would not shelter from the rain: "In the woods it is only manners to let the rain fall on your head."`,
+  'Snowshoes|Entry': `The snowshoes hang on the wall beside it, so as not to sink in the deep snow. The first year he knew not how to use them, and floundered half a day through waist-deep drifts to reach the cabin. Then he learned: spread the weight wide, and one does not sink. It was, said he, the forest's first lesson — "Do not fight it. Learn to lay yourself out."`,
   'Shelf|Entry': `Gloves, caps and matches — small things wanted on the way out. The woollen gloves are worn through at the fingertips, for he liked to measure the grain of the bark with his bare hands. The matchbox holds but three matches: his "last chance", kept back lest lamp and stove both go out.`,
   'Axe|Entry': `A hand-axe hung on the wall, for splitting wood. Its edge is honed so thin it is nearly transparent. It has cut back the vines across the path, split the winter's fuel, and one late autumn broke the ice on the brook for water. Thirty notches are cut into the haft: one for every winter he passed here.`,
   'Shotgun|Entry': `Hung high, for safety in the hills. In his young days it brought down boar and fowl; as the years went on it spoke less and less. He hung it high not only for fear of mishap, but because he had learned that the silence of the hills is stronger than any shot. Only when he ceased to fire as a conqueror did the forest show him its hidden borders.`,
@@ -1687,9 +1992,11 @@ const STORY = {
   'Compost Privy & Sawdust Pail|Water Closet': `No water to flush: after each visit a scoop of sawdust from the pail goes over all, and the room never smells. The sawdust is leavings from the woodpile, with a faint smell of pine. When the pail was full he carried it out to the compost pit behind the cabin and covered it with leaves; two years on, it came up black earth.\n\nHe said: "What I eat becomes soil; the soil feeds the trees; the trees become firewood and burn to ash in the stove, and the ash goes back into the compost pit. In this house nothing is truly wasted — and I myself am part of the round."`,
   'Paper Roll|Water Closet': `Only a common roll of paper, carried back each spring from the post-house at the forest's edge. A man can carry but a few rolls for a whole year, and he used them sparingly. His spoiled map drafts he never put to this use — those all went into the stove, to kindle the fire.`,
   'Washstand & Hand Towel|Water Closet': `An enamel basin and a ewer. Of a morning he dipped icy water from the bucket and washed his face, and the cold made him gasp; he called it "the rite that wakes the soul". The towel hangs on the rail beside it, gone stiff, with a faint smell of pine soap, its folds set in the shape it dried in.`,
-  'Broom & Pan|Water Closet': `A broom of bound spruce twigs. There was never much dust to sweep, yet he swept every day; it was his way of keeping order in a wild country. "The world outside is wild. But within these four walls, things shall be square."`,
+  'Dustpan|Water Closet': `Tin, its lip worn bright with use. Whatever he swept up went into the stove.`,
+  'Broom|Water Closet': `A broom of bound spruce twigs. There was never much dust to sweep, yet he swept every day; it was his way of keeping order in a wild country. "The world outside is wild. But within these four walls, things shall be square."`,
   'Ceiling Lamp|Water Closet': `Dimmer than any other lamp in the house; he put in a smaller bulb on purpose. Some things want no strong light, but rather a little haze, and a little decency.`,
-  'Cast-Iron Stove|Kitchen': `Black and heavy, it warms the house, cooks the supper and boils the water. Thirty years of smoke have stained it like armour that will not scrub off. The stovepipe goes out through the east wall, sleeved in iron where it passes the logs and packed round with clay and lime: one year the chimney caught fire and near burned the house down, and ever after he laid a hand on that patch of wall each day, to feel its warmth, before he could rest easy. The first thing he looked to on waking, and the last before he slept, was this stove.`,
+  'Stovepipe & Heat Shield|Kitchen': `The stovepipe goes out through the east wall, sleeved in iron where it passes the logs and packed round with clay and lime; an iron sheet stands off the wall on spacers, to keep the heat from the timber. One year the chimney caught fire and near burned the house down, and ever after he laid a hand on that patch of wall each day, to feel its warmth, before he could rest easy.`,
+  'Cast-Iron Stove|Kitchen': `Black and heavy, it warms the house, cooks the supper and boils the water. Thirty years of smoke have stained it like armour that will not scrub off. The first thing he looked to on waking, and the last before he slept, was this stove.`,
   'Stove Door|Kitchen': `A cast-iron door with a smoked glass window, to watch the fire. Opened wide to feed it; most days left a crack ajar, to let the fire breathe; and when he went far afield, shut tight with the damper turned right down, so the fire would smoulder slow and long.`,
   'The Fire|Kitchen': `Logs burning in the firebox, glowing. In thirty years this fire never wholly went out: when he went far afield he banked it down, and on his return a stir of the ashes showed it red again.\n\nWhen the two of them came, the stove was cold. Under the ashes there was not a spark of red. It was the first time in thirty years.`,
   'Kettle & Reservoir|Kitchen': `The kettle always stood upon the stovetop, so there was always hot water, and a thread of steam escaped about the lid. His first act on rising was to lift it and give it a shake, judging by the slosh how much was left.\n\nThe reservoir against the stove warms its water with the stove's spare heat, and its lid lifts. Every day he carried water in and filled it. A slip of paper pasted on its side marks the levels — Full, Half, Urgent. Below "Urgent", he must go out for water, whatever the weather.`,
@@ -1723,7 +2030,10 @@ const STORY_ZH = {
   'Boots & Bench|Entry': ['换鞋处', '进门先在帆布门垫上跺脚，坐上矮凳脱靴，靴子立进托盘接雪水。门垫上磨出两道深浅不一的靴印——左脚重右脚轻，他总是左肩扛原木，走路微跛；凳面也是左边比右边光滑，他总先穿左脚。那双雪地靴鞋底的纹路快磨平了。\n\n托盘里的泥早干成了一层壳，靴子还立在边上，筒口微张。他最后一次出门，没穿它。'],
   'Lantern|Entry': ['提灯', '挂在衣帽架钉子上的蜡烛提灯。去柴堆劈柴、夜里出去查看动静都提它；冬天溪水冻住、屋里断电的那几个月，全屋就靠它。玻璃罩上有一道裂纹——某次雪地遇受惊野鹿，鹿角扫过灯架留下的。他没换玻璃，拿铁丝箍了一圈，说：“裂了也好，光从裂缝里漏出来像把剑，刚好能劈开黑雾。”'],
   'Coat Rail & Greatcoat|Entry': ['衣帽架和厚大衣', '进门把外套挂在这里晾干。最顺手的钉子上永远挂着那件厚大衣，吸饱了十年的松脂味、烟草味和雨雪潮气。口袋里总能翻出奇怪的东西：一截干枯松枝、一块形状像山的石头、一张折了四折的测绘草图。大衣的褶皱还在，像一层刚蜕下的蝉壳。'],
-  'Umbrella Stand & Snowshoes|Entry': ['伞架和雪鞋', '伞架里插着一把从不挡雨的黑伞，伞骨顶端绑了黄铜指南针——那是他测绘时用的拐杖。他晚年不用伞挡雨，说：“在林子里让雨落在头顶是礼貌。”\n\n雪鞋挂在旁边墙上，走深雪不会陷下去。他刚来那年不会用，在齐腰深的雪里挣扎了半天才回到屋。后来学会了——把体重分散到更大的面积上，就不会沉。他说这是森林教他的第一课：“不要试图对抗，要学会摊开自己。”'],
+  'Green Umbrella|Umbrella Stand': ['绿伞', '墙上挂着一把从不挡雨的绿伞，伞骨顶端绑了黄铜指南针——那是他测绘时用的拐杖。他晚年不用伞挡雨，说：“在林子里让雨落在头顶是礼貌。”'],
+  'Snowshoes|Entry': ['雪鞋', '雪鞋挂在旁边墙上，走深雪不会陷下去。他刚来那年不会用，在齐腰深的雪里挣扎了半天才回到屋。后来学会了——把体重分散到更大的面积上，就不会沉。他说这是森林教他的第一课：“不要试图对抗，要学会摊开自己。”'],
+  'Walking Stick|Umbrella Stand': ['登山杖', ''],
+  'Drip Pan|Umbrella Stand': ['接水盘', ''],
   'Shelf|Entry': ['搁板', '手套、帽子、火柴——出门要拿的小东西。毛线手套指尖磨损严重，因为他总爱用手丈量树皮纹理。搁板上那盒火柴只剩三根——他留的“最后机会”，万一灯灭炉熄，三根火柴救命。'],
   'Axe|Entry': ['斧头', '挂在墙上的手斧，劈柴用的。刃口磨得极薄几乎透明。它劈过挡路的藤蔓、过冬的柴、某年深秋劈开过结冰的溪流取水。斧柄上刻着三十道痕，记录他在这过的三十个冬天。'],
   'Shotgun|Entry': ['猎枪', '挂得很高，为了山里的安全。年轻时他靠它打过野猪和飞鸟，越往后枪越少响。他把枪挂高不仅是怕走火，更因为他发现：山里的沉默比枪声更有力量。当他不再以征服者姿态放枪时，森林才真正向他展露了隐秘的边界。'],
@@ -1734,9 +2044,11 @@ const STORY_ZH = {
   'Compost Privy & Sawdust Pail|Water Closet': ['堆肥马桶和锯末桶', '没有水冲，每次用完从锯末桶里舀一勺盖上，屋里就没有味道。锯末是劈柴的副产物，带着淡淡的松木香。桶满了，他提到屋后的堆肥池倒掉，盖上落叶，两年后翻出来就是黑土。\n\n他说：“我吃下去的变成土，土养树，树变成柴在炉子里烧成灰，灰又撒回堆肥池里。在这个屋子里没有真正的废弃物，连我自己也是循环的一部分。”'],
   'Paper Roll|Water Closet': ['厕纸', '就是普通的厕纸卷，每年开春从林边驿站背回来的。一年只背得动这么几卷，他用得很省。画废的地图草稿从不拿来凑数——那些都塞进炉膛引火了。'],
   'Washstand & Hand Towel|Water Closet': ['洗脸架和毛巾', '搪瓷脸盆和水壶。早晨他从水桶舀出冰凉的水洗脸，冰得一个激灵，他说这是“唤醒灵魂的仪式”。毛巾挂在旁边的杆上，发硬了，带一点松木皂的香味，褶皱定型在晾干的样子。'],
-  'Broom & Pan|Water Closet': ['扫帚和簸箕', '云杉枝条扎的扫帚。能扫的灰有限，但他每天都扫。这是在混乱自然中建立秩序的方式：“外面的世界是野的，但屋子里的四堵墙内，必须方方正正。”'],
+  'Dustpan|Water Closet': ['簸箕', '铁皮簸箕，口沿用得磨亮了。扫起来的东西他都倒进炉膛。'],
+  'Broom|Water Closet': ['扫帚', '云杉枝条扎的扫帚。能扫的灰有限，但他每天都扫。这是在混乱自然中建立秩序的方式：“外面的世界是野的，但屋子里的四堵墙内，必须方方正正。”'],
   'Ceiling Lamp|Water Closet': ['顶灯', '卫生间的灯比别处都暗。他故意换了个小瓦数的灯泡——有些事情不需要太亮的光线，反而需要一点模糊和体面。'],
-  'Cast-Iron Stove|Kitchen': ['铸铁炉', '黑沉沉的铸铁炉，取暖做饭烧水全靠它。炉身有三十年的烟熏痕迹，像一层无法洗掉的铠甲。烟管从东墙穿出去，穿墙的地方套着铁管，周围糊着黏土和石灰——有一年烟囱着火差点把屋子点了，之后他每天都要摸一下这块墙的温度才安心。测绘员每天醒来的第一件事和睡前的最后一件事，都是看这炉子一眼。'],
+  'Stovepipe & Heat Shield|Kitchen': ['烟管和隔热板', '烟管从东墙穿出去，穿墙的地方套着铁管，周围糊着黏土和石灰；墙上隔着垫块钉了一块铁皮，不让热气烤到木头。有一年烟囱着火差点把屋子点了，之后他每天都要摸一下这块墙的温度才安心。'],
+  'Cast-Iron Stove|Kitchen': ['铸铁炉', '黑沉沉的铸铁炉，取暖做饭烧水全靠它。炉身有三十年的烟熏痕迹，像一层无法洗掉的铠甲。测绘员每天醒来的第一件事和睡前的最后一件事，都是看这炉子一眼。'],
   'Stove Door|Kitchen': ['炉门', '铸铁炉门，带一块熏黑的玻璃窗可以看火。添柴时整个拉开，平时留一道缝让火喘气；出远门就把门关严、风门拧到最小，让火闷着慢慢烧。'],
   'The Fire|Kitchen': ['炉火', '炉膛里木柴燃烧的火苗，会发光。这团火三十年来没有彻底熄过——出远门时他把火压住，回来一拨开灰就是红的。\n\n两个人到的时候，炉子是冷的。灰底下一点红也没有了。这是三十年里第一次。'],
   'Kettle & Reservoir|Kitchen': ['水壶和储水箱', '水壶一直放在炉面上，所以随时有热水，壶盖缝里总冒一丝白气。他起床第一件事是把水壶提起来晃一下，听水声判断还剩多少。\n\n贴着炉子的储水箱用余热把水焐热，箱盖可以掀开。他每天从外面提水回来灌进去。箱子外壁上贴着一张纸条：水位刻度——满、半、急。低于“急”线就必须出门取水，不管什么天气。'],
@@ -1763,9 +2075,70 @@ const STORY_ZH = {
   'Ceiling Lamp|Loft': ['顶灯', '床边一盏，摇椅边一盏。夜里摇椅的灯先亮，他上床后灯熄，床边的灯微亮。这是他有意设计的节律：动与静的轮换，像潮汐，像呼吸。'],
   'The Inspector|Parlour': ['老稽查', '守着炉火，坐在长沙发的凹陷里。报告断了以后，测绘局派他上山来；三十年前，测绘员委任状上签的就是他的名字。'],
   'The Clerk|Loft': ['书记员', '在摇椅上读测绘员的遗稿。测绘局年轻的书记员，他寄回的每一份报告她都读过，虽然没人让她读。'],
-  'The Clerk|Parlour': ['书记员', '在书桌前抄他的方位记录。测绘局年轻的书记员，他寄回的每一份报告她都读过，虽然没人让她读；最后一条方位，在局里的官方地图上什么也没有。'],
+  'The Clerk|Parlour': ['书记员', '测绘局年轻的书记员。他寄回的每一份报告她都读过，虽然没人让她读。'],
 };
 // 进房间时标题下淡入的一句（Journal 里有同样的段落）
+// 中文版卡片：区域名、开头那句说明（INFO 等只有英文，按英文原句查；查不到就不显示）
+const AREA_ZH = { 'Exterior': '屋外', 'Entry': '玄关', 'Umbrella Stand': '伞架', 'Water Closet': '卫生间', 'Kitchen': '厨房', 'Dining': '餐桌', 'Parlour': '起居室', 'Loft': '阁楼' };
+const LEAD_ZH = {
+  'A thick plank door against wind and snow.': '厚木板门，挡风挡雪。',
+  'Give it a knock and down it slides.': '敲一下，它就整片滑下来。',
+  'Hung by the door to light the way home after dark.': '挂在门边，天黑后照着回家的路。',
+  'Mat, bench, tray and boots: where the snow is stamped off and the boots come off.': '门垫、换鞋凳、托盘和靴子：进门在这里跺掉雪、脱下靴子。',
+  'A candle lantern on the peg, to carry out to the woodpile.': '钉子上挂着一盏蜡烛提灯，出门搬柴时提着。',
+  'Coats are hung here to dry upon coming in.': '进门把大衣挂在这里晾干。',
+  'Shoes for the deep snow, on the wall by the door.': '门边墙上挂着走深雪用的雪鞋。',
+  'A green umbrella on the wall, a compass lashed to its top.': '墙上挂着一把绿伞，伞顶绑着指南针。',
+  'An iron pan under the umbrella and the stick, to catch the snowmelt.': '伞和手杖下面一只铁盘，接化下来的雪水。',
+  'His walking stick, standing in the drip pan by the door.': '门边接水盘里立着他的登山杖。',
+  'Gloves, caps and matches — small things wanted on the way out.': '手套、帽子和火柴——出门要带的小东西。',
+  'For splitting wood.': '劈柴用的。',
+  'Hung up high, for safety in the hills.': '挂得高高的，山里防身用。',
+  'A cloth curtain parting the water closet from the entry.': '一道布帘，隔开卫生间和玄关。',
+  'The only room in the cabin with a door of its own.': '木屋里唯一有自己门的房间。',
+  'No water to flush; sawdust covers all, and time does the rest.': '不用水冲，撒一层锯末盖上，剩下的交给时间。',
+  'Carried in from the post-house each spring.': '每年开春从驿站背回来的。',
+  'Basin and ewer, and a towel on the rail beside.': '脸盆和水罐，旁边横杆上搭着毛巾。',
+  'For sweeping out.': '扫地用的。',
+  'Hung on its cord beside the broom.': '用绳子挂在扫帚旁边。',
+  'Where the pipe goes out through the east wall.': '烟管从这里穿出东墙。',
+  'The heart of the cabin.': '小屋的心脏。',
+  'Logs burning in the firebox.': '炉膛里烧着的柴。',
+  'Hot water on the stovetop, and warm water in the tank beside it.': '炉面上烧着热水，旁边的水箱里存着温水。',
+  'Split, seasoned and stacked beneath the stove — enough must be laid by for the whole winter.': '劈好、晾干、码在炉子底下——得备够一整个冬天的。',
+  'An old washing cabinet for a house without plumbing: basins above, stores below.': '没有自来水的人家用的老式洗槽柜：上面放盆，下面收东西。',
+  'Clean water in from the brook; slops out to the compost pit.': '干净水从小溪提进来，脏水倒去堆肥池。',
+  'Plates in the rack, pots on the rail, spoons close at hand.': '盘子在架上，锅挂在横杆上，勺子伸手就拿得到。',
+  'A board that folds down from the wall, and two stools.': '一块从墙上放下来的桌板，配两张凳子。',
+  'Facing the stove — the warmest seat on a winter\'s night.': '对着炉子，冬夜里最暖和的座位。',
+  'Old books swollen with the damp, and his field books on the bottom shelf.': '受潮发胀的旧书，最下层是他的野外记录本。',
+  'Three doors, each opening on its own.': '三扇门，各开各的。',
+  'Brought down from the loft, and set beneath the wall lamp.': '从阁楼搬下来，放在壁灯底下。',
+  'A survey of the hills and woods hereabouts.': '这一带山林的测绘图。',
+  'A brook in a shadowed wood, woven by hand.': '手织的，幽暗林子里的一条小溪。',
+  'Not of his shooting.': '不是他打的。',
+  'The way up to the loft, and the bar across its opening.': '上阁楼的梯子，和拦在阁楼口的横杆。',
+  'Up under the roof, where the warm air gathers — the snuggest spot in the house.': '在屋顶底下，热气都聚在这里——全屋最暖和的地方。',
+  'Its drawer pulls out.': '抽屉拉得开。',
+  'Clothes for every season, put away.': '四季的衣服都收在里面。',
+  'In the corner where the roof comes lowest. Give it a touch, and it rocks a while.': '放在屋顶最低的角落。碰一下，它会摇上一阵。',
+  'Thicker than the parlour\'s.': '比起居室那块厚。',
+  'Hung on a cord, for drying the hands.': '搭在绳子上，擦手用。',
+  'Keeping the stove going, in the hollow of the settee.': '坐在沙发的凹陷里，照看着炉火。',
+  'Folds back against the wall to save room.': '折起来贴着墙，省地方。',
+  'Cast iron with a window of glass, to watch the fire.': '铸铁炉门，嵌着一块玻璃，可以看火。',
+  'One hangs from the rafters; the other lights the whole house.': '一盏从椽子上垂下来，一盏照亮整间屋。',
+  'Cast iron, black with years of seasoning.': '铸铁的，常年养锅养得乌黑。',
+  'For the soups and stews that keep all day on the stove.': '炖汤用的，一整天搁在炉子上煨着。',
+  'Kept keen upon the whetstone.': '在磨刀石上磨得很快。',
+  'Worn smooth, and a little scorched at the tip.': '用得光滑了，勺尖有点焦。',
+  'For the soup pot.': '舀汤用的。',
+  'For turning flapjacks in the skillet.': '在平底锅里翻煎饼用的。',
+  'Reading the Surveyor\'s papers in the rocking chair.': '在摇椅上读测绘员的遗稿。',
+  'Writing up the day at the desk.': '在书桌前写今天的调查记录。',
+  'Looking the house over, room by room.': '一间一间地查看屋子。',
+  'In the clerk\'s hand, the ink still wet.': '书记员的笔迹，墨还没干。',
+};
 const ROOM_NOTES = {
   'Entry': ['The border where man and forest held their parley: take off the boots, and the wildness stays outside.', '人与森林交涉的边境——脱下靴子，把野性留在门外。'],
   'Water Closet': ['Behind the curtain: the only room in the cabin with a door of its own.', '布帘后面，木屋里唯一有自己门的房间。'],
@@ -1796,7 +2169,7 @@ function infoOf(name) {
   if (name.startsWith('take_')) return TAKE_INFO[name.replace(/_\d+$/, '')] || null;
   if (name.startsWith('toilet_door_')) return ['Folding Door', 'Water Closet', 'Folds back against the wall to save room.'];
   if (/^(living|loft)_cabinet_door_/.test(name)) return infoOf(name.replace(/_door_\d$/, ''));
-  const sub = { dry_sink_door_: 'dry_sink', desk_drawer: 'loft_desk', bedside_drawer: 'loft_bedside_table', dining_leaf: 'dining_wall_table', loft_gate: 'loft_rail', entry_toilet_lid: 'entry_toilet', stove_reservoir_lid: 'stove_reservoir', slop_pail_lid: 'sink_slop_pail', entry_toilet_rear_lid: 'entry_toilet', entry_washstand_tank_lid: 'entry_washstand', entry_noren_rod: 'entry_noren', stove_firebox: 'stove_fire', stove_iron_body: 'stove_iron' };
+  const sub = { dry_sink_door_: 'dry_sink', desk_drawer: 'loft_desk', bedside_drawer: 'loft_bedside_table', dining_leaf: 'dining_wall_table', loft_gate: 'loft_rail', entry_toilet_lid: 'entry_toilet', stove_reservoir_lid: 'stove_reservoir', slop_pail_lid: 'sink_slop_pail', entry_washstand_tank_lid: 'entry_washstand', entry_noren_rod: 'entry_noren', stove_firebox: 'stove_fire', stove_iron_body: 'stove_iron' };
   for (const [pre, host] of Object.entries(sub)) if (name.startsWith(pre)) return infoOf(host);
   if (name === 'stove_door') return ['Stove Door', 'Kitchen', 'Cast iron with a window of glass, to watch the fire.'];
   if (name.startsWith('hall_pendant_')) return ['Pendant & Ceiling Lamp', 'Parlour', 'One hangs from the rafters; the other lights the whole house.'];
@@ -1888,7 +2261,7 @@ async function loadHand(P, body) { // 第一人称拿东西的右手（../blende
 // rock：摇椅，坐着时一直轻轻摇，人跟着椅子的变换一起动。
 const SEATS = {
   living_sofa: { pelvis: [0.19, 0.39], y: 0.736, yaw: Math.PI, node: 'sofa' }, // 长沙发右坐垫（老人的老位置）；坐面实测 0.69，软垫坐下去陷 4.6cm，按 0.736 算正好是原来手调的根节点 0.25
-  loft_chair: { pelvis: [-0.894, -1.124], y: 0.70, yaw: -Math.PI / 2, pull: [0.4, 0], out: [-0.83, -0.62], node: 'desk' }, // 书桌椅（名字带 loft，其实在一楼起居室西北角），面朝西边的书桌
+  loft_chair: { pelvis: [-0.894, -1.124], y: 0.70, yaw: -Math.PI / 2, pull: [0.4, 0], out: [-0.83, -0.62], node: 'desk', shut: ['desk_drawer'] }, // shut：坐下前先关上（抽屉拉开 30cm 正顶在腿上） // 书桌椅（名字带 loft，其实在一楼起居室西北角），面朝西边的书桌
   loft_rocking_chair: { pelvis: [-0.686, 1.114], y: 2.70, yaw: Math.atan2(0.733, -0.68), rock: true, node: 'L_rocker' }, // 阁楼摇椅，顺着摇杆朝东南；骨盆比坐面中心往椅背挪 5cm（原先挪 10cm 时膝盖窝在座面前沿后面，小腿必穿前横档；背后空隙由女调查员的靠垫 Cushion 填）
   entry_toilet: { pelvis: [-1.43, 1.259], y: 0.58, yaw: Math.PI / 2, node: 'wc' }, // 卫生间马桶，面朝东边的门
 };
@@ -1924,7 +2297,8 @@ function nearNode(x, z, loft = false) { // 同一层里最近的节点（push0 �
 }
 function sitTasks(p, name) { // 走到座位前 → （拉椅子）→ 转身 → 坐下 →（推回去）
   const S = SEATS[name], a = seatPose(p, name, S.pull ? 1 : 0), t = [];
-  if (S.pull) t.push(['walk', ...S.out], ['face', S.pelvis[0], S.pelvis[1]], ['chair', name, 1]);
+  if (S.pull) t.push(['walk', ...S.out], ['face', S.pelvis[0], S.pelvis[1]], ['shut', name], ['chair', name, 1]);
+  else if (S.shut) t.push(['shut', name]);
   t.push(['walk', a.x, a.z], ['turn', S.yaw], ['seat', name], ['anim', 'Sitting_Enter']);
   if (S.pull) t.push(['chair', name, 0]);
   return t;
@@ -1935,6 +2309,11 @@ function riseTasks(p, n = p.seat) { // 起身：（拉开椅子）→ 站起来 
   if (S.pull) t.push(['chair', n, 1]);
   t.push(['anim', 'Sitting_Exit'], ['unseat']);
   if (S.pull) t.push(['walk', ...S.out], ['chair', n, 0]);
+  return t;
+}
+function fpRise(p) { // 第一人称起身：站起来后再往前迈半步。沙发坐垫网格伸到 z 0.03，Sitting_Exit 做完脚还在坐垫投影里（z 0.21），身体那几圈碰撞射线从坐垫里面往外打、四面都挡，人就关在沙发里出不去（2026-10-27 用户试玩）
+  const S = SEATS[p.seat], t = riseTasks(p);
+  if (S && !S.pull && S.pelvis) t.push(['walk', S.pelvis[0] + Math.sin(S.yaw) * 0.55, S.pelvis[1] + Math.cos(S.yaw) * 0.55]);
   return t;
 }
 function goTasks(p, x, z, toNode) { // 从现在的位置沿 NAV 走到某个节点（同一层）
@@ -1967,7 +2346,19 @@ function planOuting(p, id, act) {
   t.push(...goTasks(p, startX, startZ, goal), ...ACTIVITIES[act](p));
   const back = act === 'stove' ? 'stove' : goal;
   t.push(...navPath(back, SEATS[home].node).map(([x, z]) => ['walk', x, z]), ...sitTasks(p, home));
-  return t;
+  return wcDoorTasks(t);
+}
+function wcDoorTasks(t) { // 走 entryW ↔ wcIn 这一段要穿过折叠门门洞：前面插一个 wcDoor（执行时门开着就跳过）
+  const out = []; let prev = null;
+  for (const T of t) {
+    if (T[0] === 'walk') {
+      const at = (n) => T[1] === NAV[n][0] && T[2] === NAV[n][1];
+      if ((at('wcIn') && prev === 'entryW') || (at('entryW') && prev === 'wcIn')) out.push(['wcDoor']);
+      prev = at('wcIn') ? 'wcIn' : at('entryW') ? 'entryW' : null;
+    }
+    out.push(T);
+  }
+  return out;
 }
 // —— 女调查员的日常（2026-10-20）：坐在自己的位置（摇椅看书 / 书桌写字），隔 1–2.5 分钟（或被点一下）起来转转：
 // 去 1–3 个地方东看看西看看（书架、墙上的地图、碗架、炉子、阁楼栏杆边抱着胳膊往下看、床头柜、挂钩），有时换到另一张椅子坐一阵，再回来坐下。上下楼走梯子（routeTasks）。
@@ -2007,7 +2398,7 @@ function planWoman(p, act) {
 function goHome(p, id) { // 玩家退出后人留在别处：（起身）走回自己的座位坐下
   const home = ROUTINES[id].home || p.home, S = p.seat && SEATS[p.seat], r = p.root;
   const sx = S && S.out ? S.out[0] : r.position.x, sz = S && S.out ? S.out[1] : r.position.z;
-  p.tasks = [...riseTasks(p), ...routeTasks(sx, r.position.y, sz, SEATS[home].node), ['walk', ...NAV[SEATS[home].node]], ...sitTasks(p, home)];
+  p.tasks = wcDoorTasks([...riseTasks(p), ...routeTasks(sx, r.position.y, sz, SEATS[home].node), ['walk', ...NAV[SEATS[home].node]], ...sitTasks(p, home)]);
 }
 function wakePerson(id, act) {
   const p = people.get(id), R = ROUTINES[id];
@@ -2028,7 +2419,9 @@ const game = (() => {
   if (/[?&]reset\b/.test(location.search)) try { localStorage.removeItem(GAME_KEY); } catch (e) { /* 读写不了就当没存过 */ }
   let s = null; try { s = JSON.parse(localStorage.getItem(GAME_KEY)); } catch (e) { s = null; }
   const g = { day: (s && s.day) || 1, found: new Set(s && Array.isArray(s.found) ? s.found : []), night: false, dusk: false };
-  g.night = DAY1_NEED.every((k) => g.found.has(k));
+  g.night = g.day >= 3 ? false : g.day >= 2 ? g.found.has('log2') : DAY1_NEED.every((k) => g.found.has(k)); // 第 2 天：回屋读到日志中段才天黑
+  if (g.night) g.found.add('journal'); // 老存档：第 1 天已找齐但没弹过「解锁遗稿」，直接算解锁
+  g.saved = g.found.size > 0; // 有存档：刷新时问「继续上次 / 重新开始」（resumeAsk）
   return g;
 })();
 function saveGame() { try { localStorage.setItem(GAME_KEY, JSON.stringify({ day: game.day, found: [...game.found] })); } catch (e) { /* 存不了就只在这次打开里有效 */ } }
@@ -2043,7 +2436,7 @@ const DAY1_TEXT = {
   notes1: ['Inquiry Notes, Night of Day 1', '调查记录 · 第 1 天夜里', GAME_TEXT.notes1[1], GAME_TEXT.notes1[2]],
 };
 const QUEST = { // 屏幕上那一行任务提示：[英, 中]
-  fire: ['The stove is stone cold. Light the fire first.', '炉子冷透了。先把火生起来。'],
+  fire: ['It is cold in here. Get the fire going first.', '有点冷，先把火升起来吧。'],
   look: ['He left things behind in the house.', '屋里还有他留下的东西。'],
   dusk: ['Night is coming on.', '天快黑了。'],
   night: ['Night. The clerk is writing up the day at the desk.', '天黑了。书记员在书桌前写今天的调查记录。'],
@@ -2054,17 +2447,87 @@ const CLERK_SAYS = ['The clerk: "This house is newer than the reports made it."'
 const LETTER_CARD = ['Unburnt Letter', 'Kitchen', '没烧完的信', GAME_TEXT.letter[1], GAME_TEXT.letter[2]];
 const LOG_CARD = ['Field Log', 'Parlour', '工作日志', DAY1_TEXT.log[2], DAY1_TEXT.log[3]];
 const NOTES_CARD = ['Inquiry Notes', 'Parlour', '调查记录', GAME_TEXT.notes1[1], GAME_TEXT.notes1[2], 'In the clerk\'s hand, the ink still wet.'];
-function questNow() { const f = game.found; return f.has('notes1') ? 'end' : game.dusk ? 'dusk' : game.night ? 'night' : f.has('fire') ? 'look' : 'fire'; }
+function questNow() { const f = game.found; if (game.day >= 3) return quest3(); if (game.day >= 2) return quest2(); return f.has('notes1') ? 'end' :game.dusk ? 'dusk' : game.night ? 'night' : f.has('fire') ? 'look' : 'fire'; }
+const STOVE_ROOMS = ['Parlour']; // 「先生火」只在进起居室时提示（用户定的），屋外、厨房、第一人称都不提（让玩家自己摸索）
 function showQuest() {
-  const el = $('quest'), k = questNow(), zh = document.createElement('span');
-  el.textContent = QUEST[k][0]; zh.className = 'zh'; zh.textContent = QUEST[k][1]; el.append(zh);
-  el.classList.toggle('end', k === 'end'); el.classList.add('on');
+  const el = $('quest'), k = questNow();
+  el.innerHTML = k === 'fire' && !game.stoveSeen ? '' : lbl(QUEST[k][0], QUEST[k][1]);
+  // 线索进度：提示区下面一行小字；找齐就不显示（天转夜）
+  const need = game.day >= 3 ? X_NEED : game.day >= 2 ? DAY2_NEED : DAY1_NEED, n = need.filter((c) => game.found.has(c)).length, left = need.length - n;
+  $('walkBtn').hidden = !(game.day >= 3 ? game.found.has('log3') && !game.found.has('ended') : game.day >= 2 && !game.night) || !!fp; // 第 2 天白天：「出门走走」直接站到门口、第一人称
+  $('prog').innerHTML = (k === 'fire' || k === 'look' || k === 'out' || k === 'x3') && !opening && n > 0 && left > 0 ?lbl(`${n} found · ${left} to find`, `已找到 ${n} · 还剩 ${left}`) : '';
+  el.classList.toggle('end', k === 'end'); el.classList.toggle('on', !opening && !!el.innerHTML);
+  $('jBtn').hidden = !game.found.has('journal'); // 遗稿：开局不出现，集齐第 1 天线索、弹过「解锁遗稿」才有
+}
+// —— 居中小弹窗（解锁遗稿、继续 / 重来）：样式同线索卡片；btns = [[英, 中, 点了做什么], …]，点哪个都先关窗 ——
+function dialog(title, text, btns) {
+  const d = $('dlg'), box = d.querySelector('.box');
+  box.innerHTML = `<h2>${lbl(...title)}</h2><p>${lbl(...text)}</p><div class="row"></div>`;
+  for (const [en, zh, fn] of btns) { const b = document.createElement('button'); b.innerHTML = lbl(en, zh); b.onclick = () => { d.hidden = true; if (fn) fn(); }; box.lastChild.append(b); }
+  if (document.pointerLockElement) document.exitPointerLock(); // 第一人称：放出鼠标才点得到按钮
+  d.hidden = false;
+}
+function unlockJournal() { // 第 1 天线索找齐、天黑之后弹；线索卡片 / 遗稿 / 别的弹窗开着就等它们关了
+  if (game.found.has('journal')) return;
+  if (!$('card').hidden || !journal.hidden || !$('dlg').hidden) { setTimeout(unlockJournal, 500); return; }
+  game.found.add('journal'); saveGame(); showQuest();
+  dialog(['The Papers Unsealed', '恭喜解锁遗稿'], ['All that the first day turned up is now written into his Papers. Open the Journal below to read it.', '第一天找到的东西都记进了遗稿，点下方「遗稿」就能翻看。'], [['Very Well', '好']]);
+}
+function resumeAsk() { // 刷新时有存档才问；「重新开始」只放在这里（网址加 ?reset 也行）
+  try { if (sessionStorage.getItem('cabin.nextDay')) { sessionStorage.removeItem('cabin.nextDay'); dayStartNote(); return; } } catch (e) { /* 读不到就照常问 */ } // 刚从「第一天结束」过来：不问，直接说早上
+  if (game.found.has('ended')) { endAsk(); return; } // 通关了：刷新只说终章、后记解锁
+  if (!game.saved) return;
+  dialog(['Welcome Back', '欢迎回来'], ['Your inquiry was left part-way. Carry on from where you stopped, or begin the first day again?', '上次的调查还没做完。接着上次的进度，还是从第一天重新开始？'],
+    [['Carry On', '继续上次'], ['Begin Again', '重新开始', () => { try { localStorage.removeItem(GAME_KEY); } catch (e) { /* 清不掉也重开 */ } location.reload(); }]]);
+}
+// —— 开场字幕：第一次来（没有任何进度）时跟着开场飞行一句句播；开场被跳过就把整段放进一张卡片，点一下关 ——
+const OPENING = [
+  ['For thirty years the Surveyor in the northern woods sent down a report each spring. This spring, none came.', '三十年来，林子里的测绘员每年开春寄回一份报告。今年春天，报告没有来。'],
+  ['The Survey Office sent two people up the path:\nyou, the old inspector who signed his commission thirty years ago,\nand a young clerk who had read every report he ever sent.', '测绘局派了两个人上山：\n你，三十年前在他委任状上签字的老稽查；\n她，读过他每一份报告的年轻书记员。'], // \n 按意群分行（#subs、#opening p 用 pre-line）
+  ['The door stood ajar and the porch lamp was burning. No one was home, and the stove was cold.', '大门虚掩，门廊灯亮着，屋里没有人，炉子是冷的。'],
+  ['Night is coming on. Tonight you stop here.', '天快黑了，今晚先在这里住下。'],
+];
+let opening = game.found.size === 0 ? { i: -1, timer: 0 } : null; // null = 不播（回访、已看过）
+function startOpening() { if (opening) opening.timer = setTimeout(nextSub, 800); }
+function nextSub() {
+  const el = $('subs');
+  if (!opening) return;
+  if (el.classList.contains('on')) { el.classList.remove('on'); opening.timer = setTimeout(nextSub, 900); return; } // 先淡出再换下一句
+  const i = ++opening.i;
+  if (i >= OPENING.length) return endOpening();
+  el.innerHTML = lbl(...OPENING[i]); el.classList.add('on');
+  const zh = document.documentElement.dataset.lang === 'zh', n = OPENING[i][zh ? 1 : 0].length;
+  opening.timer = setTimeout(nextSub, (zh ? 2200 + n * 120 : 2200 + n * 45)); // 按字数给阅读时间
+}
+function endOpening() {
+  clearTimeout(opening && opening.timer); opening = null;
+  $('subs').classList.remove('on'); $('opening').classList.remove('on'); setTimeout(() => { $('opening').hidden = true; }, 600);
+  game.found.add('opening'); saveGame(); showQuest(); enterBtn.classList.remove('wait'); $('jBtn').classList.remove('wait');
+}
+function openingCard() { // 开场飞行被跳过：字幕没播完的话整段放进卡片
+  if (!opening || opening.card) return;
+  clearTimeout(opening.timer); opening.card = performance.now(); $('subs').classList.remove('on');
+  const o = $('opening'), box = o.querySelector('.box');
+  box.innerHTML = OPENING.map((l) => `<p>${lbl(...l)}</p>`).join('') + `<button>${lbl('Go In', '进去看看')}</button>`;
+  o.hidden = false; requestAnimationFrame(() => o.classList.add('on'));
+}
+$('opening').addEventListener('click', () => { if (opening && performance.now() - opening.card > 400) endOpening(); }); // 跳过的那一下点击不算
+function isClue(name) { // 第 1 天的线索物件（找到后再点也算）、夜里的书桌：卡片居中、要手动关
+  const t = infoOf(name)?.[0];
+  if (game.day >= 3) return x3.on ? ['xcoat', 'xwatch', 'xnotes', 'xfire'].some((k) => X_CARDS[k][0] === t) || ['Coat Rail & Greatcoat', 'Boots & Bench', 'Lantern', 'Night Table', 'Writing Desk, Chair & Wall Lamp', 'Rocking Chair', 'The Fire', 'Cast-Iron Stove'].includes(t) || name === 'x_light' : t === 'Bookcase' || name === 'd3_spruce';
+  if (game.day >= 2) return name.startsWith('d2_') || (game.night && t === 'Writing Desk, Chair & Wall Lamp');
+  return name === 'stove_letter' || name.startsWith('desk_drawer') || ['Map', 'Bookcase', 'Coat Rail & Greatcoat', 'Boots & Bench', 'Lantern'].includes(t)
+    || (game.night && t === 'Writing Desk, Chair & Wall Lamp');
 }
 function gameSeen(name) { // select 里调：这次点的东西算不算线索；返回要换上的卡片或 null
   const f = game.found, title = infoOf(name)?.[0], got = [];
   const add = (k) => { if (!f.has(k)) { f.add(k); got.push(k); } };
   let over = null;
+  mmReveal(infoOf(name)?.[1]); // 小地图：点过哪个房间的东西就散开那块雾
+  if (game.day >= 3) return gameSeen3(name, title, add, got);
+  if (game.day >= 2) return gameSeen2(name, title, add, got);
   if (name === 'stove_fire' || name === 'stove_firebox') {
+    game.stoveSeen = true; // 自己找到炉膛了：之后进起居室不再提「先生火」
     if (toggles.get('stove_fire')?.on) { add('fire'); if (!f.has('letter')) { add('letter'); over = LETTER_CARD; } } // 生火前先扒开灰：信就压在底下
   } else if (name === 'stove_letter') { add('letter'); over = LETTER_CARD; }
   else if (title === 'Map') add('map');
@@ -2077,19 +2540,66 @@ function gameSeen(name) { // select 里调：这次点的东西算不算线索�
   else if (name === 'person_woman') { const z = STORY_ZH['The Clerk|Loft']; over = ['The Clerk', 'Parlour', z[0], STORY['The Clerk|Loft'], z[1].replace(/^[^。]*。/, ''), INFO.person_woman[2]]; } // 白天她没在读遗稿：去掉中文第一句「在摇椅上读……」
   if (['coat', 'boots', 'lantern'].every((k) => f.has(k))) add('took');
   if (f.has('letter')) { const g = layers.get('stove_letter'); if (g) g.visible = false; } // 信拿出来了
+  gameSeen.got = got.length;
   if (!got.length) return over;
   saveGame(); renderJournal();
   if (got.includes('took')) showRoomNote([DAY1_TEXT.took[2], DAY1_TEXT.took[3]]);
   if (!game.night && DAY1_NEED.every((k) => f.has(k))) startNight(got.includes('took'));
+  if (got.includes('notes1')) endDay(); // 读完第 1 夜的调查记录：卡片关了弹「第一天结束」→ 第二天早上
   showQuest();
   return over;
 }
+// —— 卡关提示：屋里 90 秒没找到新线索、或连点 6 样东西都没进展，就提示下一条没找到的线索；同一条最多三级 ——
+// 一级只暗示，二级说在哪，三级让那件东西描边亮 5 秒。找到任何线索就从一级重新算。文字在 HINTS：[[英, 中] 一级, [英, 中] 二级, 图层]
+const HINTS = {
+  fire: [['The cold creeps into the bones. Where did his warmth come from?', '冷意往骨头里钻。这屋里的暖和是从哪儿来的？'],
+    ['The iron stove on the kitchen side — look into the firebox.', '厨房那边的铁炉子——看看炉膛里。'], 'stove_firebox'],
+  letter: [['Not everything in the stove burnt away.', '炉子里有东西没烧干净。'],
+    ['Look in the ashes behind the stove door.', '炉门里面的灰里看看。'], 'stove_letter'],
+  map: [['He was a surveyor; his work would hang where he could see it.', '他是测绘员，干活的东西会挂在抬眼就看得见的地方。'],
+    ['A map on the wall of the Parlour.', '起居室墙上的地图。'], 'wall_map'],
+  drawer: [['A writing man keeps his unfinished pages close at hand.', '写东西的人，没写完的纸总放在手边。'],
+    ['The writing desk — open its drawer.', '书桌——拉开抽屉看看。'], 'desk_drawer'],
+  log: [['Thirty winters of work must be written down somewhere.', '三十个冬天的活儿，总得记在什么地方。'],
+    ['The bookcase in the Parlour, the bottom shelf.', '起居室的书架，最下面那格。'], 'living_bookcase'],
+  coat: [['What does a man put on before he goes out into the snow?', '人出门进雪地，先要穿上什么？'],
+    ['The coat rail by the door.', '门边的衣帽架。'], 'entry_coat_rail'],
+  boots: [['And on his feet?', '脚上呢？'], ['The boots by the bench in the Entry.', '玄关换鞋凳边的靴子。'], 'entry_bench_stool'],
+  lantern: [['And a light to find the way home?', '还有回来时照路的灯呢？'], ['The lantern on its peg in the Entry.', '玄关钉子上的提灯。'], 'entry_lantern'],
+};
+const HINT_ORDER = ['fire', 'letter', 'map', 'drawer', 'log', 'coat', 'boots', 'lantern'];
+const HINT_IDLE = 90, HINT_CLICKS = 6, HINT_GLOW = 5000;
+const hint = { idle: 0, clicks: 0, key: null, lvl: 0 };
+let hintGlow = null, hintGlowT = 0; // 三级提示时描边的图层（drawHighlight 当悬停画）
+function hintReset() { hint.idle = 0; hint.clicks = 0; }
+const HINT_Q = ['fire', 'look', 'out', 'dusk2']; // 这几步任务里才提示
+function hintActive() { const q = questNow(); return game.entered && (inside || fp) && HINT_Q.includes(q) &&!opening && card.hidden && journal.hidden && $('dlg').hidden && document.visibilityState === 'visible'; }
+function hintFire() { // 升一级并显示
+  const key = (game.day >= 3 ? HINT_ORDER3.filter((k) => x3.on ? X_NEED.includes(k) : !X_NEED.includes(k)) : game.day >= 2 ? HINT_ORDER2 : HINT_ORDER).find((k) => !game.found.has(k) && (game.day < 2 || k !== 'd2light' || d2.lamp));
+  if (!key) return;
+  if (key !== hint.key) { hint.key = key; hint.lvl = 0; }
+  hint.lvl = Math.min(3, hint.lvl + 1); hintReset();
+  const h = HINTS[key];
+  if (hint.lvl < 3) { showRoomNote(h[hint.lvl - 1]); return; }
+  showRoomNote(['Look — there.', '看——就在那儿。']);
+  if (layers.get(h[2])) {
+    const prev = hintGlow; hintGlow = h[2]; if (prev) paint(prev); paint(hintGlow);
+    clearTimeout(hintGlowT); hintGlowT = setTimeout(() => { const n = hintGlow; hintGlow = null; paint(n); }, HINT_GLOW);
+  }
+}
+function hintClick() { // select 里调：点了东西却没找到新线索
+  if (gameSeen.got) { hint.key = null; hint.lvl = 0; hintReset(); return; }
+  const q = questNow(); if (!game.entered || !HINT_Q.includes(q) || hint.wait) return;
+  if (++hint.clicks >= HINT_CLICKS) { hint.wait = true; setTimeout(() => { hint.wait = false; hintFire(); }, 1200); } // 等物件说明先读一眼
+}
+setInterval(() => { if (hintActive() && ++hint.idle >= HINT_IDLE) hintFire(); }, 1000);
+window.cabinHint = { hint, fire: hintFire, click: hintClick, HINTS, glow: () => hintGlow };
 function startNight(late) { // 线索找齐：书记员说一句 → 天色转到夜里、她走去书桌 → 壁灯亮起（late：刚弹出「他什么都没带」，等它读完）
   game.night = game.dusk = true;
   const t0 = late ? 6000 : 1500;
   setTimeout(() => showRoomNote(CLERK_SAYS), t0);
   setTimeout(() => { sky.play = false; sky.goal = 21; sky.goalRate = 1; clerkToDesk(); }, t0 + 3500);
-  setTimeout(() => { game.dusk = false; const w = toggles.get('wall_lamp'); if (w) w.on = true; showQuest(); }, t0 + 10500);
+  setTimeout(() => { game.dusk = false; const w = toggles.get('wall_lamp'); if (w) w.on = true; showQuest(); unlockJournal(); }, t0 + 10500);
 }
 function clerkToDesk() { // 天黑：书记员走到书桌坐下写（正在走的那一段走完再去；书桌被人占着就等）
   const p = people.get('person_woman'); if (!p) return;
@@ -2124,7 +2634,7 @@ function makeLetter() {
   const g = new THREE.Group(); g.name = 'stove_letter'; g.position.set(...LETTER.at); g.add(m);
   scene.add(g); layers.set('stove_letter', g); meshes.push(m); indoorShade(g);
 }
-function setupJournal() { // 把 Journal 按 h3 分节（中英各一份）好按进度锁；开场后面插「第一天」，最底下加「从头再来」
+function setupJournal() { // 把 Journal 按 h3 分节（中英各一份）好按进度锁；开场后面插「第一天」
   const page = journal.querySelector('.page'), zh = page.querySelector('div.zh'), KEYS = ['open', 'prologue', 'surveyor', 'epilogue', 'after'];
   for (const [box, lang] of [[page, 'en'], [zh, 'zh']]) {
     let i = -1, cur = null;
@@ -2136,17 +2646,10 @@ function setupJournal() { // 把 Journal 按 h3 分节（中英各一份）好�
     const day = document.createElement('div'); day.className = 'jday'; day.dataset.lang = lang;
     box.querySelector('[data-sec="open"]').after(day);
   }
-  const p = document.createElement('p'), b = document.createElement('button');
-  p.className = 'jreset'; b.textContent = 'Begin Again · 从头再来'; p.append(b); page.append(p);
-  b.onclick = () => {
-    if (!confirm('Forget all that has been found, and begin the first day again?\n忘掉找到的一切，从第一天重新开始？')) return;
-    try { localStorage.removeItem(GAME_KEY); } catch (e) { /* 清不掉也重开 */ }
-    location.reload();
-  };
-  renderJournal();
+  renderJournal(); // 「从头再来」按钮删了（2026-10-22）：重新开始只在刷新时的「继续上次 / 重新开始」弹窗里（resumeAsk）
 }
 function renderJournal() { // 开场一直在；找到工作日志才有序章和「测绘员」；终章、后记等通关（第 3 天）
-  const f = game.found, open = { open: true, prologue: f.has('log'), surveyor: f.has('log'), epilogue: false, after: false };
+  const f = game.found, open = { open: true, prologue: f.has('log'), surveyor: f.has('log'), epilogue: f.has('ended'), after: f.has('ended') };
   for (const d of journal.querySelectorAll('[data-sec]')) d.hidden = !open[d.dataset.sec];
   for (const box of journal.querySelectorAll('.jday')) {
     const zh = box.dataset.lang === 'zh', add = (tag, text, cls) => { const e = document.createElement(tag); e.textContent = text; if (cls) e.className = cls; box.append(e); };
@@ -2155,16 +2658,450 @@ function renderJournal() { // 开场一直在；找到工作日志才有序章�
     const keys = Object.keys(DAY1_TEXT).filter((k) => f.has(k));
     if (!keys.length) add('p', zh ? '还什么都没记下。' : 'Nothing written down yet.', 'coda');
     for (const k of keys) { const t = DAY1_TEXT[k]; add('h4', zh ? t[1] : t[0]); for (const para of (zh ? t[3] : t[2]).split('\n\n')) add('p', para); }
-    add('p', zh ? '还有一些纸页没找到。' : 'Some pages are still to be found.', 'coda');
+    if (game.day >= 2) { // 第二天：同样只列已找到的
+      add('h3', zh ? '第二天' : 'The Second Day');
+      const k2 = Object.keys(DAY2_TEXT).filter((k) => f.has(k));
+      if (!k2.length) add('p', zh ? '还什么都没记下。' : 'Nothing written down yet.', 'coda');
+      for (const k of k2) { const t = DAY2_TEXT[k]; add('h4', zh ? t[1] : t[0]); for (const para of (zh ? t[3] : t[2]).split('\n\n')) add('p', para); }
+    }
+    if (game.day >= 3) { // 第三天
+      add('h3', zh ? '第三天' : 'The Third Day');
+      const k3 = Object.keys(DAY3_TEXT).filter((k) => f.has(k));
+      if (!k3.length) add('p', zh ? '还什么都没记下。' : 'Nothing written down yet.', 'coda');
+      for (const k of k3) { const t = DAY3_TEXT[k]; add('h4', zh ? t[1] : t[0]); for (const para of (zh ? t[3] : t[2]).split('\n\n')) add('p', para); }
+    }
+    if (!f.has('ended')) add('p', zh ? '还有一些纸页没找到。' : 'Some pages are still to be found.', 'coda');
   }
 }
 function gameInit() { // 模型和开关都建好后调（loadPeople 之前）：冷炉子、炉膛里的信、时刻、Journal、任务提示
   const f = toggles.get('stove_fire');
   if (f && !game.found.has('fire')) { f.on = false; f.k = 0; for (const q of f.parts) q(0); fire.smoke = 0; }
   if (!game.found.has('letter')) makeLetter();
-  sky.goal = null; sky.play = false; sky.hour = game.night ? 21 : 15.5; // 下午到，找齐线索时天黑；时间不自己走，免得找着找着天就黑了
+  sky.goal = null; sky.play = false; sky.hour = game.night ? 21 : game.day >= 3 ? 9.5 : game.day >= 2 ? (DAY2_NEED.every((k) => game.found.has(k)) ? 17.5 : 9.5) : 15.5;
+  if (game.day === 2 && game.found.has('notes2')) endDay2(); // 读完第 2 夜的记录还没点「第三天早上」就刷新了
+  if (game.day === 1 && game.found.has('notes1')) endDay(); // 读完第 1 夜的记录还没点「第二天早上」就刷新了 // 下午到，找齐线索时天黑；时间不自己走，免得找着找着天就黑了
+  if (game.day >= 2) { setWeather('Fog', true); clearTimeout(wxTimer); game.entered = true; } // 第 2 天整天起雾、不自动换天气
   if (game.night) { const w = toggles.get('wall_lamp'); if (w) w.on = true; }
   setupJournal(); showQuest();
+}
+// —— 三日调查小游戏 · 第 2 天（2026-10-21）：读完第 1 夜的记录 →「第一天结束」→ 重新载入成第二天早上、整天起雾 →「出门走走」站到门口、第一人称 →
+// 门口劈柴木桩 + 沿小路的标桩 / 刻了记号的云杉 / 石堆（雾里的路：还没认出来的那段走进去，就绕回门口）→ 四样找齐天转傍晚，北偏东的雾里亮起一盏灯（点它算线索）
+// → 走回屋里读到工作日志中段 → 天黑，书记员在书桌写第 2 夜的记录 → 读完「第 3 天 · 待续」。物件都是 three.js 几何体，在 day2Setup 里建（要等地面高度和小路曲线）。
+const DAY2_NEED = ['d2block', 'd2stake', 'd2blaze', 'd2cairn'];
+const DAY2_MARKS = ['d2stake', 'd2blaze', 'd2cairn']; // 沿路的三样：每认出一样，雾里能走的那段就往前放一截（D2.reach）
+const D2 = { door: [-0.05, 3.4], block: [1.9, 3.0], yard: 13, width: 6.5, reach: [32, 52, 72, 90], lost: 1.2, lamp: [40, 2.4, -38], lampNear: 26 };
+const D2_SPOTS = { d2_stake: { s: 24, off: 2.3 }, d2_blaze: { s: 44, off: -2.0 }, d2_cairn: { s: 64, off: 2.0 } }; // s = 从院子边起沿小路的米数，off = 离路中心
+const d2 = { veil: false, lamp: null, lostT: 0, samples: null, lampSaid: false };
+window.cabinD2 = d2; // 调试
+const D2_CARDS = { // 图层 → [标题, 区域, 中文标题, 英, 中, 说明]
+  d2_block: ['Chopping Block', 'Exterior', '劈柴木桩', 'A round of old spruce by the porch, waist-high, scarred by thirty winters of the axe. Across the top runs one slanting cut, deeper than all the rest: the axe always came down the same way.', '门廊边一截老云杉，齐腰高，三十个冬天的斧痕。顶上有一道斜刀口，比别的都深——斧子总是从同一个方向落下来。', 'Where he split the winter\'s wood.'],
+  d2_stake: ['Survey Stake', 'Exterior', '测量标桩', 'A survey stake beside the path, as tall as the chopping-block by the door. Near the top, one slanting cut: the same angle, the same depth.\n\nThe inspector: "He set it himself, as a matter of course."\n\nBelow the cut, a bearing burnt into the wood. The path holds on, past the next bend.', '路边一根测量标桩，跟门口的劈柴木桩一样高。靠上有一道斜刀口——一样的角度，一样的深。\n\n稽查说：“他自己立的，顺手。”\n\n刀口下面烙着一行方位：沿路再走，过下一道弯。', 'A stake by the path, a rag of red cloth at its head.'],
+  d2_blaze: ['Blazed Spruce', 'Exterior', '刻了记号的云杉', 'An old spruce with a blaze cut into the bark at eye height: an arrow, and beneath it the figure 7. The bark has grown back round the edges; it was cut a great many years ago.', '一棵老云杉，齐眼高的树皮上削出一块记号：一个箭头，下面刻着“7”。切口边上的树皮已经长回来了——是很多年前刻的。', 'A mark cut in the bark.'],
+  d2_cairn: ['Cairn', 'Exterior', '石堆', 'Stones heaped knee-high where the path bends. On the topmost, in charcoal: ✕ → 4 mi.\n\nBeyond it the fog lies so thick the path cannot be seen at all.', '小路拐弯的地方堆着齐膝高的石头。最上面那块用炭笔写着：✕ → 四里。\n\n再往前，雾浓得连路都看不见了。', 'Stones heaped where the path bends.'],
+  d2_lamp: ['A Light in the Fog', 'Exterior', '雾里的灯', 'A light in the fog, east of north, like the porch lamp. There is no house that way.', '雾里一盏灯，在北偏东，像门廊灯。那边没有人家。', 'A light, far off in the fog.'],
+};
+const D2_KEY = { d2_block: 'd2block', d2_stake: 'd2stake', d2_blaze: 'd2blaze', d2_cairn: 'd2cairn', d2_lamp: 'd2light' };
+const LOG2_CARD = ['Field Log', 'Parlour', '工作日志', 'Back indoors, the clerk turns the field log on to its middle pages.\n\n' + GAME_TEXT.log2[1], '回到屋里，书记员把工作日志翻到了中间。\n\n' + GAME_TEXT.log2[2], 'The middle pages.'];
+const NOTES2_CARD = ['Inquiry Notes', 'Parlour', '调查记录', GAME_TEXT.notes2[1], GAME_TEXT.notes2[2], 'In the clerk\'s hand, the ink still wet.'];
+const DAY2_TEXT = { // Journal「第二天」：键 → [英标题, 中标题, 英, 中]
+  d2block: ['The Chopping Block', '劈柴木桩', D2_CARDS.d2_block[3], D2_CARDS.d2_block[4]],
+  d2stake: ['A Stake by the Path', '路边的标桩', D2_CARDS.d2_stake[3], D2_CARDS.d2_stake[4]],
+  d2blaze: ['The Blazed Spruce', '刻了记号的云杉', D2_CARDS.d2_blaze[3], D2_CARDS.d2_blaze[4]],
+  d2cairn: ['The Cairn', '石堆', D2_CARDS.d2_cairn[3], D2_CARDS.d2_cairn[4]],
+  d2light: ['A Light in the Fog', '雾里的灯', D2_CARDS.d2_lamp[3], D2_CARDS.d2_lamp[4]],
+  log2: ['Field Log, Middle Part', '工作日志 · 中段', GAME_TEXT.log2[1], GAME_TEXT.log2[2]],
+  notes2: ['Inquiry Notes, Night of Day 2', '调查记录 · 第 2 天夜里', GAME_TEXT.notes2[1], GAME_TEXT.notes2[2]],
+};
+Object.assign(QUEST, {
+  out: ['The fog is down. He left his marks along the path — go and find them.', '起雾了。他在小路边留了记号，出去找找。'],
+  dusk2: ['Dusk is coming on. Make your way back to the cabin.', '天要黑了，往小屋走吧。'],
+  home2: ['Go back inside.', '回屋里去。'],
+  end2: ['The second day is done.', '第二天结束了。'],
+});
+const D2_SAYS = {
+  morning: ['Morning. In the night the fog came down over the woods.', '早上。夜里起了雾，把林子盖住了。'],
+  clerk: ['The clerk: "He wrote that in fog you find the way by his marks."', '书记员：“他写过，雾里认路靠记号。”'],
+  lost: ['The fog turned you round. You are back at the cabin door.', '雾里绕了一圈，又回到了小屋门口。'],
+  dusk: ['The light is going. Best make for the cabin.', '天色暗下来了，该往回走了。'],
+  lamp: ['The clerk: "Look — east of north. A light."', '书记员：“你看——北偏东，有一盏灯。”'],
+};
+Object.assign(HINTS, {
+  d2block: [['Before the woods, look about the porch.', '进林子之前，先看看门廊边上。'], ['By the porch there is a chopping block.', '门廊边有一个劈柴木桩。'], 'd2_block'],
+  d2stake: [['Follow the path into the fog.', '顺着小路往雾里走。'], ['A stake stands beside the path, past the first bend.', '过了第一道弯，路边立着一根标桩。'], 'd2_stake'],
+  d2blaze: [['Look at the trees along the path.', '看看路边的树。'], ['An old spruce by the path has a mark cut in its bark.', '路边一棵老云杉的树皮上刻了记号。'], 'd2_blaze'],
+  d2cairn: [['Further on, where the path bends again.', '再往前，路又拐弯的地方。'], ['A heap of stones where the path bends.', '小路拐弯处有一堆石头。'], 'd2_cairn'],
+  d2light: [['Look about you, away from the path.', '离开小路，四下看看。'], ['East of north, past the cabin.', '北偏东，小屋那边过去。'], 'd2_lamp'],
+});
+const HINT_ORDER2 = ['d2block', 'd2stake', 'd2blaze', 'd2cairn', 'd2light'];
+for (const [n, c] of Object.entries(D2_CARDS)) { INFO[n] = [c[0], c[1], c[5]]; STORY[c[0] + '|' + c[1]] = c[3]; STORY_ZH[c[0] + '|' + c[1]] = [c[2], c[4]]; }
+function quest2() {
+  const f = game.found;
+  if (f.has('notes2')) return 'end2';
+  if (game.night) return game.dusk ? 'dusk' : 'night';
+  if (f.has('d2light')) return 'home2';
+  return DAY2_NEED.every((k) => f.has(k)) ? 'dusk2' : 'out';
+}
+function gameSeen2(name, title, add, got) {
+  let over = null;
+  if (D2_KEY[name]) { add(D2_KEY[name]); over = D2_CARDS[name]; }
+  if (game.night && !game.dusk && (title === 'Writing Desk, Chair & Wall Lamp' || name === 'person_woman')) { add('notes2'); over = NOTES2_CARD; }
+  else if (name === 'person_woman') { const z = STORY_ZH['The Clerk|Loft']; over = ['The Clerk', 'Parlour', z[0], STORY['The Clerk|Loft'], z[1].replace(/^[^。]*。/, ''), INFO.person_woman[2]]; }
+  gameSeen.got = got.length;
+  if (!got.length) return over;
+  saveGame(); renderJournal();
+  if (got.some((k) => DAY2_NEED.includes(k)) && DAY2_NEED.every((k) => game.found.has(k))) startDusk2();
+  if (got.includes('notes2')) endDay2(); // 读完第 2 夜的记录：卡片关了弹「第二天结束」→ 第三天早上
+  mmDirty = true;
+  showQuest();
+  return over;
+}
+function endDay() { // 第一天读完调查记录：卡片 / 遗稿 / 别的弹窗关了再弹；点了存成第 2 天、重新载入（人物、灯、火都按第 2 天早上重新摆）
+  if (!$('card').hidden || !journal.hidden || !$('dlg').hidden) { setTimeout(endDay, 500); return; }
+  dialog(['The First Day Ends', '第一天结束'], ['The clerk puts out the lamp. In the night the fog comes down over the woods.', '书记员吹熄了灯。夜里，雾把林子盖住了。'],
+    [['Next Morning', '第二天早上', () => { game.day = 2; saveGame(); try { sessionStorage.setItem('cabin.nextDay', '1'); } catch (e) { /* 存不了就照常问「继续上次」 */ } location.reload(); }]]);
+}
+function dayStartNote() { // 第二天早上：两句开场（第 1 天的旧存档读完了也走这里）
+  if (game.day < 2 || game.night) return;
+  if (game.day >= 3) { if (game.found.has('xarrive')) return; setTimeout(() => showRoomNote(D3_SAYS.morning), 1500); setTimeout(() => showRoomNote(D3_SAYS.clerk), 6500); return; }
+  setTimeout(() => showRoomNote(D2_SAYS.morning), 1500);
+  setTimeout(() => showRoomNote(D2_SAYS.clerk), 6500);
+}
+function startDusk2() { // 四样找齐：天慢慢转到傍晚，灯在 updateDay2 里按时刻亮
+  setTimeout(() => { showRoomNote(D2_SAYS.dusk); sky.play = false; sky.goal = 17.5; sky.goalRate = 0.8; }, 4000);
+}
+function startNight2() { // 回屋读到日志中段：天黑、书记员走去书桌、壁灯亮
+  game.night = game.dusk = true; showQuest();
+  setTimeout(() => { sky.play = false; sky.goal = 21; sky.goalRate = 1; clerkToDesk(); }, 2500);
+  setTimeout(() => { game.dusk = false; const w = toggles.get('wall_lamp'); if (w) w.on = true; showQuest(); }, 9000);
+}
+function pathAt(s) { // 小路上离院子边 s 米处：[位置, 右手方向]
+  const S = d2.samples, i = Math.max(0, Math.min(S.length - 2, Math.round(s / S.ds)));
+  const p = S[i], q = S[i + 1], t = new THREE.Vector3(q.x - p.x, 0, q.z - p.z).normalize();
+  return [p.clone(), new THREE.Vector3(-t.z, 0, t.x)];
+}
+function d2Mat(color, map) { return new THREE.MeshStandardMaterial({ color, map: map || null, roughness: 0.95 }); }
+function d2Canvas(w, h, draw) { const c = document.createElement('canvas'); c.width = w; c.height = h; draw(c.getContext('2d'), w, h); const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t; }
+function d2Add(name, g, x, z, yaw = 0) {
+  g.name = name; g.position.set(x, ground.position.y, z); g.rotation.y = yaw;
+  scene.add(g); layers.set(name, g); g.traverse((o) => { if (o.isMesh) { meshes.push(o); o.receiveShadow = true; } });
+  return g;
+}
+function day2Setup() {
+  const pts = pathCurve.getSpacedPoints(1800), ds = pathCurve.getLength() / 1800;
+  d2.samples = pts.slice(0, Math.ceil((game.day >= 3 ? 140 : 120) / ds)); d2.samples.ds = ds;
+  const gy = ground.position.y, bark = d2Mat('#5a4632'), wood = d2Mat('#9c7a52'), dark = d2Mat('#2a1f16');
+  // 劈柴木桩：齐腰高一截圆木，顶上一道斜刀口（深色细条）
+  const blk = new THREE.Group(), BH = 0.62;
+  blk.add(new THREE.Mesh(new THREE.CylinderGeometry(0.23, 0.26, BH, 16), [bark, wood, wood]).translateY(BH / 2));
+  const cut = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.03, 0.025), dark); cut.position.set(0, BH, 0); cut.rotation.y = 0.6; blk.add(cut);
+  d2Add('d2_block', blk, ...D2.block, 0.3);
+  // 标桩：一样高的方木桩，顶上一样的斜刀口，系一条褪色红布（雾里好认）
+  const stk = new THREE.Group();
+  stk.add(new THREE.Mesh(new THREE.BoxGeometry(0.09, BH, 0.09), wood).translateY(BH / 2));
+  const c2 = cut.clone(); c2.scale.set(0.3, 1, 1); c2.position.y = BH - 0.06; stk.add(c2);
+  const rag = new THREE.Mesh(new THREE.PlaneGeometry(0.08, 0.22), new THREE.MeshStandardMaterial({ color: '#8a3a2a', roughness: 1, side: THREE.DoubleSide })); rag.position.set(0.05, BH - 0.14, 0); rag.rotation.set(0, 0.4, 0.15); stk.add(rag);
+  // 刻了记号的云杉：树干 + 两节树冠，齐眼高一块削白的树皮，canvas 画箭头和「7」
+  const tree = new THREE.Group();
+  tree.add(new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.3, 8, 12), d2Mat('#4A3A2C')).translateY(4));
+  for (const [r, h, y] of [[1.9, 4.2, 4.2], [1.3, 3.4, 6.4]]) tree.add(new THREE.Mesh(new THREE.ConeGeometry(r, h, 10), d2Mat('#2F3A2E')).translateY(y));
+  const mark = d2Canvas(64, 96, (x, w, h) => { x.fillStyle = '#c9b48a'; x.fillRect(0, 0, w, h); x.strokeStyle = '#3a2a1a'; x.lineWidth = 5; x.lineCap = 'round';
+    x.beginPath(); x.moveTo(32, 50); x.lineTo(32, 12); x.moveTo(20, 24); x.lineTo(32, 12); x.lineTo(44, 24); x.stroke(); x.font = 'bold 34px serif'; x.fillStyle = '#3a2a1a'; x.textAlign = 'center'; x.fillText('7', 32, 86); });
+  const blaze = new THREE.Mesh(new THREE.PlaneGeometry(0.34, 0.5), d2Mat('#ffffff', mark)); blaze.position.set(0, 1.5, 0.3); tree.add(blaze); // 树干在 1.5m 高处半径约 0.28：第一版贴在 z 0.235 埋进树干里看不见，又小、离路 3.2m（用户第 2 天卡关）
+  const rag2 = rag.clone(); rag2.position.set(0.22, 1.05, 0.24); rag2.rotation.set(0, 0.6, 0.1); rag2.scale.set(1.6, 1.4, 1); tree.add(rag2); // 跟标桩一样系条红布，雾里好认
+  // 石堆：几块大小不一的石头摞到齐膝高
+  const cairn = new THREE.Group(), R = rng(7), stone = d2Mat('#6d6a62');
+  let y = 0;
+  for (const r of [0.28, 0.24, 0.2, 0.15, 0.11]) { const m = new THREE.Mesh(new THREE.DodecahedronGeometry(r, 0), stone); m.scale.y = 0.6; m.position.set((R() - 0.5) * 0.06, y + r * 0.55, (R() - 0.5) * 0.06); m.rotation.set(R(), R() * 6, R()); cairn.add(m); y += r * 1.05; }
+  for (const [name, g] of [['d2_stake', stk], ['d2_blaze', tree], ['d2_cairn', cairn]]) {
+    const S = D2_SPOTS[name], [p, rt] = pathAt(S.s), q = p.addScaledVector(rt, S.off);
+    d2Add(name, g, q.x, q.z, Math.atan2(-rt.x * Math.sign(S.off), -rt.z * Math.sign(S.off))); // 记号那面朝着路
+  }
+  // 雾里的灯：暖色光晕（不吃雾、不被挡）+ 一个看不见的大球好点；傍晚才出现
+  const lamp = new THREE.Group();
+  const glow = d2Canvas(64, 64, (x) => { const gr = x.createRadialGradient(32, 32, 0, 32, 32, 32); gr.addColorStop(0, 'rgba(255,226,170,1)'); gr.addColorStop(0.12, 'rgba(255,196,110,.9)'); gr.addColorStop(0.4, 'rgba(240,150,60,.3)'); gr.addColorStop(1, 'rgba(230,140,60,0)'); x.fillStyle = gr; x.fillRect(0, 0, 64, 64); });
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: glow, fog: false, depthTest: false, transparent: true, depthWrite: false })); sp.scale.set(7, 7, 1); sp.renderOrder = 10; lamp.add(sp);
+  lamp.add(new THREE.Mesh(new THREE.SphereGeometry(1.8, 8, 6), new THREE.MeshBasicMaterial({ visible: false })));
+  d2Add('d2_lamp', lamp, D2.lamp[0], D2.lamp[2]); lamp.position.y = gy + D2.lamp[1]; lamp.visible = false; d2.lamp = lamp; d2.glow = sp;
+  if (game.day >= 3) day3Setup(); // 小路尽头的老云杉、✕ 那边的灯
+}
+function pathNear(x, z) { // 离小路最近的采样点：{ d 离路中心, s 沿路米数 }
+  let best = 1e9, bi = 0;
+  for (let i = 0; i < d2.samples.length; i++) { const p = d2.samples[i], dd = (p.x - x) ** 2 + (p.z - z) ** 2; if (dd < best) { best = dd; bi = i; } }
+  return { d: Math.sqrt(best), s: bi * d2.samples.ds };
+}
+function placeMan(p, x, z, yaw) { // 第 2 天：老稽查直接站到某处（不走路线）
+  p.tasks = []; p.seat = null; p.ride = null; p.claim = null; p.after = null; p.setMode('stand'); p.play(MOODS.stand.idle, 0.2);
+  p.root.position.set(x, ground.position.y + 0.05, z); p.root.rotation.set(0, yaw, 0);
+}
+function outdoors(r) { return Math.abs(r.x) > 2.3 || Math.abs(r.z) > 2.3; }
+$('walkBtn').onclick = () => {
+  const p = people.get('person_man'); if (!p || fly || intro || fp) return;
+  if (!outdoors(p.root.position) || p.mode === 'sit') placeMan(p, ...D2.door, 0); // 在屋里：直接站到门口，面朝小路
+  inside = null; startFP('person_man'); showQuest();
+};
+function day2StopFP(p) {
+  if (!outdoors(p.root.position)) return;
+  p.roam = p.next = 1e9; // 别自己找路回沙发（屋外没有路网）；再点「出门走走」接着走
+  inside = null; placeRooms(null); enterBtn.innerHTML = lbl('Enter the Cabin', '进屋'); enterBtn.classList.add('glow');
+  controls.minDistance = 1; controls.maxDistance = 220; resetView(true); showQuest();
+}
+function loopBack() { // 走进还没认出来的雾里：压黑、回到门口
+  d2.veil = true; veilEl.style.transition = 'opacity .7s'; veilEl.style.opacity = 1;
+  setTimeout(() => {
+    if (fp) { placeMan(fp.p, ...D2.door, 0); fp.yaw = 0; fp.pitch = -0.1; }
+    veilEl.style.opacity = 0; showRoomNote(D2_SAYS.lost); hint.clicks++;
+    setTimeout(() => { d2.veil = false; veilEl.style.transition = ''; }, 800);
+  }, 800);
+}
+function updateDay2(dt) {
+  if (!d2.samples) return;
+  const f = game.found, t = performance.now() / 1000;
+  if (fp && !game.night) { scene.fog.near = 2; scene.fog.far = 26; } // 第一人称在雾里：二十来米外就看不见
+  // 傍晚的灯：四样找齐、天色到傍晚才亮；人在屋里看不到
+  const lampOn = DAY2_NEED.every((k) => f.has(k)) && !game.night && sky.hour > 17.2 && outdoors(camera.position);
+  d2.lamp.visible = lampOn;
+  if (lampOn) d2.glow.material.opacity = 0.82 + 0.1 * Math.sin(t * 1.7) + 0.06 * Math.sin(t * 4.3);
+  if (!fp || game.night) return;
+  const r = fp.p.root.position;
+  if (lampOn && !d2.lampSaid && Math.hypot(r.x, r.z) < D2.lampNear) { d2.lampSaid = true; showRoomNote(D2_SAYS.lamp); }
+  if (f.has('d2light') && !f.has('log2') && !outdoors(r) && Math.abs(r.x) < 1.7 && Math.abs(r.z) < 1.7) { // 进了屋
+    f.add('log2'); saveGame(); renderJournal(); select(null);
+    cardData = { t: LOG2_CARD[0], a: LOG2_CARD[1], zt: LOG2_CARD[2], story: LOG2_CARD[3], zs: LOG2_CARD[4], lead: LOG2_CARD[5] };
+    showNote(null); card.hidden = cardBg.hidden = false; drawCard(); startNight2(); return;
+  }
+  if (d2.veil || x3.on) return; // ✕ 那间屋的院子在 updateDay3 里管
+  const n = DAY2_MARKS.filter((k) => f.has(k)).length, q = pathNear(r.x, r.z);
+  const ok = Math.hypot(r.x, r.z) < D2.yard || (q.d < D2.width && q.s <= (game.day >= 3 ? D3.reach : D2.reach[n]));
+  d2.lostT = ok ? 0 : d2.lostT + dt;
+  if (d2.lostT > D2.lost) { d2.lostT = 0; loopBack(); }
+}
+// —— 三日调查小游戏 · 第 3 天 + 结局（2026-10-27，灰盒）：读完第 2 夜记录 →「第二天结束」→ 重新载入成第三天早上（还是雾）→ 书架读工作日志后段 →「出门走走」，
+// 雾里的路一直放到 ✕（D3.s 米处一棵老云杉、树根下裂口、焦黑松针）→ 走到树跟前压黑，「放进」✕ 那间小屋：就是同一个模型换一套状态（applyX：大衣 / 靴子 / 提灯藏掉、
+// 炉火烧着、摇椅一直摇、书记员不在），所以两间屋永远不会同时渲染。四处不同（X_NEED）点到就记；走出门廊弹「回去 / 留下 / 再看看」；四处都找到再「回去」= 隐藏结局。
+// 结局读完存 ended、重新载入回自己那间，Journal 解锁终章、后记。进度键都在 game.found：log3 → xarrive → xcoat / xwatch / xnotes / xfire → xlook → end_* + ended。
+const D3 = { s: 110, reach: 118, near: 3.2, yard: 14, spruceX: [-9, 10], light: [0, 2.4, 80] }; // s = 老云杉在小路上的米数（D2.reach 最后一档 90 之后）
+const X_NEED = ['xcoat', 'xwatch', 'xnotes', 'xfire'];
+const X_HIDE = ['entry_coat', 'entry_boots', 'entry_lantern']; // ✕ 那间：他是穿戴整齐出的门
+const x3 = { on: false, wasIn: false, spruce: null, light: null };
+window.cabinX = x3; // 调试
+const D3_CARDS = { // 图层 → [标题, 区域, 中文标题, 英, 中, 说明]
+  d3_spruce: ['The Old Spruce', 'Exterior', '老云杉', GAME_TEXT.xArrive[1].split('\n\n')[0], GAME_TEXT.xArrive[2].split('\n\n')[0], 'Where the path gives out.'],
+  x_light: ['A Light to the South', 'Exterior', '南边的灯', GAME_TEXT.xLook[1], GAME_TEXT.xLook[2], 'A light, far off in the fog.'],
+};
+for (const [n, c] of Object.entries(D3_CARDS)) { INFO[n] = [c[0], c[1], c[5]]; STORY[c[0] + '|' + c[1]] = c[3]; STORY_ZH[c[0] + '|' + c[1]] = [c[2], c[4]]; }
+const LOG3_CARD = ['Field Log', 'Parlour', '工作日志', 'Before setting out, the clerk reads the last pages of the field log aloud.\n\n' + GAME_TEXT.log3[1], '出发前，书记员把工作日志最后几页念了一遍。\n\n' + GAME_TEXT.log3[2], 'The last pages.'];
+const X_ARRIVE = ['The Other Cabin', 'Exterior', '另一间小屋', GAME_TEXT.xArrive[1], GAME_TEXT.xArrive[2], 'At the ✕.'];
+const X_CARDS = { // 四处不同：卡片只写看到的，不写「它说明什么」（设计原则 1）
+  xcoat: ['Coat Rail', 'Entry', '衣帽架', 'The coat rail is bare. No greatcoat on the peg, no boots by the tray, no lantern on its nail.', '衣帽架上没有大衣，托盘边没有靴子，钉子上没有提灯。', 'Nothing hangs here.'],
+  xwatch: ['Night Table', 'Loft', '床头柜', 'In the drawer, the pocket-watch, the old compass, a few pine needles. The watch is going. Its hands do not stand at seventeen minutes past three.', '抽屉里有怀表、旧罗盘、几根松针。怀表还在走，指针不在三点十七分。', 'The watch is ticking.'],
+  xnotes: ['Inquiry Notes', 'Parlour', '调查记录', 'A page of inquiry notes lies open on the desk, in the clerk\'s hand. It is dated today.\n\n' + GAME_TEXT.xNote[1], '书桌上摊着一页调查记录，是书记员的笔迹，写的是今天：\n\n' + GAME_TEXT.xNote[2], 'In the clerk\'s hand.'],
+  xfire: ['The Fire', 'Kitchen', '炉火', 'The fire is burning in the stove. Up in the loft the rocking chair is rocking. There is no one in the house.', '炉火烧着，楼上的摇椅在摇，屋里没有人。', 'Someone keeps this fire.'],
+};
+const END_TITLE = { endBack: ['Going Back', '结局 · 回去'], endStay: ['Staying', '结局 · 留下'], endHidden: ['The Lantern', '隐藏结局'] };
+const DAY3_TEXT = { // Journal「第三天」：键 → [英标题, 中标题, 英, 中]
+  log3: ['Field Log, Last Part', '工作日志 · 后段', GAME_TEXT.log3[1], GAME_TEXT.log3[2]],
+  xarrive: ['At the ✕', '✕ 那里', GAME_TEXT.xArrive[1], GAME_TEXT.xArrive[2]],
+  xcoat: ['A Bare Coat Rail', '空的衣帽架', X_CARDS.xcoat[3], X_CARDS.xcoat[4]],
+  xwatch: ['The Watch Is Going', '怀表在走', X_CARDS.xwatch[3], X_CARDS.xwatch[4]],
+  xnotes: ['A Page Dated Today', '写着今天的记录', X_CARDS.xnotes[3], X_CARDS.xnotes[4]],
+  xfire: ['A Fire, and No One', '炉火和空屋', X_CARDS.xfire[3], X_CARDS.xfire[4]],
+  xlook: ['From the Other Porch', '另一间屋的门廊下', GAME_TEXT.xLook[1], GAME_TEXT.xLook[2]],
+  end_back: [END_TITLE.endBack[0], END_TITLE.endBack[1], GAME_TEXT.endBack[1], GAME_TEXT.endBack[2]],
+  end_stay: [END_TITLE.endStay[0], END_TITLE.endStay[1], GAME_TEXT.endStay[1], GAME_TEXT.endStay[2]],
+  end_hidden: [END_TITLE.endHidden[0], END_TITLE.endHidden[1], GAME_TEXT.endHidden[1], GAME_TEXT.endHidden[2]],
+};
+Object.assign(QUEST, {
+  log3: ['Before you set out, read the rest of his field log.', '出发前，把他的工作日志读完。'],
+  go3: ['Follow his marks through the fog, to the ✕.', '照着他的记号穿过雾，走到 ✕ 去。'],
+  x3: ['Look about this house. When you are ready, step out under the porch.', '在这间屋里看看。看够了，就到门廊下去。'],
+  fin: ['The inquiry is closed.', '调查结束了。'],
+});
+const D3_SAYS = {
+  morning: ['The third morning. The fog has not lifted.', '第三天早上。雾还没有散。'],
+  clerk: ['The clerk: "His log goes on past where we stopped reading."', '书记员：“他的日志后面还有。”'],
+  go: ['The clerk: "Seven degrees east of north, about four miles. I will stay with the house."', '书记员：“北偏东七度，大约四里。我留在屋里。”'],
+};
+Object.assign(HINTS, {
+  log3: [['He wrote more than you have read.', '他写下的，比你读到的多。'], ['The field log, on the parlour bookcase.', '起居室书架上的工作日志。'], 'living_bookcase'],
+  xarrive: [['Follow the path, past the stones.', '顺着小路走，过了石堆再往前。'], ['Where the path gives out, beneath an old spruce.', '小路在一棵老云杉下面没了。'], 'd3_spruce'],
+  xcoat: [['How did he go out, this time?', '这一回，他是怎么出的门？'], ['Look at the coat rail by the door.', '看看门边的衣帽架。'], 'entry_coat_rail'],
+  xnotes: [['Someone has been writing.', '有人在写东西。'], ['The writing desk under the wall lamp.', '壁灯下的书桌。'], 'loft_desk'],
+  xfire: [['Is the house as cold as yours was?', '这屋子跟你们那间一样冷吗？'], ['The stove — and up in the loft, the rocking chair.', '炉子——还有阁楼上的摇椅。'], 'loft_rocking_chair'],
+  xwatch: [['What time is it, in this house?', '这间屋里是几点？'], ['The night table by the bed in the loft.', '阁楼床边的床头柜。'], 'loft_bedside_table'],
+});
+const HINT_ORDER3 = ['log3', 'xarrive', 'xcoat', 'xnotes', 'xfire', 'xwatch'];
+HINT_Q.push('log3', 'go3', 'x3');
+function quest3() {
+  const f = game.found;
+  if (f.has('ended')) return 'fin';
+  if (f.has('xarrive')) return 'x3';
+  return f.has('log3') ? 'go3' : 'log3';
+}
+function gameSeen3(name, title, add, got) {
+  let over = null;
+  if (x3.on) {
+    if (['Coat Rail & Greatcoat', 'Boots & Bench', 'Lantern'].includes(title)) { add('xcoat'); over = X_CARDS.xcoat; }
+    else if (title === 'Night Table') { add('xwatch'); over = X_CARDS.xwatch; }
+    else if (title === 'Writing Desk, Chair & Wall Lamp') { add('xnotes'); over = X_CARDS.xnotes; }
+    else if (/^stove_/.test(name) || title === 'Rocking Chair' || title === 'The Fire' || title === 'Cast-Iron Stove') { add('xfire'); over = X_CARDS.xfire; }
+    else if (name === 'x_light') add('xlook');
+    else if (name === 'entry_porch_lamp') setTimeout(porchAsk, 300); // 鸟瞰时也能从这里选
+  } else if (title === 'Bookcase' && !game.found.has('ended')) { add('log3'); over = LOG3_CARD; }
+  else if (name === 'person_woman') { const z = STORY_ZH['The Clerk|Loft']; over = ['The Clerk', 'Parlour', z[0], STORY['The Clerk|Loft'], z[1].replace(/^[^。]*。/, ''), INFO.person_woman[2]]; }
+  gameSeen.got = got.length;
+  if (!got.length) return over;
+  saveGame(); renderJournal(); mmDirty = true;
+  if (got.includes('log3')) setTimeout(() => showRoomNote(D3_SAYS.go), 600);
+  showQuest();
+  return over;
+}
+function endDay2() { // 读完第 2 夜的调查记录：同 endDay，存成第 3 天、重新载入
+  if (!$('card').hidden || !journal.hidden || !$('dlg').hidden) { setTimeout(endDay2, 500); return; }
+  dialog(['The Second Day Ends', '第二天结束'], ['The clerk puts out the lamp. All night long the fog does not lift.', '书记员吹熄了灯。雾一夜都没有散。'],
+    [['Next Morning', '第三天早上', () => { game.day = 3; saveGame(); try { sessionStorage.setItem('cabin.nextDay', '1'); } catch (e) { /* 存不了就照常问「继续上次」 */ } location.reload(); }]]);
+}
+function day3Setup() { // 小路尽头的老云杉 + 裂口 + 焦黑松针；✕ 那间屋往南看的灯（只在 ✕ 那边亮）
+  const g = new THREE.Group(), bark = d2Mat('#3e3024'), needle = d2Mat('#26302a');
+  g.add(new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.75, 16, 14), bark).translateY(8));
+  for (const [r, h, y] of [[3.2, 6, 7], [2.5, 5, 10.5], [1.7, 4, 13.5]]) g.add(new THREE.Mesh(new THREE.ConeGeometry(r, h, 12), needle).translateY(y));
+  for (let i = 0; i < 6; i++) { // 树根：几根斜插进土里的圆木
+    const a = i * 1.05 + 0.3, m = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.22, 1.8, 6), bark);
+    m.position.set(Math.cos(a) * 0.95, 0.12, Math.sin(a) * 0.95); m.rotation.set(0, -a, Math.PI / 2 - 0.18); m.rotation.order = 'YZX'; g.add(m);
+  }
+  const flat = (geo, mat, y, off) => { mat.polygonOffset = true; mat.polygonOffsetFactor = mat.polygonOffsetUnits = off; const m = new THREE.Mesh(geo, mat); m.rotation.x = -Math.PI / 2; m.position.y = y; g.add(m); return m; };
+  flat(new THREE.CircleGeometry(3.4, 24), new THREE.MeshStandardMaterial({ color: '#1c1612', roughness: 1 }), 0.02, -3); // 焦黑的松针
+  const rift = d2Canvas(64, 256, (x, w, h) => { x.fillStyle = '#000'; x.beginPath(); x.moveTo(w / 2, 0); // 锯齿形的裂口
+    for (let y = 0; y <= h; y += 16) x.lineTo(w / 2 + (y % 32 ? 1 : -1) * (6 + 18 * Math.sin(Math.PI * y / h)), y);
+    for (let y = h; y >= 0; y -= 16) x.lineTo(w / 2 + (y % 32 ? -1 : 1) * (3 + 10 * Math.sin(Math.PI * y / h)), y); x.fill(); });
+  flat(new THREE.PlaneGeometry(1.1, 4.4), new THREE.MeshBasicMaterial({ map: rift, transparent: true, depthWrite: false, color: '#000' }), 0.04, -4).position.set(1.7, 0.04, 0.4);
+  const [p] = pathAt(D3.s);
+  x3.spruce = d2Add('d3_spruce', g, p.x, p.z); x3.home = [p.x, p.z];
+  const lamp = new THREE.Group(), sp = new THREE.Sprite(d2.glow.material.clone()); sp.scale.set(5, 5, 1); sp.renderOrder = 10; lamp.add(sp);
+  lamp.add(new THREE.Mesh(new THREE.SphereGeometry(1.8, 8, 6), new THREE.MeshBasicMaterial({ visible: false })));
+  x3.light = d2Add('x_light', lamp, D3.light[0], D3.light[2]); lamp.position.y = ground.position.y + D3.light[1]; lamp.visible = false;
+  if (game.found.has('xarrive') && !game.found.has('ended')) applyX();
+}
+function applyX() { // 换成 ✕ 那间屋的样子（同一个模型，不另外渲染一间）
+  x3.on = true;
+  for (const n of X_HIDE) { const g = layers.get(n); if (g) g.visible = false; }
+  const f = toggles.get('stove_fire'); if (f && !f.on) { f.on = true; f.k = 1; for (const q of f.parts) q(1); fire.smoke = 1; }
+  x3.spruce.position.set(D3.spruceX[0], ground.position.y, D3.spruceX[1]); // 裂口旁边立着这间屋
+  shadowDirty = true;
+}
+function enterX() { // 走到老云杉跟前：压黑，「放进」那间屋的门口，面朝屋里
+  d2.veil = true; veilEl.style.transition = 'opacity .9s'; veilEl.style.opacity = 1;
+  setTimeout(() => {
+    game.found.add('xarrive'); saveGame(); renderJournal(); applyX(); mmDirty = true; select(null);
+    if (fp) { placeMan(fp.p, ...D2.door, Math.PI); fp.yaw = Math.PI; fp.pitch = -0.05; }
+    cardData = { t: X_ARRIVE[0], a: X_ARRIVE[1], zt: X_ARRIVE[2], story: X_ARRIVE[3], zs: X_ARRIVE[4], lead: X_ARRIVE[5] };
+    showNote(null); card.hidden = cardBg.hidden = false; drawCard(); showQuest();
+    veilEl.style.opacity = 0; setTimeout(() => { d2.veil = false; veilEl.style.transition = ''; }, 900);
+  }, 1000);
+}
+function porchAsk() { // ✕ 那间屋的门廊下：回去 / 留下 / 再看看
+  if (!x3.on || game.found.has('ended') || !$('dlg').hidden) return;
+  if (!game.found.has('xlook')) { game.found.add('xlook'); saveGame(); renderJournal(); }
+  dialog(['Under the Other Porch', '另一间屋的门廊下'], [GAME_TEXT.xLook[1], GAME_TEXT.xLook[2]],
+    [['Go Back', '回去', () => ending('back')], ['Stay', '留下', () => ending('stay')], ['Not Yet', '再看看']]);
+}
+function ending(kind) { // 压黑，一张张放结局文字；读完存 ended，重新载入回自己那间屋
+  const hidden = kind === 'back' && X_NEED.every((k) => game.found.has(k)), seq = kind === 'stay' ? ['endStay'] : hidden ? ['endBack', 'endHidden'] : ['endBack'];
+  if (fp) stopFP();
+  d2.veil = true; veilEl.style.transition = 'opacity 1.2s'; veilEl.style.zIndex = 30; veilEl.style.opacity = 1;
+  const next = (i) => {
+    if (i >= seq.length) {
+      game.found.add('end_' + kind); if (hidden) game.found.add('end_hidden'); game.found.add('ended'); saveGame();
+      try { sessionStorage.setItem('cabin.ended', '1'); } catch (e) { /* 存不了就照常问 */ }
+      location.reload(); return;
+    }
+    const t = GAME_TEXT[seq[i]], e = END_TITLE[seq[i]];
+    dialog([e[0], e[1]], [t[1], t[2]], [[i < seq.length - 1 ? 'Continue' : 'The End', i < seq.length - 1 ? '继续' : '完', () => next(i + 1)]]);
+  };
+  setTimeout(() => next(0), 1300);
+}
+function endAsk() { // 通关后刷新：不问「继续上次」，告诉玩家终章、后记解锁了
+  dialog(['The Papers Complete', '遗稿齐了'], ['The last pages are in the Journal now: where he went, and what came after.', '终章和后记已经收进遗稿：他去了哪里，以及后来。'],
+    [['Read the Papers', '翻开遗稿', () => $('jBtn').click()], ['Begin Again', '重新开始', () => { try { localStorage.removeItem(GAME_KEY); } catch (e) { /* 清不掉也重开 */ } location.reload(); }]]);
+}
+function updateDay3(dt) {
+  if (!x3.spruce) return;
+  const f = game.found;
+  if (!x3.on) {
+    if (fp && !d2.veil && f.has('log3') && !f.has('xarrive')) { const r = fp.p.root.position, s = x3.spruce.position; if (Math.hypot(r.x - s.x, r.z - s.z) < D3.near) enterX(); }
+    return;
+  }
+  const w = people.get('person_woman'); if (w && w.root.visible) { w.root.visible = false; w.hit.visible = false; } // 这边屋里没有人
+  const rk = toggles.get('loft_rocking_chair'); if (rk && rocker.g && rocker.t > 3) rk.click(); // 摇椅一直在摇
+  x3.light.visible = outdoors(camera.position);
+  if (x3.light.visible) x3.light.children[0].material.opacity = 0.75 + 0.1 * Math.sin(performance.now() / 600);
+  if (!fp || d2.veil) return;
+  const r = fp.p.root.position;
+  if (Math.abs(r.x) < 1.5 && Math.abs(r.z) < 1.5) x3.wasIn = true;
+  else if (x3.wasIn && outdoors(r) && Math.hypot(r.x, r.z) < 6 && $('dlg').hidden && card.hidden) { x3.wasIn = false; porchAsk(); }
+  d2.lostT = Math.hypot(r.x, r.z) < D3.yard ? 0 : d2.lostT + dt; // 这边走远了也是雾，绕回门口
+  if (d2.lostT > D2.lost) { d2.lostT = 0; loopBack(); }
+}
+// —— 迷雾小地图（2026-10-27）：左下角一张竖长的纸图，北在上；没去过的地方盖着雾。屋里五块（按点过的物件区域和第一人称站的位置）、
+// 第 2 天四样地标和灯、小路（认出的记号 / 走过的最远处）、✕。0.3 秒重画一次（几百笔 2D，不碰 WebGL）。屋子画大了（实际 3.4m 见方，图上约 20m）。
+const MM = { x0: -22, z0: -46, w: 70, h: 164, cab: 10 };
+const MM_ROOM = { Entry: 'Entry', 'Water Closet': 'Water Closet', Kitchen: 'Kitchen', 'Kitchen & Dining': 'Kitchen', Parlour: 'Parlour', Hall: 'Parlour', Loft: 'Loft' };
+const MM_CELL = { Parlour: [-1, -1], Kitchen: [0, -1], 'Water Closet': [-1, 0], Entry: [0, 0] }; // 屋里四格：西北起居、东北厨房、西南卫生间、东南玄关；阁楼画在正中
+let mmDirty = true, mmT = 0, mmFar = 0;
+function mmReveal(area) { const r = MM_ROOM[area]; if (r && !x3.on && !game.found.has('m:' + r)) { game.found.add('m:' + r); saveGame(); mmDirty = true; } }
+function mmTick(dt) {
+  const c = $('mmap'); c.hidden = !!opening || !game.found.has('opening');
+  if (c.hidden || (mmT += dt) < 0.3) return; mmT = 0;
+  if (fp && !x3.on) { // 第一人称走到哪：屋里按位置认房间，屋外记沿路走过的最远处
+    const r = fp.p.root.position;
+    if (!outdoors(r)) mmReveal(r.y > home.floorY + 1.6 ? 'Loft' : r.x < 0 ? (r.z > 0.6 ? 'Water Closet' : 'Parlour') : (r.z > 0.6 ? 'Entry' : 'Kitchen'));
+    else if (d2.samples) { const q = pathNear(r.x, r.z); if (q.d < D2.width && q.s > mmFar) { mmFar = q.s; mmDirty = true; } }
+  }
+  mmDraw();
+}
+function mmDraw() {
+  const c = $('mmap'), W = 168, H = Math.round(W * MM.h / MM.w), k = W / MM.w, f = game.found;
+  if (c.width !== W) { c.width = W; c.height = H; }
+  const x = c.getContext('2d'), P = (wx, wz) => [(wx - MM.x0) * k, (wz - MM.z0) * k];
+  if (mmDirty || !mmDraw.base) { // 底图 + 雾只在进度变了才重画，放进离屏 canvas
+    mmDirty = false;
+    const b = mmDraw.base || (mmDraw.base = document.createElement('canvas')); b.width = W; b.height = H;
+    const g = b.getContext('2d');
+    g.fillStyle = '#d8ccb4'; g.fillRect(0, 0, W, H);
+    const S = d2.samples || (pathCurve ? pathCurve.getSpacedPoints(400).slice(0, 90) : []);
+    g.strokeStyle = '#7a6448'; g.lineWidth = 2.2; g.setLineDash([5, 3]); g.beginPath();
+    S.forEach((p, i) => { const [a, d] = P(p.x, p.z); i ? g.lineTo(a, d) : g.moveTo(a, d); }); g.stroke(); g.setLineDash([]);
+    const [cx, cz] = P(0, 0), cs = MM.cab * k;
+    g.fillStyle = '#efe6d2'; g.strokeStyle = '#4a3a2a'; g.lineWidth = 1.5;
+    for (const [n, [i, j]] of Object.entries(MM_CELL)) { g.fillRect(cx + i * cs, cz + j * cs, cs, cs); g.strokeRect(cx + i * cs, cz + j * cs, cs, cs); }
+    g.strokeRect(cx - cs / 2, cz - cs / 2, cs, cs); // 阁楼
+    const mark = (wx, wz, col, r = 3) => { const [a, d] = P(wx, wz); g.fillStyle = col; g.beginPath(); g.arc(a, d, r, 0, 7); g.fill(); };
+    mark(...D2.block, '#5a4632');
+    for (const n of ['d2_stake', 'd2_blaze', 'd2_cairn']) { const o = layers.get(n); if (o) mark(o.position.x, o.position.z, n === 'd2_stake' ? '#8a3a2a' : n === 'd2_blaze' ? '#2f3a2e' : '#6d6a62'); }
+    mark(D2.lamp[0], D2.lamp[2], '#e8a040', 4);
+    const xp = x3.home || (d2.samples ? [pathAt(D3.s)[0].x, pathAt(D3.s)[0].z] : null);
+    if (xp) { const [a, d] = P(...xp); g.strokeStyle = '#8a2a1a'; g.lineWidth = 2.5; g.beginPath(); g.moveTo(a - 5, d - 5); g.lineTo(a + 5, d + 5); g.moveTo(a + 5, d - 5); g.lineTo(a - 5, d + 5); g.stroke(); }
+    // 雾：整张盖住，再按进度挖洞
+    const fog = mmDraw.fog || (mmDraw.fog = document.createElement('canvas')); fog.width = W; fog.height = H;
+    const m = fog.getContext('2d'); m.fillStyle = 'rgba(206,208,204,0.97)'; m.fillRect(0, 0, W, H);
+    m.globalCompositeOperation = 'destination-out';
+    const hole = (wx, wz, r) => { const [a, d] = P(wx, wz), R = r * k, gr = m.createRadialGradient(a, d, R * 0.4, a, d, R); gr.addColorStop(0, '#000'); gr.addColorStop(1, 'rgba(0,0,0,0)'); m.fillStyle = gr; m.fillRect(a - R, d - R, 2 * R, 2 * R); };
+    for (const [n, [i, j]] of Object.entries(MM_CELL)) if (f.has('m:' + n)) m.fillRect(cx + i * cs - 1, cz + j * cs - 1, cs + 2, cs + 2);
+    if (f.has('m:Loft')) m.fillRect(cx - cs / 2 - 1, cz - cs / 2 - 1, cs + 2, cs + 2);
+    const sMax = Math.max(mmFar, f.has('xarrive') ? D3.s : 0, ...['d2stake', 'd2blaze', 'd2cairn'].map((n, i) => f.has(n) ? [24, 44, 64][i] + 4 : 0));
+    for (let i = 0; i < S.length && i * (S.ds || 1) <= sMax; i += 4) hole(S[i].x, S[i].z, 7);
+    if (f.has('d2block')) hole(...D2.block, 9);
+    for (const n of ['d2_stake', 'd2_blaze', 'd2_cairn']) { const o = layers.get(n); if (o && f.has(n.replace('_', ''))) hole(o.position.x, o.position.z, 11); }
+    if (f.has('d2light')) hole(D2.lamp[0], D2.lamp[2], 12);
+    if (xp && f.has('xarrive')) hole(...xp, 14);
+    m.globalCompositeOperation = 'source-over';
+    g.drawImage(fog, 0, 0);
+  }
+  x.clearRect(0, 0, W, H); x.drawImage(mmDraw.base, 0, 0);
+  const pr = fp ? fp.p.root.position : people.get('person_man')?.root.position; // 老稽查在哪（在 ✕ 那间就画在 ✕）
+  if (pr) {
+    const [a, d] = x3.on && x3.home ? P(...x3.home) : outdoors(pr) ? P(pr.x, pr.z) : P(pr.x * MM.cab / 1.7, pr.z * MM.cab / 1.7);
+    x.fillStyle = '#b8401f'; x.strokeStyle = '#fff'; x.lineWidth = 1.5; x.beginPath(); x.arc(a, d, 4, 0, 7); x.fill(); x.stroke();
+  }
 }
 // —— 爬梯子（2026-10-20，女调查员；动作 Climb_Ladder_Loop / Ladder_Top / Ladder_Top_Lift 是 Blender 里按梯子尺寸用 IK 摆的，../blender/scripts/climb.py）——
 // 梯子放下（k=1）斜 0.2rad，横档间距 0.28。S = 从最底一档沿梯子往上的距离，根节点 = ladderRoot(S)（面朝西）；一个周期爬 0.56（两档、1.67s），动作时间 = 相位，所以手脚始终对着横档。
@@ -2212,6 +3149,12 @@ const CLIMB_TASKS = {
     start: (p, T) => { T.from = p.root.position.clone(); p.play('Idle_Loop', 0.5); p.S = null; },
     step: (p, T) => { const e = Math.min(1, T.t / 0.6), fy = floorBelow(NAV.ladder[0], 0.3, ladderZ()) ?? 0.16;
       p.root.position.lerpVectors(T.from, _cv.set(NAV.ladder[0], fy + 0.01, ladderZ()), e * e * (3 - 2 * e)); return e >= 1; } },
+  shut: { // 座位旁边开着的抽屉（SEATS[..].shut）：开着就先推上再坐，关着就跳过；执行时才查（玩家可能刚拉开）
+    start: (p, T) => { T.ds = (SEATS[T[1]].shut || []).map((n) => toggles.get(n)).filter((d) => d && d.on); T.skip = !T.ds.length; if (!T.skip) p.play('Interact', 0.3); },
+    step: (p, T) => { if (T.skip) return true; if (!T.g && T.t > 0.5) { T.g = true; T.ds.forEach((d) => { d.on = false; }); } return T.g && T.ds.every((d) => d.k < 0.05); } },
+  wcDoor: { // 卫生间折叠门：关着就先拉开再走（门 0.9 秒收完才过），开着就跳过
+    start: (p, T) => { const d = toggles.get('toilet_door_A'); T.skip = !d || !d.on; if (!T.skip) p.play('Interact', 0.3); },
+    step: (p, T) => { const d = toggles.get('toilet_door_A'); if (T.skip) return true; if (!T.g && T.t > 0.5) { T.g = true; d.on = false; } return T.g && d.k < 0.05; } },
   gate: { // 拦杆：['gate', true] 放下、false 抬起；已经是那样就跳过
     start: (p, T) => { const g = toggles.get('loft_gate'); T.skip = !g || g.on === T[1]; if (!T.skip) p.play('Interact', 0.3); },
     step: (p, T) => { if (T.skip) return true; if (!T.g && T.t > 0.7) { T.g = true; toggles.get('loft_gate').on = T[1]; } return T.g && p.cur.time >= p.cur.getClip().duration - 0.05; } },
@@ -2250,7 +3193,7 @@ function runTask(p, dt) {
     done = a.time >= d - 0.05;
   } else if (k === 'idle') done = T.t >= T[1];
   else if (k === 'seat') { const a = seatPose(p, T[1], SEATS[T[1]].pull ? 1 : 0); p.seat = T[1]; p.standY = r.position.y; p.sitY = a.y; done = true; }
-  else if (k === 'unseat') { p.seat = null; r.rotation.x = r.rotation.z = 0; done = true; }
+  else if (k === 'unseat') { p.seat = null; const f = _cv.set(0, 0, 1).applyQuaternion(r.quaternion); r.rotation.set(0, Math.atan2(f.x, f.z), 0); done = true; } // 摇椅上 quaternion 是「仰 × 朝向」，拆成 XYZ 欧拉角时朝向 >90° 会落到 x/z=±π 上，直接清 x/z 会一下转 86°；按正前方重算朝向
   else if (k === 'chair') { // 拉开 / 推回椅子；人坐在上面就一起挪
     const g = layers.get(T[1]), S = SEATS[T[1]], e = Math.min(1, T.t / 0.6), kk = T.from + (T[2] - T.from) * e * e * (3 - 2 * e);
     if (g) { const dk = kk - (g.userData.pullK || 0); g.userData.pullK = kk; g.position.set(S.pull[0] * kk, 0, S.pull[1] * kk); shadowDirty = true;
@@ -2274,7 +3217,7 @@ function runTask(p, dt) {
   if (k === 'unseat') p.ride = null;
 }
 function updatePeople(dt) {
-  for (const [id, p] of people) { p.mixer.update(dt); stepPerson(id, p, dt); updateLook(p, dt); }
+  for (const [id, p] of people) { unLook(p); unDesk(p); p.mixer.update(dt); stepPerson(id, p, dt); deskFix(p); updateLook(p, dt); }
 }
 function stepPerson(id, p, dt) {
   if (p.tasks.length) { runTask(p, dt); return; }
@@ -2327,8 +3270,116 @@ function updateLook(p, dt) {
   const fy = p.root.rotation.y + p.lookYaw; _lax.set(-Math.cos(fy), 0, Math.sin(fy)); // 抬头的转轴 = 视线 × 上
   for (const [b, f] of [[p.neck, 0.4], [p.head, 0.6]]) {
     _lq.setFromAxisAngle(_UP, p.lookYaw * f); _lq2.setFromAxisAngle(_lax, p.lookPitch * f); _lq.premultiply(_lq2); // 世界里先左右转、再抬头
-    b.parent.getWorldQuaternion(_lpq); b.quaternion.premultiply(_lq.premultiply(_lpq.clone().invert()).multiply(_lpq)); // 换到父骨骼空间：P⁻¹·q·P
+    b.parent.getWorldQuaternion(_lpq); _lq.premultiply(_lpq.clone().invert()).multiply(_lpq); // 换到父骨骼空间：P⁻¹·q·P
+    b.quaternion.premultiply(_lq); (b.userData.lookQ ||= new THREE.Quaternion()).copy(_lq); b.userData.lookOn = true;
   }
+}
+// 下一帧 mixer.update 之前把上一帧加的转角减掉。three 的 PropertyMixer 只在动画值变了时才写回骨骼：
+// 头/颈轨道是常量的动作（Climb_Ladder_Loop 只有两帧一样的关键帧、坐姿看书写字也是常量）不会每帧覆盖，
+// 直接在骨骼上 premultiply 会一帧帧累加 → 爬梯时头越转越歪、切到 Ladder_Top 那一帧又一下弹回 107°（2026-10-22 修）
+function unLook(p) {
+  for (const b of [p.neck, p.head]) if (b && b.userData.lookOn) { b.quaternion.premultiply(_lq.copy(b.userData.lookQ).invert()); b.userData.lookOn = false; }
+}
+
+// —— 书记员伏案写字：在 mixer 之后重摆双臂（2026-10-22 修「手扭曲」）——
+// Sitting_Write_Loop 是 Blender 里按「桌面 = 坐面 + 0.30m」摆的，网页里书桌比那高 ~4.5cm：本子（0.779–0.791）、笔尖、指尖全插在桌面（0.83）里，
+// 手臂为够那个低处几乎伸直、前臂往下斜 25–40°，左腕折 36°、右手相对前臂扭 46°，看着就是拧着的拳头戳进桌子。
+// 这里按真实桌面给绝对目标（根节点局部坐标，未缩放单位，+Z 朝前、-X 是她的右边）：两骨 IK、手肘垂下让前臂搭在桌沿；
+// 右手给定朝向（手指朝前下、手心朝内下、小指侧落纸），倒推手腕让笔尖落在本子上；左手手心朝下平按本子；手相对前臂的扭转 65% 挪给前臂（骨架没有 twist 骨）。
+// hand 局部：+Y 指尖方向，右手 -X / 左手 +X 是手心，+Z 是食指一侧。改的是最终值，下一帧 mixer.update 前 unDesk 还原（常量轨道不会每帧覆盖，同 unLook）。
+const DESK_FIX = {
+  nbLift: 0.052, // 本子往上挪到桌面上
+  // 右手：tip = 笔尖落点；fwd = 手指方向（往内 15°、往下 5°）；palm = 手心（朝下、往内滚 30°，小指侧落纸）。这组数是网格搜出来的：
+  // 中指尖比笔尖高 ≥1cm、笔杆仰 51°、手腕在纸上 ~7cm（手指、笔、朝向一起搜，见 ../_test/probe8.js）
+  r: { tip: [-0.02, 0.847, 0.2], fwd: [0.258, -0.087, 0.962], palm: [0.5, -0.866, 0], pole: [-0.5, -1, -0.5] },
+  l: { wrist: [0.17, 0.885, 0.12], fwd: [-0.3, -0.06, 0.95], palm: [0, -1, 0], pole: [0.5, -1, -0.5], thumb: -0.35 }, // 左手平按本子；thumb = 大拇指绕局部 Z 往手背抬（原来插进本子）
+  grip: { index: [0.45, 0.55, 0.32], middle: [0.95, 1.05, 0.57], ring: [1.35, 1.35, 0.81], pinky: [1.35, 1.35, 0.81] }, // 右手各指 01/02/03 节弯曲（弧度）：食指拇指捏笔，中指托在下面，无名指小指蜷起
+  penOut: 0.045, // 笔尖伸出捏笔点（食指尖与拇指尖中点）多少；笔杆从捏笔点往后穿过虎口 PEN_K
+};
+const PEN_K = [-0.005, 0.05, 0.068]; // hand_r 局部：虎口（食指根和拇指根之间、靠食指外侧）。在手心手背中间会看着像笔从手背穿出来
+const _dk = Array.from({ length: 9 }, () => new THREE.Vector3()), _dkq = Array.from({ length: 4 }, () => new THREE.Quaternion()), _dkm = new THREE.Matrix4();
+function deskInit(p) {
+  const g = (n) => p.root.getObjectByName(n), arm = (s) => ({ up: g('upperarm_' + s), lo: g('lowerarm_' + s), hand: g('hand_' + s) });
+  p.desk = p.acts.Sitting_Write_Loop && g('hand_r') && g('hand_l') ? { r: arm('r'), l: arm('l'), on: false, grip: [] } : null;
+  let sk = null; p.root.traverse((o) => { if (o.isSkinnedMesh && !sk && o.skeleton.bones.some((b) => b.name === 'index_01_r')) sk = o.skeleton; });
+  if (p.desk && sk) { // 右手握笔的手指：从静止姿势（伸直）起绕局部 +X 弯（+X = 往手心弯，左右手都是），不在原动作上叠加
+    const restW = (n) => sk.boneInverses[sk.bones.findIndex((b) => b.name === n)].clone().invert();
+    for (const [f, as] of Object.entries(DESK_FIX.grip)) as.forEach((ang, j) => {
+      const b = g(`${f}_0${j + 1}_r`); if (!b) return;
+      const q = new THREE.Quaternion(); restW(b.parent.name).invert().multiply(restW(b.name)).decompose(_dk[0], q, _dk[1]);
+      p.desk.grip.push([b, q.multiply(new THREE.Quaternion().setFromAxisAngle(_dk[0].set(1, 0, 0), ang))]);
+    });
+    // 笔重新放：原来笔尖在食指末节关节上，手指一弯指尖比笔尖还低（戳进纸）。按握笔手型量食指尖、拇指尖，笔夹在中间、笔尖往前下伸出 penOut
+    const pen = g('Pen'), hand = g('hand_r'), it = g('index_04_leaf_r'), th = g('thumb_04_leaf_r');
+    if (pen && it && th) {
+      const keep = p.desk.grip.map(([b]) => b.quaternion.clone());
+      for (const [b, q] of p.desk.grip) b.quaternion.copy(q);
+      p.root.updateMatrixWorld(true); const inv = new THREE.Matrix4().copy(hand.matrixWorld).invert(); // 从根更新：刚加载时骨骼的 matrixWorld 还是单位阵
+      const G = it.getWorldPosition(new THREE.Vector3()).applyMatrix4(inv).lerp(th.getWorldPosition(_dk[0]).applyMatrix4(inv), 0.5); G.z += 0.008; // 贴食指外侧
+      const ax = G.clone().sub(_dk[1].fromArray(PEN_K)).normalize(), tip = G.addScaledVector(ax, DESK_FIX.penOut);
+      pen.geometry.computeBoundingBox(); const half = pen.geometry.boundingBox.max.y; // 笔是沿自身 Y 的细圆柱
+      const old = _dk[5].set(-0.04, 0.12, 0.032), end = _dk[2].set(0, half, 0).applyQuaternion(pen.quaternion).add(pen.position);
+      const sgn = end.distanceTo(old) < _dk[3].set(0, -half, 0).applyQuaternion(pen.quaternion).add(pen.position).distanceTo(old) ? 1 : -1; // 哪头是笔尖：原动作里笔尖在 hand_r 局部 (-0.04, 0.12, 0.032)
+      pen.quaternion.setFromUnitVectors(_dk[4].set(0, sgn, 0), ax); pen.position.copy(tip).addScaledVector(ax, -half);
+      p.desk.penTip = tip.toArray();
+      p.desk.grip.forEach(([b], i) => b.quaternion.copy(keep[i])); hand.updateMatrixWorld(true);
+    }
+    p.desk.thumbL = g('thumb_01_l');
+  }
+  const nb = g('Notebook');
+  if (p.desk && nb) { p.root.updateMatrixWorld(true); const v = nb.getWorldPosition(_dk[0]); v.y += DESK_FIX.nbLift * p.root.scale.y; nb.position.copy(nb.parent.worldToLocal(v)); }
+}
+function unDesk(p) {
+  const d = p.desk; if (!d || !d.on) return;
+  for (const s of ['r', 'l']) for (const b of [d[s].up, d[s].lo, d[s].hand]) b.quaternion.copy(b.userData.deskQ);
+  for (const [b] of d.grip) b.quaternion.copy(b.userData.deskQ);
+  if (d.thumbL) d.thumbL.quaternion.copy(d.thumbL.userData.deskQ);
+  d.on = false;
+}
+function setWorldQ(b, q) { b.quaternion.copy(b.parent.getWorldQuaternion(_dkq[3]).invert().multiply(q)); b.updateMatrixWorld(true); }
+function aimBone(b, from, to) { // 转骨骼，让它下面的点从 from 移到 to（世界）
+  const o = b.getWorldPosition(_dk[8]), q = _dkq[2].setFromUnitVectors(_dk[6].subVectors(from, o).normalize(), _dk[7].subVectors(to, o).normalize());
+  setWorldQ(b, q.multiply(b.getWorldQuaternion(_dkq[1])));
+}
+function deskFix(p) {
+  const a = p.acts.Sitting_Write_Loop;
+  if (!a || !a.isRunning()) return;
+  if (p.desk === undefined) deskInit(p); // 第一次真在写字时才初始化（量拇指尖要用写字动作里的拇指）
+  const d = p.desk; if (!d) return;
+  const w = a.getEffectiveWeight(); if (w < 0.01) return;
+  const R = p.root; R.updateMatrixWorld(true);
+  const rq = R.getWorldQuaternion(_dkq[0]);
+  for (const s of ['r', 'l']) {
+    const A = d[s], F = DESK_FIX[s];
+    for (const b of [A.up, A.lo, A.hand]) (b.userData.deskQ ||= new THREE.Quaternion()).copy(b.quaternion);
+    // 手的目标朝向（根局部）：Y = 指尖方向，手心按左右手是 ∓X
+    const y = _dk[0].fromArray(F.fwd).normalize(), x = _dk[1].fromArray(F.palm);
+    x.addScaledVector(y, -x.dot(y)).normalize(); if (s === 'r') x.negate();
+    _dkm.makeBasis(x, y, _dk[2].crossVectors(x, y));
+    const W = _dk[3].fromArray(F.tip || F.wrist);
+    if (s === 'r' && d.penTip) W.sub(_dk[4].fromArray(d.penTip).applyMatrix4(_dkm)); // 笔尖落点 → 手腕位置
+    R.localToWorld(W);
+    const qh = new THREE.Quaternion().setFromRotationMatrix(_dkm).premultiply(rq);
+    // 两骨 IK：肩 S、肘 E、腕 W；肘往 pole 方向垂
+    const S = A.up.getWorldPosition(_dk[4]), E0 = A.lo.getWorldPosition(_dk[5]).clone(), H0 = A.hand.getWorldPosition(_dk[0]);
+    const L1 = S.distanceTo(E0), L2 = E0.distanceTo(H0), u = _dk[1].subVectors(W, S), dd = Math.min(u.length(), (L1 + L2) * 0.999);
+    u.normalize();
+    const ca = (L1 * L1 - L2 * L2 + dd * dd) / (2 * dd), hh = Math.sqrt(Math.max(0, L1 * L1 - ca * ca));
+    const pole = _dk[2].fromArray(F.pole).applyQuaternion(rq); pole.addScaledVector(u, -pole.dot(u)).normalize();
+    const E = S.clone().addScaledVector(u, ca).addScaledVector(pole, hh);
+    W.copy(S).addScaledVector(u, dd);
+    aimBone(A.up, E0, E);
+    aimBone(A.lo, A.hand.getWorldPosition(_dk[0]), W);
+    setWorldQ(A.hand, qh);
+    // 手腕扭转的 65% 挪给前臂（绕前臂自身 Y），手的世界朝向不变
+    const hq = A.hand.quaternion, tw = 2 * Math.atan2(hq.w < 0 ? -hq.y : hq.y, Math.abs(hq.w)); // 四元数 w<0 时要翻号，否则扭转算成绕远路的 ±300°
+    A.lo.quaternion.multiply(_dkq[1].setFromAxisAngle(_dk[0].set(0, 1, 0), 0.65 * tw)); A.lo.updateMatrixWorld(true);
+    setWorldQ(A.hand, qh);
+    if (w < 0.999) for (const b of [A.up, A.lo, A.hand]) { _dkq[1].copy(b.quaternion); b.quaternion.copy(b.userData.deskQ).slerp(_dkq[1], w); }
+  }
+  for (const [b, q] of d.grip) { (b.userData.deskQ ||= new THREE.Quaternion()).copy(b.quaternion); b.quaternion.slerp(q, w); }
+  if (d.thumbL) { const b = d.thumbL; (b.userData.deskQ ||= new THREE.Quaternion()).copy(b.quaternion); b.quaternion.multiply(_dkq[1].setFromAxisAngle(_dk[0].set(0, 0, 1), DESK_FIX.l.thumb * w)); }
+  d.on = true;
 }
 
 // —— 门、灯：点一下开/关 ——
@@ -2338,7 +3389,7 @@ function updateLook(p, dt) {
 const GLOW = /bulb|lamp_glass|lantern_glass|flame/;
 const isLamp = (n) => n === 'entry_porch_lamp' || n === 'wall_lamp' || n === 'entry_lantern' || n.startsWith('ceiling_light_') || n.startsWith('hall_pendant_');
 // 软物件在 Blender 里单独做（../blender/scripts/towel_glb.py 等），加载时换掉 Rhino 导出的原物件；挂在原图层下，点选/卡片照旧。材质按名字借 cabin 里的
-const SOFT_PROPS = { loft_hanging_towel: 'props/loft_towel.glb' };
+const SOFT_PROPS = { loft_hanging_towel: 'props/loft_towel.glb', bed_quilt: 'props/bed_quilt.glb', bed_quilt_fold: 'props/bed_quilt_fold.glb' };
 async function swapSoftProps(root) {
   const mats = new Map();
   root.traverse((o) => { if (o.isMesh) for (const m of [].concat(o.material)) mats.set(m.name, m); });
@@ -2373,6 +3424,8 @@ function splitParts(root) {
     || (/^toilet_door_hinge_leaf/.test(o.name) && cx(o).x < -0.8));
   // 大门的铰链带、门闩、夜闩在 doghouse_dark 图层；门框上的铰链座（pintle）、锁扣（door_frame_*）不动
   pull('doghouse_dark', 'door_wood', (o) => /^door_(hinge|latch|night)/.test(o.name) && !/pintle/.test(o.name));
+  pull('entry_umbrella_stand', 'entry_umbrella', (o) => o.name === 'umbrella'); // 墙上的黑伞、接水盘里的登山杖各自单独点（剩下接水盘 + 雪鞋）
+  pull('entry_umbrella_stand', 'entry_stick', (o) => o.name === 'stick');
   pull('entry_coat_rail', 'entry_lantern', (o) => /^lantern_/.test(o.name)); // 衣帽架上挂的提灯，拆出来才能单独开关
   pull('stove_iron', 'stove_door', (o) => /^stove_(door_frame|glass|handle)/.test(o.name));
   // 其他可动件：同名部件按位置分（干洗槽两扇门按 x），其余按名字
@@ -2387,13 +3440,14 @@ function splitParts(root) {
   pull('stove_iron', 'stove_firebox', (o) => /^stove_firebox_/.test(o.name)); // 炉膛里的柴和余烬：点它等于点火
   // 炉身：stove_iron 是顶层图层，部件都是多材质（导出成 Group），合并时各成一个图层（stove_body、stove_leg…）、不在 INFO 里 → 原来炉子点不了。
   // 除拆出去的炉门、炉膛柴以外，屋里的部件（包围盒 min.x < 2；烟管穿出东墙后那截和烟囱帽不算）收进 stove_iron_body，infoOf 映射回 stove_iron
+  // 烟管（从炉顶一根弯到东墙外）、墙上的法兰、墙外的卡箍/外伸管/烟囱帽并进墙上隔热板图层 stove_wall_thimble：烟囱 + 隔热板是一个物件，炉子单独一个（2026-10-22 用户定）
+  pull('stove_iron', 'stove_wall_thimble', (o) => /^stove_(flue_(pipe|flange|clamp)|cap_)/.test(o.name));
   const notBody = new Set(['stove_door', 'stove_firebox', 'stove_iron_body']);
   pull('stove_iron', 'stove_iron_body', (o) => !notBody.has(o.name) && new THREE.Box3().setFromObject(o).min.x < 2);
   pull('firewood_split', 'firewood_end', () => true); // 炉子底下的柴堆：柴的侧面、端面在 glb 里是两个顶层图层（点出来是两样东西），并成一个
   pull('entry_toilet', 'entry_toilet_lid', (o) => /^toilet_lid/.test(o.name));
   pull('stove_reservoir', 'stove_reservoir_lid', (o) => /^reservoir_lid($|_hinge_leaf|_knob)/.test(o.name));
   pull('sink_slop_pail', 'slop_pail_lid', (o) => /^pail_lid/.test(o.name));
-  pull('entry_toilet', 'entry_toilet_rear_lid', (o) => /^toilet_rear_lid/.test(o.name));
   pull('entry_washstand', 'entry_washstand_tank_lid', (o) => /^wash_tank_(lid|knob)/.test(o.name));
   splitWaterFx(pull); // 龙头手柄、阀体、壶盖（见 setupWaterFx）
   // 挂在墙上的东西：钉子、支架、挂杆、挂钩这些固定在墙上的五金件并进 wall_fixings（不在 INFO 里 = 不可选，pick 时射线直接穿过），
@@ -2402,8 +3456,12 @@ function splitParts(root) {
     ['wall_tapestry', /^tapestry_(bracket|rod|finial)/], ['wall_snowshoes', /^snowshoe_peg/], ['wall_lamp', /^lamp_(plate|arm|ring)/],
     ['entry_porch_lamp', /^lamp_(plate|arm|ring)/], ['wall_pot_rail', /^pot_rail_/], ['wall_utensil_rack', /^utensil_(board|rail|hook|knife_bar|knife_spacer)/],
     ['entry_shelf', /^eshelf_nail/], ['entry_coat_rail', /^coat_rail_nail/], ['entry_towel_rack', /^toilet_towel_(pipe|flange)/],
-    ['entry_tp_holder', /^toilet_tp_/], ['sink_water_bucket', /^dipper_nail/]];
+    ['entry_tp_holder', /^toilet_tp_/], ['sink_water_bucket', /^dipper_nail/], ['entry_cleaning_tools', /^toilet_tool_(hook|flange)/]];
   for (const [from, re] of FIX) pull(from, 'wall_fixings', (o) => re.test(o.name));
+  pull('umbrella', 'wall_fixings', (o) => /^umbrella_rack_/.test(o.name)); // 伞的墙上挂钩在 umbrella 组里面（pull 只看直接子物件）
+  // 扫帚、簸箕各成一件（挂钩、墙上法兰上面已并进 wall_fixings）；挂绳按 x 分：簸箕在东边 x≈−1.355，扫帚 x≈−1.59
+  pull('entry_cleaning_tools', 'entry_cleaning_tools_pan', (o) => /^toilet_pan/.test(o.name) || (/^toilet_tool_cord/.test(o.name) && cx(o).x > -1.47));
+  pull('entry_cleaning_tools', 'entry_cleaning_tools_broom', (o) => /^toilet_(broom|tool_cord)/.test(o.name));
   pull('entry_coat_rail', 'entry_coat_rail_keys', (o) => /^keys_/.test(o.name)); // 衣帽架挂钩上的一串钥匙
   pull('sink_water_bucket', 'sink_water_bucket_dipper', (o) => /^dipper_(bowl|handle)/.test(o.name)); // 水桶上方钉子上挂的水瓢
   // 第一人称能拿下来看的（TAKEABLE）：锅架上两口平底锅、一口汤锅，刀架上三把刀、汤勺、两把木勺、锅铲各成一件（挂杆、挂钩上面已并进 wall_fixings）
@@ -2477,8 +3535,6 @@ const DOORS = {
   entry_toilet_lid: { pivot: [-1.564, 0.612, 1.259], axis: 'z', angle: (k) => -k * Math.PI / 2, slide: (k) => [0, k * 0.022, 0] }, // 马桶盖 Rhino 里掀着，k=1 盖上（抬 2cm 落在座圈上）
   stove_reservoir_lid: { pivot: [1.088, 0.873, -1.42], axis: 'z', angle: (k) => -k * Math.PI * 0.53 }, // 炉边水箱盖，合页在靠炉一侧
   slop_pail_lid: { pivot: [-0.59, 0.56, -1.565], slide: (k) => [0, k * 0.12, 0], axis: 'z', angle: (k) => k * 0.35 }, // 污水桶盖：提起来、歪一点
-  // 马桶后箱盖：通风管（x≈−1.62, z 1.259）从盖子中间穿上去，翻不开 → 顺着管子提起 12cm、歪一点（同污水桶盖）
-  entry_toilet_rear_lid: { pivot: [-1.62, 0.82, 1.259], slide: (k) => [0, k * 0.12, 0], axis: 'x', angle: (k) => k * 0.1 },
   // 洗脸架水箱盖：合页在贴墙的后沿（z 1.718），前沿翻起 80°
   entry_washstand_tank_lid: { pivot: [-0.85, 2.013, 1.718], axis: 'x', angle: (k) => k * 1.4 },
   // 水壶：提梁立着横跨壶盖，先把提梁放倒到壶嘴一侧（−n），再从另一侧（+n）的合页翻开壶盖。
@@ -2813,7 +3869,7 @@ const _rk = { T: new THREE.Matrix4(), R: new THREE.Matrix4(), M: new THREE.Matri
 function updateRocker(dt) {
   const rider = [...people.values()].find((q) => q.ride && !q.tasks.length);
   if (!rocker.g || (rocker.t > 12 && !rider)) return;
-  rocker.t += dt; if (!rider) shadowDirty = true; // 有人坐着的轻摇不重画阴影（否则一直每帧重画阴影图）
+  rocker.t += dt; if (!rider && !x3.on) shadowDirty = true; // 有人坐着的轻摇不重画阴影（否则一直每帧重画阴影图）
   const { at, dir, R, period, decay } = ROCKER, t = rocker.t;
   if (rider) { rocker.rt = (rocker.rt || 0) + dt; rocker.t = 13; } // 有人坐着：慢慢地一直摇（人走了就停，下次点再摇）
   const th = rider ? 0.045 * Math.sin(2 * Math.PI * rocker.rt / 1.9) : rocker.t > 12 ? 0 : rocker.amp * Math.exp(-t / decay) * Math.sin(2 * Math.PI * t / period);
@@ -2831,7 +3887,8 @@ function updateRocker(dt) {
 const toggleOf = (name) => toggles.get(name === 'stove_firebox' ? 'stove_fire' : name) || toggles.get(DOORS[name]?.parent);
 // 有人坐在马桶上时折叠门不动（像从里面闩上了）：坐着的人脚伸到 x −0.82~−0.93，门折到一半（k 0.4–0.5）会扫到脚；改成往玄关那边折也不行：打开时两块板贴在隔墙上，会撞衣帽架挂杆（y 1.65–1.75）
 const wcBusy = () => [...people.values()].some((q) => q.seat === 'entry_toilet' && q.mode === 'sit');
-function toggle(name) { const t = toggleOf(name); if (t.click) return t.click(); if (/^toilet_door_/.test(name) && wcBusy()) return; t.on = !t.on; } // click：不是开/关，点一下触发一次动作（摇椅）
+const shutBusy = (name) => Object.entries(SEATS).some(([n, S]) => S.shut?.includes(name) && [...people.values()].some((q) => q.seat === n || q.claim === n)); // 有人坐着 / 正要坐的座位旁，抽屉点了不动
+function toggle(name) { const t = toggleOf(name); if (t.click) return t.click(); if (/^toilet_door_/.test(name) && wcBusy()) return; if (!t.on && shutBusy(name)) return; t.on = !t.on; } // click：不是开/关，点一下触发一次动作（摇椅）
 let toggleT = 0;
 function updateToggles() {
   const now = performance.now(), dt = Math.min(0.1, (now - (toggleT || now)) / 1000); toggleT = now;
@@ -2932,8 +3989,23 @@ function updateFire(dt) {
 
 const raycaster = new THREE.Raycaster();
 raycaster.firstHitOnly = true;
-const pointer = new THREE.Vector2(), tip = document.getElementById('tip'), card = document.getElementById('card');
+const pointer = new THREE.Vector2(), tip = document.getElementById('tip'), card = document.getElementById('card'), cardBg = document.getElementById('cardBg');
+card.addEventListener('scroll', cardMore, { passive: true }); addEventListener('resize', () => { if (!card.hidden) cardMore(); });
 let hovered = null, selected = null, hoverDirty = false, downAt = null;
+let cardData = null; // 当前卡片的中英内容（select 里填，drawCard 画）
+let noteData = null, noteTimer2 = 0; // 普通物件说明（showNote）
+const nameOf = (i) => lang() === 'zh' && STORY_ZH[i[0] + '|' + i[1]]?.[0] || i[0]; // 悬停名字
+function setLang(l) {
+  const h = document.documentElement; h.dataset.lang = l; h.lang = l === 'zh' ? 'zh-CN' : 'en';
+  try { localStorage.setItem('cabin.lang', l); } catch (e) { /* 存不了就只管这次 */ }
+  document.title = l === 'zh' ? '无名测绘员的遗稿' : 'The Surveyor\'s Cabin';
+  for (const o of skyEl.speed.options) o.textContent = l === 'zh' ? `一天 ${o.value / 60} 分钟` : `A day in ${o.value / 60} min`;
+  if (cardData && !card.hidden) drawCard();
+  if (noteData && $('note').classList.contains('on')) showNote(noteData);
+  if (hovered) tip.textContent = nameOf(infoOf(hovered));
+}
+setLang(lang());
+$('langBtn').onclick = () => setLang(lang() === 'zh' ? 'en' : 'zh');
 
 function isShown(o) { for (; o; o = o.parent) if (!o.visible) return false; return true; }
 function pick(e) {
@@ -2942,7 +4014,9 @@ function pick(e) {
   raycaster.setFromCamera(pointer, camera);
   const hit = raycaster.intersectObjects(meshes.filter((m) => isShown(m) && m.parent.name !== 'wall_fixings').concat(roofWx.sides.filter((S) => S.s < 0 && S.slab.visible).map((S) => S.slab)), false)[0]; // 墙上的钉子、支架（wall_fixings）不挡点选：点挂钩等于点挂着的东西
   pick.side = hit && hit.object.userData.side; // 点到屋顶积雪：记下是哪一坡
-  const name = pick.side ? 'roof_snow' : hit && hit.object.parent.name;
+  let name = pick.side ? 'roof_snow' : hit && hit.object.parent.name;
+  if (name === 'entry_toilet_room') return null; // 卫生间隔墙、门框、门柱、门锁都算房屋结构，不可点（2026-10-22 用户定；挡射线照旧）
+  if (name === 'toilet_door_B') name = 'toilet_door_A'; // 两扇折叠门算一个：点哪扇都选 A（B 挂在 A 下，描边一起）
   return name && infoOf(name) ? name : null;
 }
 
@@ -2977,11 +4051,15 @@ const hl = {
 };
 hl.quad.frustumCulled = false; hl.scene.add(hl.quad);
 function setHL(name, on) { // 把这个图层的网格加进/移出高亮 layer
-  const g = name && layers.get(name);
-  if (g) g.traverse((o) => { if (o.isMesh) on ? o.layers.enable(HL_LAYER) : o.layers.disable(HL_LAYER); });
+  // 折叠门：B 板的转轴组挂在 A 的转轴组下（和 A 图层是兄弟，不在 A 图层里），只描 A 就只亮半扇 → 两扇一起描
+  for (const n of name === 'toilet_door_A' ? [name, 'toilet_door_B'] : [name]) {
+    const g = n && layers.get(n);
+    if (g) g.traverse((o) => { if (o.isMesh) on ? o.layers.enable(HL_LAYER) : o.layers.disable(HL_LAYER); });
+  }
 }
 function drawHighlight() {
-  const want = [selected, hovered].filter((n, i, a) => n && layers.get(n) && (i === 0 || n !== a[0]));
+  const hov = hovered || hintGlow; // 卡关提示三级：没悬停时描提示的那件
+  const want = [selected, hov].filter((n, i, a) => n && layers.get(n) && (i === 0 || n !== a[0]));
   if (!want.length) return;
   const sz = renderer.getDrawingBufferSize(new THREE.Vector2());
   if (hl.rt.width !== sz.x || hl.rt.height !== sz.y) hl.rt.setSize(sz.x, sz.y);
@@ -2991,7 +4069,7 @@ function drawHighlight() {
   renderer.setRenderTarget(hl.rt); renderer.setClearColor(0x000000, 0); renderer.clear();
   renderer.autoClear = false;
   if (selected && layers.get(selected)) { scene.overrideMaterial = hl.sel; renderer.render(scene, camera); }
-  if (hovered && hovered !== selected && layers.get(hovered)) { scene.overrideMaterial = hl.hov; renderer.render(scene, camera); }
+  if (hov && hov !== selected && layers.get(hov)) { scene.overrideMaterial = hl.hov; renderer.render(scene, camera); }
   scene.overrideMaterial = null;
   renderer.setRenderTarget(null);
   const u = hl.quad.material.uniforms; // 线宽按物理像素：约 1.5 个 CSS 像素
@@ -3017,48 +4095,87 @@ function prewarm() {
   for (const o of hidden) o.visible = false;
   camera.position.copy(p); camera.quaternion.copy(q); camera.fov = f; camera.updateProjectionMatrix();
 }
-function paint(name) { setHL(name, (name === selected || name === hovered) && !(held && held.name === name)); } // 拿在手里的不描边
+function paint(name) { setHL(name, (name === selected || name === hovered || name === hintGlow) && !(held && held.name === name)); } // 拿在手里的不描边
 function setHovered(name) {
   if (name === hovered) return;
   const prev = hovered; hovered = name; paint(prev); paint(name);
-  renderer.domElement.style.cursor = name ? 'pointer' : '';
+  renderer.domElement.style.cursor = name ? 'pointer' : ''; document.documentElement.classList.toggle('cur-hot', !!name); // 自定义鼠标的环放大
   tip.hidden = !name;
-  if (name) tip.textContent = infoOf(name)[0];
+  if (name) tip.textContent = nameOf(infoOf(name));
 }
+function cardMore() { card.classList.toggle('more', card.scrollTop + card.clientHeight < card.scrollHeight - 4); } // 卡片没滚到底：底部渐隐
 function select(name) {
   const prev = selected; selected = name; paint(prev); paint(name);
-  card.hidden = !name;
-  if (!name) return;
+  card.hidden = cardBg.hidden = true;
+  if (!name) { showNote(null); return; }
   if (people.has(name)) wakePerson(name); // 点人物：起来活动一圈
   const pa = card.querySelector('#playAs'); pa.hidden = !people.has(name) || name === 'person_woman' || lite || !!fp; // 游戏里玩家只当老稽查，书记员是同伴 // 触屏还没做摇杆，先不给
-  pa.textContent = name === 'person_woman' ? 'Take Her Place' : 'Take His Place';
-  const [title, area, desc] = infoOf(name);
-  card.querySelector('h2').innerHTML = '';
-  card.querySelector('h2').append(title);
-  if (area) { const s = document.createElement('span'); s.className = 'area'; s.textContent = area; card.querySelector('h2').append(s); }
-  card.querySelector('p.lead').textContent = desc || '';
-  card.querySelector('p.story').textContent = STORY[title + '|' + area] || '';
-  const zh = STORY_ZH[title + '|' + area];
-  card.querySelector('p.zh').textContent = zh ? zh[1] : '';
-  if (zh) { const s = card.querySelector('h2 .area'); if (s) { s.append(' · '); const z = document.createElement('span'); z.className = 'zh'; z.textContent = zh[0]; s.append(z); } }
+  pa.innerHTML = name === 'person_woman' ? lbl('Take Her Place', '化身为她') : lbl('Take His Place', '化身为他');
+  const [title, area, desc] = infoOf(name), zh = STORY_ZH[title + '|' + area];
+  cardData = { t: title, a: area, lead: desc, story: STORY[title + '|' + area], zt: zh?.[0], zs: zh?.[1] };
   const g = gameSeen(name); // 游戏线索：有的换成信 / 日志 / 调查记录的卡片
-  if (g) {
-    const h = card.querySelector('h2'), a = document.createElement('span'), z = document.createElement('span');
-    h.innerHTML = ''; h.append(g[0]); a.className = 'area'; a.textContent = g[1] + ' · '; z.className = 'zh'; z.textContent = g[2]; a.append(z); h.append(a);
-    card.querySelector('p.lead').textContent = g[5] || ''; card.querySelector('p.story').textContent = g[3]; card.querySelector('p.zh').textContent = g[4];
-  }
-  card.scrollTop = 0;
+  hintClick(); // 卡关提示：没进展的点击计数
+  if (g) cardData = { t: g[0], a: g[1], zt: g[2], story: g[3], zs: g[4], lead: g[5] };
+  if (g || gameSeen.got || people.has(name) || isClue(name)) { showNote(null); card.hidden = cardBg.hidden = false; drawCard(); } // 线索、人物：卡片居中，只能点 × / Esc 关
+  else { const d = cardData; showNote({ t: d.t, zt: d.zt, text: d.story || d.lead || '', ztext: d.zs || LEAD_ZH[d.lead] || '' }); } // 普通物件：不强制读；有故事只放故事（短说明多半是故事第一句的缩写）
+}
+// 普通物件的说明：画面中下方，和开场字幕同款，按字数停一会儿自己淡掉；null = 收起
+function showNote(d) {
+  const el = $('note'); clearTimeout(noteTimer2); noteData = d;
+  if (!d) { el.classList.remove('on'); return; }
+  showRoomNote(null); // 和进房间那句在同一块地方
+  const zh = lang() === 'zh', t = zh ? d.zt || d.t : d.t, x = zh ? d.ztext || d.text : d.text;
+  el.innerHTML = (t ? `<span class="t">${esc(t)}</span>` : '') + `<p>${esc(x)}</p>`;
+  el.classList.add('on');
+  noteTimer2 = setTimeout(() => el.classList.remove('on'), Math.min(20000, zh ? 2600 + x.length * 120 : 2600 + x.length * 45));
+}
+function drawCard() { // 英文版：英文标题 + 区域 + 说明 + 故事；中文版：中文标题 + 区域 + 说明（LEAD_ZH）+ 中文故事
+  const d = cardData, zh = lang() === 'zh', h = card.querySelector('h2'), a = document.createElement('span'), lead = card.querySelector('p.lead');
+  h.innerHTML = ''; a.className = 'area';
+  if (zh) { const t = document.createElement('span'); t.className = 'cn'; t.textContent = d.zt || d.t; h.append(t); a.classList.add('cn'); a.textContent = AREA_ZH[d.a] || d.a; }
+  else { h.append(d.t); a.textContent = d.a; }
+  if (d.a) h.append(a);
+  lead.classList.toggle('cn', zh); lead.textContent = zh ? LEAD_ZH[d.lead] || '' : d.lead || '';
+  card.querySelector('p.story').textContent = d.story || '';
+  card.querySelector('p.zh').textContent = d.zs || '';
+  card.scrollTop = 0; cardMore();
 }
 function focusSelected() {
   const g = selected && layers.get(selected);
   if (!g) return;
   clearTimeout(idleTimer); spin = false; // 看近的时候不转，拖动松手后才恢复
+  if (!closeBack) closeBack = fly && !fly.out ? { pos: fly.toPos.clone(), tgt: fly.toTgt.clone(), fov: fly.toFov ?? camera.fov } // 换房间飞到一半点的：回到要去的那个视角
+    : { pos: camera.position.clone(), tgt: controls.target.clone(), fov: camera.fov };
+  $('backBtn').hidden = false;
   const fov = inside ? CLOSE_FOV : camera.fov, v = closeView(g, fov);
   fly = { t: 0, fromPos: camera.position.clone(), fromTgt: controls.target.clone(), fromFov: camera.fov,
     toPos: v.pos, toTgt: v.c, toFov: fov, smooth: true, dur: 1.4 }; // 屋里飞完 lookAround，原地看着物体
   controls.minDistance = 0; controls.maxDistance = Infinity; // 飞行中不夹距离
   if (!inside) { fly.out = true; fly.minD = Math.min(1, v.pos.distanceTo(v.c) * 0.9); } // 屋外飞完恢复距离限制（借用出屋那次的收尾）
 }
+// 走近看之后回原来的视角（2026-10-22 修「卡住」）：屋里飞完 lookAround 把近处当成新的站位，只能原地转头、滚轮只调视场角，
+// 除了再点一次房间列表没有路回去。现在记下走近之前的视角 closeBack，「返回」按钮 / Esc / 滚轮 / 屋里拖动 都飞回去；换房间、出门、第一人称就作废。
+let closeBack = null;
+function endClose() { closeBack = null; $('backBtn').hidden = true; }
+function backFromClose() {
+  const b = closeBack; if (!b) return;
+  endClose();
+  fly = { t: 0, fromPos: camera.position.clone(), fromTgt: controls.target.clone(), fromFov: camera.fov, toPos: b.pos, toTgt: b.tgt, toFov: b.fov, smooth: true, dur: 1.1 };
+  controls.minDistance = 0; controls.maxDistance = Infinity;
+  if (!inside) fly.out = true; // 屋外：飞完恢复 1–220m 距离限制；屋里飞完 lookAround
+}
+$('backBtn').onclick = backFromClose;
+addEventListener('keydown', (e) => { // 捕获阶段先看：卡片 / 遗稿 / 弹窗都关着时 Esc = 返回
+  if (e.key === 'Escape' && closeBack && !fly && card.hidden && journal.hidden && $('dlg').hidden && !fp) backFromClose();
+}, true);
+renderer.domElement.addEventListener('wheel', () => { if (closeBack && !fly && !fp) backFromClose(); }, { passive: true });
+let closeDrag = null; // 屋里走近看时拖动（转头）超过 12px 就返回；屋外拖动是绕物体转，不退出
+renderer.domElement.addEventListener('pointerdown', (e) => { closeDrag = [e.clientX, e.clientY]; });
+addEventListener('pointerup', () => { closeDrag = null; });
+renderer.domElement.addEventListener('pointermove', (e) => {
+  if (!closeDrag || !e.buttons || !closeBack || !inside || fly || fp) return;
+  if (Math.hypot(e.clientX - closeDrag[0], e.clientY - closeDrag[1]) > 12) { closeDrag = null; backFromClose(); }
+});
 // Look Closer 选视角：物体周围水平 16 个方向 × 俯角 8°/22°/38° × 两种距离（物体约占画面 55% / 再近 25%），
 // 每个候选从相机往包围盒中心 + 8 个角（往里收 25%）打射线，算没被别的东西挡住的比例；相机在实体里（往物体看先打到背面）的不要。
 // 打分 = 可见比例 ×3 + 正面（屋里朝屋子中心、屋外背向小屋）+ 俯角接近 22° + 离墙 ≥35cm + 和现在站的方向接近一点。
@@ -3133,8 +4250,8 @@ const FP = { R: 0.17, STEP: 0.22, RUN: 2.6, SENS: 0.0022, HIDE: /^(HeadSkin|Eyeb
 let fp = null; // { p, yaw, pitch, keys, solid, floors, solidT, eye, paused, climb, crouch, bob, inspect }
 const fpRay = new THREE.Raycaster(); fpRay.firstHitOnly = true;
 const fpHud = document.createElement('div'); fpHud.id = 'fpHud'; fpHud.hidden = true;
-fpHud.innerHTML = '<div class="dot"></div><div class="help"><b>Click</b> to look about · <b>WASD</b> to walk · <b>Shift</b> to hurry · <b>Esc</b> to stop'
-  + '<br><b>E</b> to take a thing · <b>E</b> again to put it back or drop it · hold <b>right button</b> to turn it over'
+fpHud.innerHTML = '<div class="dot"></div><div class="help"><span class="en"><b>Click</b> to look about · <b>WASD</b> to walk · <b>Shift</b> to hurry · <b>Esc</b> to stop'
+  + '<br><b>E</b> to take a thing · <b>E</b> again to put it back or drop it · hold <b>right button</b> to turn it over</span>'
   + '<span class="zh">点画面开始 · WASD 走动 · Shift 快走 · E 拿取，再按 E 放回原处或丢在地上 · 按住右键翻看 · Esc 结束</span></div><div class="hint"></div>';
 document.body.append(fpHud);
 const fpHint = fpHud.querySelector('.hint');
@@ -3267,7 +4384,7 @@ function seatAim() { // 准星对着空座位、够得着
 }
 function fpUse() { // E：坐着 → 起身；对着座位 → 坐下；否则拿取 / 放下
   const p = fp.p; if (p.tasks.length || fp.climb) return;
-  if (p.mode === 'sit') { p.tasks = riseTasks(p); return; }
+  if (p.mode === 'sit') { p.tasks = fpRise(p); return; }
   const n = seatAim(); if (n) { p.tasks = sitTasks(p, n); fp.satT = 0; return; }
   fpTake();
 }
@@ -3332,11 +4449,11 @@ function heldPutBack() { // 退出第一人称时手里的东西直接回原处
 function startFP(id) {
   const p = people.get(id);
   if (!p || fly || intro) return;
-  select(null); spin = false; clearTimeout(idleTimer);
+  select(null); spin = false; clearTimeout(idleTimer); endClose();
   if (!inside) inside = ROOMS.find((r) => r.name === 'Parlour'); // 屋里那套（近裁面、雾、UI）照用
   const LAD = ['mount', 'climb', 'top', 'topDown', 'dismount'], i = p.tasks.findIndex((t) => t[0] === 'top' || t[0] === 'dismount');
   if (p.tasks.length && LAD.includes(p.tasks[0][0]) && i >= 0) p.tasks = p.tasks.slice(0, i + 1); // 她正在梯子上：先把这一段爬完（上到阁楼 / 下到地上），再交给玩家
-  else p.tasks = riseTasks(p); // 坐着的先起身（书桌椅要先拉开）
+  else p.tasks = fpRise(p); // 坐着的先起身（书桌椅要先拉开）
   p.player = true; p.hit.visible = false;
   p.root.traverse((o) => { if (FP.HIDE.test(o.name)) o.visible = false; });
   hand = p.hand || null; p.look = null;
@@ -3359,6 +4476,7 @@ function stopFP() {
   controls.enabled = true; lookAround(); // 相机留在他眼睛的位置，接着原地环顾
   if (climbs(p) && p.S != null && !p.tasks.length) p.tasks = p.S > CLIMB.top / 2 ? [['climb', CLIMB.top], ['top']] : [['climb', 0], ['dismount']]; // 在梯子上退出：自己爬完
   if (!p.tasks.length) p.play(moodOf(p).idle);
+  if (game.day >= 2) day2StopFP(p); // 第 2 天在屋外退出：回鸟瞰、他就站在原地等
 }
 document.addEventListener('pointerlockchange', () => {
   if (!fp) return;
@@ -3378,6 +4496,7 @@ canvas.addEventListener('mousedown', (e) => {
   if (fp && e.button === 2 && !fp.paused) { fp.inspect = true; return; }
   if (!fp || e.button !== 0) return;
   if (fp.paused) { canvas.requestPointerLock?.(); return; }
+  if (!card.hidden) { select(null); return; } // 线索卡片开着（指针锁着点不到 ×）：点一下就是关
   const name = pick(fpCenter());
   if (name === 'roof_snow') { slideSnow(pick.side); return; }
   if (name && toggleOf(name)) { toggle(name); select(name); return; }
@@ -3416,6 +4535,13 @@ function fpPush(r, s, upper) { // 身体周围有东西就往外推（小腿、�
     fpRay.set(_fpO, _fpD); fpRay.far = FP.R;
     const hit = fpRay.intersectObjects(fp.solid, false)[0];
     if (hit) { r.position.x -= _fpD.x * (FP.R - hit.distance); r.position.z -= _fpD.z * (FP.R - hit.distance); }
+  }
+}
+function fpTrees(o) { // 树是 InstancedMesh、不进碰撞网格：按树干位置往外推（原来能直接走进树里，镜头埋在树干里一片黑）
+  if (Math.abs(o.x) < 4 && Math.abs(o.z) < 4) return;
+  for (let i = 0; i < TREE_XZ.length; i += 2) {
+    const dx = o.x - TREE_XZ[i], dz = o.z - TREE_XZ[i + 1], d = Math.hypot(dx, dz), R = 0.55;
+    if (d < R && d > 1e-6) { o.x += dx / d * (R - d); o.z += dz / d * (R - d); }
   }
 }
 function fpTryMove(r, dx, dz, s) { // 整步走不了就试只走 x、只走 z（贴着墙滑）；落脚处要有地、头顶净空够弯腰（≥0.95m）
@@ -3496,7 +4622,7 @@ function updateFP(dt) {
   const run = (k.has('ShiftLeft') || k.has('ShiftRight')) && f > 0;
   let moving = false;
   if (!p.tasks.length && p.mode === 'sit') { // 坐着：W 起身；转头有限度
-    if (f > 0) p.tasks = riseTasks(p);
+    if (f > 0) p.tasks = fpRise(p);
     const sy = SEATS[p.seat] ? SEATS[p.seat].yaw : r.rotation.y, d = angDiff(sy, fp.yaw);
     if (Math.abs(d) > 1.9) fp.yaw = sy + Math.sign(d) * 1.9;
     fp.satT = (fp.satT || 0) + dt;
@@ -3506,7 +4632,7 @@ function updateFP(dt) {
     else {
       r.rotation.y += THREE.MathUtils.clamp(angDiff(r.rotation.y, fp.yaw), -8 * dt, 8 * dt); // 身体朝向跟着视线转
       if (f || st) {
-        const sp = (run ? FP.RUN : WALK_SPEED) * s * (f < 0 ? 0.7 : 1) * (fp.crouch ? 0.6 : 1);
+        const sp = (run ? FP.RUN : WALK_SPEED) * s * (f < 0 ? 0.7 : 1) * (fp.crouch ? 0.6 : 1) * (game.day >= 2 && outdoors(r) ? 1.8 : 1); // 屋外路长（到 ✕ 110m）：走快些
         _fpV.set(Math.sin(fp.yaw) * f - Math.cos(fp.yaw) * st, 0, Math.cos(fp.yaw) * f + Math.sin(fp.yaw) * st).normalize().multiplyScalar(sp * dt);
         moving = fpTryMove(r, _fpV.x, _fpV.z, s);
       }
@@ -3514,6 +4640,7 @@ function updateFP(dt) {
       else { p.play(MOODS.stand.idle, 0.3); p.cur.timeScale = 1; }
       const q0 = fpProbe(r.position.x, r.position.y, r.position.z);
       fpPush(r, s, Math.max(0.42 * s, Math.min(1.1 * s, q0.ceil - r.position.y - 0.3)));
+      fpTrees(r.position);
       const q = fpProbe(r.position.x, r.position.y, r.position.z);
       if (q.floor !== null) r.position.y += (q.floor - r.position.y) * Math.min(1, dt * 12);
     }
@@ -3539,14 +4666,14 @@ function updateFP(dt) {
   const c = pointer.lastEvent = fpCenter(); hoverDirty = true; // 悬停按准星算，名字提示贴在准星右下
   tip.style.left = c.clientX + 'px'; tip.style.top = c.clientY + 'px';
   updateHeld(dt);
-  const key = (k, zh, en) => `<b class="key">${k}</b> ${zh} · ${en}`;
+  const key = (k, zh, en) => `<b class="key">${k}</b> ${lbl(en, zh)}`;
   const barred = !gateOpen() && ((fp.climb && !climbs(p) && r.position.y > LADDER.top - 0.4) || (ladderNear(r) && r.position.y > 2)); // 她爬到顶会自己推拦杆
-  const hint = barred ? '先点拦杆抬起 · Lift the bar first' : fp.climb ? (fp.climb.ph === 'on' ? 'W up · S down' : '') // 梯子提示让着拿取提示（梯子边上也挂着东西）
+  const hint = barred ? lbl('Lift the bar first', '先点拦杆抬起') : fp.climb ? (fp.climb.ph === 'on' ? lbl('W up · S down', 'W 上 · S 下') : '') // 梯子提示让着拿取提示（梯子边上也挂着东西）
     : held ? (held.mode === 'hold' && aimingAtHome(held) ? key('E', '放回', 'Put back') : '') // 拿着时只在对准原位时提示；放下、翻看写在操作说明里
     : p.mode === 'sit' ? (!p.tasks.length && fp.satT < 4 ? key('E', '起身', 'Stand') : '')
     : seatAim() ? key('E', '坐下', 'Sit')
     : reachable(hovered) ? key('E', '拿取', 'Take')
-    : ladderNear(r) ? (fpLadderStart(r) ? (r.position.y > 2 ? 'W to climb down' : 'W to climb') : 'Face the ladder') : '';
+    : ladderNear(r) ? (fpLadderStart(r) ? (r.position.y > 2 ? lbl('W to climb down', 'W 往下爬') : lbl('W to climb', 'W 往上爬')) : lbl('Face the ladder', '面朝梯子')) : '';
   if (hint !== fpHint.dataset.h) { fpHint.dataset.h = hint; fpHint.innerHTML = hint; } // 变了才改 DOM
 }
 
@@ -3559,7 +4686,7 @@ canvas.addEventListener('pointerup', (e) => {
   select(name === selected ? null : name);
 });
 card.querySelector('.x').onclick = () => select(null);
-document.getElementById('focus').onclick = focusSelected;
+document.getElementById('focus').onclick = () => { focusSelected(); card.hidden = cardBg.hidden = true; };
 document.getElementById('playAs').onclick = () => startFP(selected);
 addEventListener('keydown', (e) => { if (e.key === 'Escape') select(null); });
 function updateHover() {
@@ -3635,7 +4762,7 @@ function startIntro() {
 function endIntro(skip) {
   if (!intro) return;
   const { homePos, homeTgt } = intro;
-  intro = null; controls.enabled = true; spin = true; spinK = skip ? 0 : 1; // 开场结束就绕小屋转着展示
+  intro = null; if (skip) openingCard(); controls.enabled = true; spin = true; spinK = skip ? 0 : 1; // 开场结束就绕小屋转着展示
   camera.fov = FOV1; camera.updateProjectionMatrix();
   if (skip) fly = { t: 0, fromPos: camera.position.clone(), fromTgt: controls.target.clone(), toPos: homePos, toTgt: homeTgt };
   else { camera.position.copy(homePos); controls.target.copy(homeTgt); }
@@ -3677,28 +4804,55 @@ addEventListener('resize', () => {
 // 标题颜色跟着身后画面亮度变：暗背景白字、亮背景黑字，中间平滑过渡。
 // 不读 GPU 像素（readPixels/PBO 读回在 Chrome 里每次都要等 GPU 画完，场景重时卡 60–150ms），改按天空颜色估算：
 // 屋外、标题那条视线朝天 → 取天穹在那个仰角的颜色（同 skyDome 着色器的混法）× 曝光；视线朝地、在屋里 → 当作暗背景
-const titleEl = document.getElementById('title'), _tDir = new THREE.Vector3(), _tCol = new THREE.Color();
+const titleEl = document.getElementById('title'), curEl = document.getElementById('cur'), _tDir = new THREE.Vector3(), _tCol = new THREE.Color(), _tCol2 = new THREE.Vector3();
 let titleT = 0, frameNo = 0;
+const TREE_RING = 14, TREE_TOP = 13; // 估标题身后用：树林从离小屋约 14m 开始，树梢约 13m 高
+function bgLum(nx, ny) { // 屏幕上 (nx, ny) 那条视线身后的估计亮度（显示亮度 0–1）
+  // 2026-10-22 v3：① 视线朝下 / 平着、越过树林那一圈时原来当成「远处地面 + 雾」估成亮（开场飞到林边、首页对面的树其实是暗的）——
+  //   现在先求视线第一次进到「离小屋 ≥ TREE_RING、低于树梢」那片林子的位置，比落地早就算撞上树；相机本身在林子里、低于树梢（开场贴路飞）= 树就在身边。
+  // ② 雾：three.js 的雾在色调映射 + sRGB 转换之后才混（fog.color 按 sRGB 值直接混进显示颜色，不乘曝光），
+  //   原来在线性空间里混、再乘曝光，浓雾里暗的东西被估得太亮（雾天从上往下看实测 0.3 估成 0.6）。现在物体先转成显示亮度再按视深混雾色。
+  _tDir.set(nx, ny, 0.5).unproject(camera).sub(camera.position).normalize();
+  const d = _tDir, cp = camera.position, gy = ground.position.y, top = gy + TREE_TOP, sn = cover.uSnow.value;
+  const lumOf = (c) => 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b, disp = (l) => Math.pow(Math.min(1, Math.max(0, l)), 1 / 2.2);
+  const flash = wx.flash * 0.5, exp = renderer.toneMappingExposure;
+  const tG = d.y < -1e-4 ? Math.max(0.1, cp.y - gy) / -d.y : Infinity; // 落地距离
+  const a = d.x * d.x + d.z * d.z, b = cp.x * d.x + cp.z * d.z, c = cp.x * cp.x + cp.z * cp.z - TREE_RING * TREE_RING;
+  let tT = Infinity; // 撞上树林的距离
+  const disc = b * b - a * c, sq = Math.sqrt(Math.max(0, disc)), under = cp.y < top, FOREST = 18; // 在林子里（开场贴路飞）：路上前方通透、两边是树，约 18m 算撞上树（10m 时浓雾里估太暗：实测前方全是雾、很亮）
+  const cross = a > 1e-6 && disc > 0 && (c < 0 || b < 0); // 视线穿过空地（在空地里，或在圈外朝空地看）
+  const tOut = cross ? (-b + sq) / a : Infinity; // 从空地对面那一侧出去的那一刻
+  if (!under) { // 树梢上方（开场高空、拉高俯看）：往下落到树梢高度时在林圈外 = 撞上树冠；落进空地再看对面那一侧
+    const tc = d.y < 0 ? (cp.y - top) / -d.y : Infinity, x = cp.x + d.x * tc, z = cp.z + d.z * tc;
+    tT = tc === Infinity ? Infinity : x * x + z * z >= TREE_RING * TREE_RING ? tc : tOut;
+  } else if (c >= 0 && (!cross || (-b - sq) / a > FOREST)) tT = FOREST; // 在林子里、树梢下面，空地还远 / 根本不朝空地
+  else if (cross && cp.y + d.y * tOut < top) tT = tOut; // 在空地里（或林边朝空地看）：对面那圈树；出圈时已高过树梢 = 天空
+  let obj, t;
+  if (tT < tG) { obj = 0.03 + 0.25 * sn; t = tT; } // 树冠 / 树干（积雪时偏亮）
+  else if (tG < Infinity) { // 落在院子空地上（天光照亮，积雪更亮）还是小屋上（暗）
+    const hx = cp.x + d.x * tG, hz = cp.z + d.z * tG, yard = Math.abs(hx) > 3.6 || Math.abs(hz) > 3.6;
+    obj = lumOf(skyU.uHor.value) * (yard ? 0.1 + 0.7 * sn : 0.03 + 0.25 * sn); t = tG;
+  } else { // 天空（天穹着色器同样做了色调映射 + sRGB，这里只乘曝光、转显示亮度）
+    _tCol.lerpColors(skyU.uHor.value, skyU.uTop.value, Math.pow(Math.max(0, d.y), 0.55));
+    return disp(lumOf(_tCol) * exp + flash);
+  }
+  camera.getWorldDirection(_tCol2); // 雾按视深（沿相机朝向的距离）算，同 three.js 的 vFogDepth
+  const f = smoothstep(scene.fog.near, scene.fog.far, t * d.dot(_tCol2));
+  return THREE.MathUtils.lerp(disp(obj * exp + flash), disp(lumOf(scene.fog.color)), f);
+}
 function updateTitleColor() {
   if (++frameNo % 8) return;
   let lum = 0;
-  if (!inside) {
-    const r = titleEl.getBoundingClientRect(), ny = 1 - 2 * (r.top + r.height * 0.5) / innerHeight;
-    _tDir.set(0, ny, 0.5).unproject(camera).sub(camera.position).normalize();
-    if (_tDir.y > 0.02) _tCol.lerpColors(skyU.uHor.value, skyU.uTop.value, Math.pow(_tDir.y, 0.55));
-    else { // 朝地：落点越远雾越浓，按雾的远近把暗地面（树林）混向雾色
-      const D = Math.max(0.1, camera.position.y - ground.position.y) / Math.max(0.01, -_tDir.y);
-      _tCol.setScalar(0.03).lerp(scene.fog.color, smoothstep(scene.fog.near, scene.fog.far, D));
-    }
-    _tCol.multiplyScalar(renderer.toneMappingExposure);
-    lum = Math.min(1, 0.2126 * _tCol.r + 0.7152 * _tCol.g + 0.0722 * _tCol.b + wx.flash * 0.5);
-    lum = Math.pow(lum, 1 / 2.2); // 线性 → 显示亮度
+  if (!inside) { // 标题身后常常一半天、一半树冠：沿标题宽度打 5 条视线取平均
+    const r = titleEl.querySelector('h1').getBoundingClientRect(), ny = 1 - 2 * (r.top + r.height * 0.5) / innerHeight;
+    for (let k = 0; k < 5; k++) lum += bgLum(2 * (r.left + r.width * (0.1 + 0.2 * k)) / innerWidth - 1, ny) / 5;
   }
   const goal = 1 - smoothstep(0.4, 0.6, lum); // 背景暗 → 1（白字）
   if (!Number.isFinite(goal)) return; // 加载中相机还没就位（视线方向为 0 → NaN）：跳过，否则 titleT 一旦变 NaN 就再也不变色
   titleT += (goal - titleT) * 0.35;
-  titleEl.style.setProperty('--t', titleT.toFixed(3));
+  titleEl.style.setProperty('--t', titleT.toFixed(3)); curEl.style.setProperty('--t', titleT.toFixed(3)); // 鼠标同标题颜色
 }
+window.cabinTitle = { bgLum, get t() { return titleT; } }; // 调试：无头测试比较估计亮度和实测
 
 const UP = new THREE.Vector3(0, 1, 0);
 // 屋外仰望天空：相机最低离地 40cm。往下拖到贴地后 OrbitControls 的「虚拟位置」继续往地下转，
@@ -3734,7 +4888,7 @@ renderer.setAnimationLoop(() => {
     if (fly.toFov !== undefined) { camera.fov = fly.fromFov + (fly.toFov - fly.fromFov) * e; camera.updateProjectionMatrix(); }
     if (fly.t === 1) {
       if (fly.out) { controls.minDistance = fly.minD ?? 1; controls.maxDistance = 220; }
-      fly = null; if (inside) { lookAround(); placeRooms('side'); } // 进屋飞到了：房间列表在右侧淡入
+      const came = fly.in; fly = null; if (inside) { lookAround(); placeRooms('side'); if (came) showNote({ t: '', zt: '', text: 'Have a look around inside.', ztext: '往室内看看吧。' }); } // 进屋飞到了：房间列表在右侧淡入，下方一句提示
     }
   }
   updateHover();
@@ -3762,7 +4916,10 @@ renderer.setAnimationLoop(() => {
   updatePrecip(dt);
   updateRoofWeather(dt);
   // 地面/落叶带/路面只差几毫米，near 太小远处深度精度不够会闪：按离地高度放大 near（贴路飞时约 0.5m）
-  if (veilEl.style.opacity !== '0' && !(fly && fly.veil)) veilEl.style.opacity = 0; // 出屋飞行被打断/结束：撤掉黑幕
+  if (veilEl.style.opacity !== '0' && !(fly && fly.veil) && !d2.veil) veilEl.style.opacity = 0;
+  if (game.day >= 3) updateDay3(dt); // 走到老云杉、✕ 那间屋（摇椅、门廊、院子）
+  mmTick(dt); // 迷雾小地图
+  if (game.day >= 2) updateDay2(dt); // 雾、走远了绕回门口、傍晚的灯 // 出屋飞行被打断/结束：撤掉黑幕
   // 屋里离东西很近，用最小 near；出屋飞行中 inside 已是 null，但相机还在屋里/门口（原来按离地高度算 near，阁楼约 0.65m，把近处的墙和家具切开）
   // 进屋飞行中 inside 已经设了，但相机还在屋外高处：离小屋远时照常按高度算，靠近（含屋顶上方）才切 0.05
   const cp = camera.position, nearCab = fly && (fly.out || fly.in) && Math.abs(cp.x) < 3.2 && Math.abs(cp.z) < 3.2 && cp.y < (fly.in ? 5.6 : 4.8);
