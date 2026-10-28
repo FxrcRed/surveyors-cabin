@@ -14,6 +14,8 @@
 <script>/* 调试：网址带 ?mc 时用 MessageChannel 代替 rAF（浏览器面板隐藏时 rAF 不跑） */ if (/[?&]mc\b/.test(location.search)) window.requestAnimationFrame = (cb) => { const c = new MessageChannel(); c.port1.onmessage = () => cb(performance.now()); c.port2.postMessage(0); };</script>
 <link rel="stylesheet" href="fonts/fonts.css">
 <style>
+:root { --fs-xs: 13px; --fs-s: 15px; --fs-m: 17px; --fs-l: 22px; --fs-xl: 30px; } /* 字号只用这 5 档（2026-10-28 统一并放大一档） */
+
   /* 字体只有两种：英文 IM Fell English、中文汇文明朝体（fonts/zh.woff2）。--serif 里中文排第二：IM Fell 没有中文字形，界面上任何中文都会落到汇文明朝，不会掉进系统宋体 / 黑体；中文不用斜体（汇文没有斜体，浏览器会硬拉斜） */
   :root { --ink: #2b2620; --paper: #f4efe6; --accent: #8a5a2b; --zh: "Huiwen Mincho", "Songti SC", "Noto Serif SC", "Source Han Serif SC", "SimSun", serif;
     --serif: "IM Fell English", "Huiwen Mincho", Georgia, "Times New Roman", "Songti SC", "SimSun", serif; }
@@ -21,22 +23,23 @@
   #app { position: fixed; inset: 0; }
   #loader { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; background: var(--paper); transition: opacity .6s; z-index: 10; }
   #loader.done { opacity: 0; pointer-events: none; }
+  #loader #startBtn { font: inherit; font-size: var(--fs-m); letter-spacing: 2px; color: inherit; background: none; box-shadow: none; border: 1px solid currentColor; border-radius: 6px; padding: 6px 26px; cursor: pointer; }
   #bar { width: min(320px, 70vw); height: 6px; background: #e2d8c8; border-radius: 3px; overflow: hidden; }
   #bar > div { height: 100%; width: 0; background: var(--accent); transition: width .2s; }
   /* 标题居中；颜色由脚本按身后画面亮度在黑白之间渐变（--t 0 黑 → 1 白），加一点反色阴影兜底 */
   #title { --t: 0; position: fixed; top: 18px; left: 16px; right: 16px; z-index: 5; pointer-events: none; text-align: center;
     color: rgb(calc(30 + 220 * var(--t)), calc(26 + 220 * var(--t)), calc(22 + 220 * var(--t)));
     text-shadow: 0 0 6px rgba(calc(255 - 255 * var(--t)), calc(255 - 255 * var(--t)), calc(255 - 255 * var(--t)), .35); }
-  #title h1 { margin: 0; font-family: "IM Fell English SC", "IM Fell English", Georgia, serif; font-weight: normal; font-size: 30px; letter-spacing: 3px; }
+  #title h1 { margin: 0; font-family: "IM Fell English SC", "IM Fell English", Georgia, serif; font-weight: normal; font-size: var(--fs-xl); letter-spacing: 3px; }
   /* 标题中英都显示：英文主标题，下面一行中文（不随语言切换） */
   html #title h1 .en, html #title h1 .zh { display: block !important; }
-  #title h1 .zh { margin-top: 2px; font-family: var(--zh); font-size: 16px; letter-spacing: 6px; }
-  #by { position: fixed; right: 12px; bottom: 8px; z-index: 5; font-family: "IM Fell English SC", "IM Fell English", Georgia, serif; font-size: 11px; letter-spacing: 1px; color: #fff; opacity: .6; text-shadow: 0 1px 3px rgba(0,0,0,.7); pointer-events: none; }
+  #title h1 .zh { margin-top: 2px; font-family: var(--zh); font-size: var(--fs-m); letter-spacing: 6px; }
+  #by { position: fixed; right: 12px; bottom: 8px; z-index: 5; font-family: "IM Fell English SC", "IM Fell English", Georgia, serif; font-size: var(--fs-xs); letter-spacing: 1px; color: #fff; opacity: .6; text-shadow: 0 1px 3px rgba(0,0,0,.7); pointer-events: none; }
   button, #card, #tip { letter-spacing: .3px; }
-  button { font: inherit; font-size: 13px; padding: 8px 14px; border: 0; border-radius: 6px; background: rgba(255,255,255,.85); color: var(--ink); cursor: pointer; box-shadow: 0 1px 4px rgba(0,0,0,.15); }
+  button { font: inherit; font-size: var(--fs-s); padding: 8px 14px; border: 0; border-radius: 6px; background: rgba(255,255,255,.85); color: var(--ink); cursor: pointer; box-shadow: 0 1px 4px rgba(0,0,0,.15); }
   button:hover { background: #fff; }
   /* 悬停物件名：不要底框，白字 + 深色描边阴影（同字幕），亮暗背景都看得清 */
-  #tip { position: fixed; z-index: 6; pointer-events: none; padding: 0; font-size: 14px; line-height: 1.4; color: #f4efe6; white-space: nowrap; transform: translate(20px, 16px);
+  #tip { position: fixed; z-index: 6; pointer-events: none; padding: 0; font-size: var(--fs-s); line-height: 1.4; color: #f4efe6; white-space: nowrap; transform: translate(20px, 16px);
     text-shadow: 0 0 2px rgba(0,0,0,.9), 0 1px 3px rgba(0,0,0,.85), 0 0 10px rgba(0,0,0,.55); }
   html[data-lang="zh"] #tip, html[data-lang="zh"] #subs, html[data-lang="zh"] #note p { letter-spacing: .5px; }
   /* 自定义鼠标：小圆点 + 细环，颜色同标题（--t 由 updateTitleColor 一起写，0 黑 → 1 白，外圈反色描边兜底）；
@@ -57,15 +60,16 @@
     color: #f4efe6; text-shadow: 0 1px 3px rgba(0,0,0,.75), 0 0 8px rgba(0,0,0,.45); }
   /* 卡片排版：英文只用 IM Fell English 一种（不用小型大写、不用斜体）、中文只用汇文明朝体；四级：标题 21 / 区域 12 / 正文 13.5 / 中文 13，段间距统一 10px，中文译文前一条短细线 */
   #card { padding: 12px 0 14px; line-height: 1.65; }
-  #card h2 { margin: 0 28px 0 0; font-weight: normal; font-size: 21px; line-height: 1.25; letter-spacing: .3px; }
-  #card .area { display: block; margin-top: 3px; font-size: 12px; letter-spacing: .6px; opacity: .72; }
+  #card h2 { margin: 0 28px 0 0; font-weight: normal; font-size: var(--fs-l); line-height: 1.25; letter-spacing: .3px; }
+  #card .area { display: block; margin-top: 3px; font-size: var(--fs-xs); letter-spacing: .6px; opacity: .72; }
   #card .area .zh { margin-left: 2px; letter-spacing: 1px; }
-  #card p { margin: 0 0 10px; font-size: 13.5px; }
+  #card p { margin: 0 0 10px; font-size: var(--fs-s); }
   #card p.lead { margin-top: 12px; }
   #card p.story { margin-top: 0; opacity: .9; }
   #card p.story:empty, #card p.zh:empty { display: none; }
   #card p.story, #card p.zh { white-space: pre-line; }
-  #card p.zh { margin-top: 14px; padding-top: 12px; border-top: 1px solid rgba(244,239,230,.22); font-size: 13px; line-height: 1.9; opacity: .92; }
+  html[data-lang] #card.paper p.story, html[data-lang] #card.paper p.zh { font-size: var(--fs-m); line-height: 1.9; opacity: 1; } /* 走近看展开的纸上文字 */
+  #card p.zh { margin-top: 14px; padding-top: 12px; border-top: 1px solid rgba(244,239,230,.22); font-size: var(--fs-s); line-height: 1.9; opacity: .92; }
   #card .row { margin-top: 14px; }
   #card { max-height: calc(100vh - 220px); overflow-y: auto; scrollbar-width: none; } /* 不显示滚动条（用户嫌难看），滚轮 / 触摸照样能滚；没到底时底部渐隐提示还有内容 */
   #card::-webkit-scrollbar { display: none; }
@@ -73,50 +77,52 @@
   /* 中文原文接在英文下面：IM Fell 没有中文字形，用汇文明朝体（子集 fonts/zh.woff2），没加载到退回系统宋体 */
   .zh, .cn, #card p.zh, #roomNote .zh { font-family: var(--zh); font-style: normal; letter-spacing: .5px; }
   html[data-lang="zh"] em, .zh em { font-style: normal; } /* 中文里的强调只变色不斜 */
-  #roomNote .zh { display: block; margin-top: 2px; font-size: 13px; opacity: .9; }
-  #journal div.zh { margin-top: 72px; padding-top: 40px; border-top: 1px solid rgba(239,231,216,.25); font-size: 15.5px; line-height: 1.9; }
+  #roomNote .zh { display: block; margin-top: 2px; font-size: var(--fs-s); opacity: .9; }
+  #journal div.zh { margin-top: 72px; padding-top: 40px; border-top: 1px solid rgba(239,231,216,.25); font-size: var(--fs-m); line-height: 1.9; }
   #journal div.zh h2, #journal div.zh h3, #journal div.zh h4 { font-family: inherit; letter-spacing: 3px; }
   #journal div.zh .coda, #journal div.zh .sub { font-style: normal; }
   /* 文字提示统一区（2026-10-22 第 5 轮）：全部放画面中下方「进屋」上面同一块，底边对齐、多行往上长；同一时间只亮一条主提示：
      开场字幕 #subs > 物件说明 #note / 房间开场白·书记员的话 #roomNote（这两个新的顶掉旧的）> 任务 #quest（常驻，有别的提示时先让开，提示淡掉再回来）。
      进度 #prog 是下面一行小字。淡出快（.35s）、淡入等淡出做完再开始，同一位置不叠字 */
+  #roomNote.on, #subs.on, #note.on { pointer-events: auto; cursor: pointer; } /* 显示时点一下跳过 */
   #roomNote, #quest, #subs, #note { position: fixed; bottom: 150px; left: 50%; transform: translateX(-50%); z-index: 6; width: min(560px, calc(100vw - 32px)); pointer-events: none; text-align: center;
-    font-size: 16px; line-height: 1.7; color: #f4efe6; text-shadow: 0 1px 3px rgba(0,0,0,.85), 0 0 12px rgba(0,0,0,.6); opacity: 0; transition: opacity .35s; }
+    font-size: var(--fs-m); line-height: 1.7; color: #f4efe6; text-shadow: 0 1px 3px rgba(0,0,0,.85), 0 0 12px rgba(0,0,0,.6); opacity: 0; transition: opacity .35s; }
   #roomNote.on, #quest.on, #subs.on, #note.on { opacity: 1; transition: opacity .9s .35s; }
   body:has(#subs.on) :is(#note, #roomNote, #quest, #prog), body:has(#note.on, #roomNote.on) #quest, body:has(#fpHud:not([hidden]):not(.live)) :is(#quest, #note, #roomNote, #prog) { opacity: 0; transition: opacity .35s; }
-  #roomNote .zh, #quest .zh { display: block; margin-top: 2px; font-size: 13px; }
-  #quest.end { font-size: 22px; letter-spacing: 2px; }
-  #quest.end .zh { font-size: 16px; }
+  #roomNote .zh, #quest .zh { display: block; margin-top: 2px; font-size: var(--fs-s); }
+  #quest.end { font-size: var(--fs-l); letter-spacing: 2px; }
+  #quest.end .zh { font-size: var(--fs-m); }
   #prog { position: fixed; bottom: 124px; left: 50%; transform: translateX(-50%); z-index: 6; width: max-content; max-width: calc(100vw - 32px); pointer-events: none; text-align: center;
-    font-size: 12px; line-height: 1.5; letter-spacing: .6px; color: rgba(244,239,230,.75); text-shadow: 0 1px 3px rgba(0,0,0,.75), 0 0 8px rgba(0,0,0,.45); transition: opacity .35s; }
+    font-size: var(--fs-xs); line-height: 1.5; letter-spacing: .6px; color: rgba(244,239,230,.75); text-shadow: 0 1px 3px rgba(0,0,0,.75), 0 0 8px rgba(0,0,0,.45); transition: opacity .35s; }
   #prog:empty { display: none; }
   #subs, #opening p { white-space: pre-line; text-wrap: balance; } /* 字幕里的 \n 换行；自动折行时各行长度均匀，不剩一个字孤零零一行 */
-  #note .t { display: block; margin-bottom: 2px; font-style: normal; font-size: 18px; letter-spacing: 1px; }
+  #note .t { display: block; margin-bottom: 2px; font-style: normal; font-size: var(--fs-l); letter-spacing: 1px; }
   html[data-lang="zh"] #note .t { letter-spacing: 3px; }
   #note p { margin: 0; white-space: pre-line; }
   #opening { position: fixed; inset: 0; z-index: 30; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(8,10,8,.55);
     color: #f4efe6; text-shadow: 0 1px 3px rgba(0,0,0,.8); opacity: 0; transition: opacity .6s; }
   #opening[hidden] { display: none; }
   #opening.on { opacity: 1; }
-  #opening .box { width: min(520px, 100%); text-align: center; font-size: 16px; line-height: 1.7; }
+  #opening .box { width: min(520px, 100%); text-align: center; font-size: var(--fs-m); line-height: 1.7; }
   #opening p { margin: 0 0 10px; }
-  #opening button { margin-top: 12px; font: inherit; font-size: 13px; color: inherit; text-shadow: inherit; background: none; border: 1px solid rgba(244,239,230,.45); border-radius: 6px; padding: 5px 14px; cursor: pointer; }
+  #opening button { margin-top: 12px; font: inherit; font-size: var(--fs-s); color: inherit; text-shadow: inherit; background: none; border: 1px solid rgba(244,239,230,.45); border-radius: 6px; padding: 5px 14px; cursor: pointer; }
   #opening button:hover { background: rgba(255,255,255,.12); }
   /* 中英切换：只显示一种；中文版里原来当「下一行小字」的 .zh 改成主文字的大小 */
   html[data-lang="en"] .zh { display: none !important; }
   html[data-lang="zh"] .en { display: none !important; }
   html[data-lang="zh"] #quest .zh { margin-top: 0; font-size: inherit; }
-  html[data-lang="zh"] #quest.end .zh { font-size: 22px; letter-spacing: 4px; }
+  html[data-lang="zh"] #quest.end .zh { font-size: var(--fs-l); letter-spacing: 4px; }
   html[data-lang="zh"] #roomNote .zh { margin-top: 0; font-size: inherit; opacity: 1; }
-  html[data-lang="zh"] #rooms button .zh { font-size: 15px; letter-spacing: 2px; opacity: 1; }
-  html[data-lang="zh"] #fpHud .help .zh { margin-top: 0; font-size: 12.5px; opacity: 1; }
-  html[data-lang="zh"] #card p.zh { margin-top: 0; padding-top: 0; border-top: 0; font-size: 13.5px; }
+  html[data-lang="zh"] #rooms button .zh { font-size: var(--fs-m); letter-spacing: 2px; opacity: 1; }
+  html[data-lang="zh"] #fpHud .help .zh { margin-top: 0; font-size: var(--fs-xs); opacity: 1; }
+  html[data-lang="zh"] #card p.zh { margin-top: 0; padding-top: 0; border-top: 0; font-size: var(--fs-s); }
   html[data-lang="zh"] #card h2 .cn { letter-spacing: 2px; }
   html[data-lang="zh"] #journal .page > :not(.zh):not(.jreset) { display: none; }
   html[data-lang="zh"] #journal div.zh { margin-top: 0; padding-top: 0; border-top: 0; }
   /* 中英切换：右下角署名上方，字体字号同署名 */
-  #langBtn { position: fixed; right: 7px; bottom: 26px; z-index: 8; font: inherit; font-family: "IM Fell English SC", "IM Fell English", Georgia, serif; font-size: 11px; letter-spacing: 1px; color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,.7);
+  #langBtn { position: fixed; right: 7px; bottom: 26px; z-index: 8; font: inherit; font-family: "IM Fell English SC", "IM Fell English", Georgia, serif; font-size: var(--fs-xs); letter-spacing: 1px; color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,.7);
     background: none; border: 0; border-radius: 4px; padding: 2px 5px; cursor: pointer; }
+  #viewBtn { position: fixed; right: 7px; top: 10px; z-index: 8; font: inherit; font-size: var(--fs-xs); letter-spacing: .5px; color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,.7); background: none; border: 0; padding: 2px 5px; cursor: pointer; opacity: .75; }
   #langBtn:hover { background: rgba(255,255,255,.12); }
   #langBtn { opacity: .6; } #langBtn:hover { opacity: 1; }
   #langBtn b { font-weight: normal; }
@@ -128,16 +134,16 @@
   /* Journal：整页阅读，序章 / 测绘员 / 各房间 / 终章 */
   #journal { position: fixed; inset: 0; z-index: 20; background: rgba(22,18,14,.86); overflow-y: auto; color: #efe7d8; -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px); }
   #journal[hidden] { display: none; }
-  #journal .page { max-width: 600px; margin: 0 auto; padding: 56px 16px 80px; font-size: 16px; line-height: 1.75; }
-  #journal h2 { font-family: "IM Fell English SC", "IM Fell English", Georgia, serif; font-weight: normal; font-size: 30px; letter-spacing: 3px; text-align: center; margin: 0 0 4px; }
+  #journal .page { max-width: 600px; margin: 0 auto; padding: 56px 16px 80px; font-size: var(--fs-m); line-height: 1.75; }
+  #journal h2 { font-family: "IM Fell English SC", "IM Fell English", Georgia, serif; font-weight: normal; font-size: var(--fs-xl); letter-spacing: 3px; text-align: center; margin: 0 0 4px; }
   #journal .sub { text-align: center; opacity: .7; margin: 0 0 36px; }
-  #journal h3 { font-family: "IM Fell English SC", "IM Fell English", Georgia, serif; font-weight: normal; font-size: 20px; letter-spacing: 2px; text-align: center; margin: 44px 0 12px; }
-  #journal h3::after { content: "❦"; display: block; font-size: 14px; opacity: .55; margin-top: 4px; }
-  #journal h4 { font-family: "IM Fell English SC", "IM Fell English", Georgia, serif; font-weight: normal; font-size: 16px; letter-spacing: 1.5px; margin: 22px 0 4px; }
+  #journal h3 { font-family: "IM Fell English SC", "IM Fell English", Georgia, serif; font-weight: normal; font-size: var(--fs-l); letter-spacing: 2px; text-align: center; margin: 44px 0 12px; }
+  #journal h3::after { content: "❦"; display: block; font-size: var(--fs-s); opacity: .55; margin-top: 4px; }
+  #journal h4 { font-family: "IM Fell English SC", "IM Fell English", Georgia, serif; font-weight: normal; font-size: var(--fs-m); letter-spacing: 1.5px; margin: 22px 0 4px; }
   #journal p { margin: 0 0 14px; }
   #journal em.k { font-style: italic; color: #e8c89a; }
   #journal .coda { opacity: .85; }
-  #journal .x { position: fixed; top: 14px; right: 18px; background: none; box-shadow: none; color: #efe7d8; font-size: 26px; padding: 0 8px; }
+  #journal .x { position: fixed; top: 14px; right: 18px; background: none; box-shadow: none; color: #efe7d8; font-size: var(--fs-xl); padding: 0 8px; }
   #journal .x:hover { background: rgba(255,255,255,.1); }
   /* 2026-10-22 遗稿：× 常驻——#journal 自己带 backdrop-filter 会成为 fixed 子元素的包含块，× 跟着内容滚走；模糊挪到 ::before。排版收紧（副标题删了） */
   #journal { -webkit-backdrop-filter: none; backdrop-filter: none; }
@@ -154,37 +160,38 @@
     color: #f4efe6; text-shadow: 0 1px 3px rgba(0,0,0,.75), 0 0 8px rgba(0,0,0,.45); }
   #dlg[hidden] { display: none; }
   #dlg .box { width: min(440px, 100%); padding: 12px 0 14px; line-height: 1.65; border-top: 1px solid rgba(244,239,230,.45); border-bottom: 1px solid rgba(244,239,230,.45); }
-  #dlg h2 { margin: 0; font-weight: normal; font-size: 21px; line-height: 1.25; letter-spacing: .3px; }
+  #dlg h2 { margin: 0; font-weight: normal; font-size: var(--fs-l); line-height: 1.25; letter-spacing: .3px; }
   html[data-lang="zh"] #dlg h2 { letter-spacing: 2px; }
-  #dlg p { margin: 12px 0 0; font-size: 13.5px; white-space: pre-line; }
+  #dlg p { margin: 12px 0 0; font-size: var(--fs-s); white-space: pre-line; }
   #mmap { position: fixed; left: 16px; bottom: 56px; z-index: 6; width: 72px; height: auto; pointer-events: none; border-radius: 4px; opacity: .88; box-shadow: 0 1px 4px rgba(0,0,0,.35); } /* 迷雾小地图 */
   @media (max-width: 600px) { #mmap { left: 8px; bottom: 52px; width: 52px; } }
   #dlg .row { display: flex; gap: 8px; margin-top: 14px; }
-  #dlg button { font: inherit; font-size: 12px; color: inherit; text-shadow: inherit; background: none; box-shadow: none; border: 1px solid rgba(244,239,230,.45); border-radius: 6px; padding: 5px 10px; cursor: pointer; }
+  #dlg button { font: inherit; font-size: var(--fs-xs); color: inherit; text-shadow: inherit; background: none; box-shadow: none; border: 1px solid rgba(244,239,230,.45); border-radius: 6px; padding: 5px 10px; cursor: pointer; }
   #dlg button:hover { background: rgba(255,255,255,.12); }
-  #sky #backBtn { font-size: 15px; letter-spacing: 1px; border: 0; }
-  #skyL #jBtn, #skyL #skyBtn { border: 0; font-size: 15px; letter-spacing: 1px; }
+  #sky #backBtn { font-size: var(--fs-m); letter-spacing: 1px; border: 0; }
+  #skyL #jBtn, #skyL #skyBtn { border: 0; font-size: var(--fs-m); letter-spacing: 1px; }
   #card .row { display: flex; gap: 8px; }
   #fpHud { position: fixed; inset: 0; z-index: 5; pointer-events: none; }
   #fpHud .dot { position: absolute; left: 50%; top: 50%; width: 6px; height: 6px; margin: -3px 0 0 -3px; border-radius: 50%; background: rgba(244,239,230,.85); box-shadow: 0 0 0 1px rgba(43,38,32,.5); }
-  #fpHud .help { position: absolute; left: 50%; bottom: 150px; transform: translateX(-50%); padding: 6px 12px; border-radius: 6px; background: rgba(43,38,32,.6); color: #f4efe6; font-size: 12.5px; text-align: center; white-space: nowrap; transition: opacity .6s; }
-  #fpHud .help .zh { display: block; margin-top: 2px; font-size: 12px; opacity: .9; }
+  #fpHud .help { position: absolute; left: 50%; bottom: 150px; transform: translateX(-50%); padding: 6px 12px; border-radius: 6px; background: rgba(43,38,32,.6); color: #f4efe6; font-size: var(--fs-xs); text-align: center; white-space: nowrap; transition: opacity .6s; }
+  #fpHud .help .zh { display: block; margin-top: 2px; font-size: var(--fs-xs); opacity: .9; }
   #fpHud.live .help { opacity: 0; }
-  #fpHud .hint { position: absolute; left: 50%; top: calc(50% + 48px); transform: translateX(-50%); font-size: 12px; color: #f4efe6; text-shadow: 0 1px 2px rgba(0,0,0,.7); white-space: nowrap; }
+  #fpHud .hint { position: absolute; left: 50%; top: calc(50% + 48px); transform: translateX(-50%); font-size: var(--fs-xs); color: #f4efe6; text-shadow: 0 1px 2px rgba(0,0,0,.7); white-space: nowrap; }
   #fpHud:not(.live) .dot { opacity: 0; }
   #fpHud .hint .key { display: inline-block; min-width: 1.4em; padding: 0 .35em; margin-right: .15em; border: 1px solid rgba(244,239,230,.7); border-radius: 4px; text-align: center; font-weight: normal; }
-  #card button { font: inherit; font-size: 12px; color: inherit; text-shadow: inherit; background: none; box-shadow: none; border: 1px solid rgba(244,239,230,.45); border-radius: 6px; padding: 5px 10px; }
+  #card button { font: inherit; font-size: var(--fs-xs); color: inherit; text-shadow: inherit; background: none; box-shadow: none; border: 1px solid rgba(244,239,230,.45); border-radius: 6px; padding: 5px 10px; }
   #card button:hover { background: rgba(255,255,255,.12); }
-  #card .x { position: absolute; top: 6px; right: 0; padding: 0 6px; border: 0; font-size: 18px; opacity: .8; }
+  #card .x { position: absolute; top: 6px; right: 0; padding: 0 6px; border: 0; font-size: var(--fs-l); opacity: .8; }
   /* 时间面板：底部居中，无底框，白字 + 深色阴影，在亮暗画面上都看得清；面板往上展开 */
   #sky { position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); z-index: 7; display: flex; flex-direction: column; align-items: center; gap: 6px;
     color: #f4efe6; text-shadow: 0 1px 3px rgba(0,0,0,.75), 0 0 8px rgba(0,0,0,.45); }
-  #sky button, #skyL button, #skyL select { font: inherit; font-size: 12px; color: inherit; text-shadow: inherit; background: none; box-shadow: none; border: 1px solid rgba(244,239,230,.45); border-radius: 6px; padding: 5px 8px; }
+  #sky button, #skyL button, #skyL select { font: inherit; font-size: var(--fs-xs); color: inherit; text-shadow: inherit; background: none; box-shadow: none; border: 1px solid rgba(244,239,230,.45); border-radius: 6px; padding: 5px 8px; }
   #sky button:hover, #skyL button:hover { background: rgba(255,255,255,.12); }
   /* 进屋 / 出门：大号、无框、悬停不加底框；屋外（.glow）只用和标题同款的淡晕影（0 0 6px 反色 .35），不要底部暖光；开场字幕播完前和遗稿一起完全隐藏（.wait） */
-  #sky #enter { position: relative; font-size: 26px; letter-spacing: 4px; padding: 8px 30px; border: 0; transition: opacity .6s; }
+  #sky #enter { position: relative; font-size: var(--fs-xl); letter-spacing: 4px; padding: 8px 30px; border: 0; transition: opacity .6s; }
   #sky #enter:hover, #sky #walkBtn:hover { background: none; }
-  #sky #walkBtn { font-size: 18px; letter-spacing: 3px; padding: 4px 20px; border: 0; }
+  #sky #enter.nogo { display: none; }
+  #sky #walkBtn { font-size: var(--fs-l); letter-spacing: 3px; padding: 4px 20px; border: 0; }
   #sky #enter.glow { text-shadow: 0 0 6px rgba(0,0,0,.35), 0 1px 3px rgba(0,0,0,.6); }
   #sky .wait, #skyL .wait { visibility: hidden; opacity: 0; pointer-events: none; }
   /* 时间、天气：左下角，面板往上展开 */
@@ -194,8 +201,8 @@
   #rooms { position: fixed; right: 16px; top: 50%; transform: translateY(-50%); z-index: 7; display: flex; flex-direction: column; align-items: flex-end; gap: 6px;
     color: #f4efe6; text-shadow: 0 1px 3px rgba(0,0,0,.75), 0 0 8px rgba(0,0,0,.45); }
   #rooms[hidden] { display: none; }
-  #rooms button { font: inherit; font-size: 15px; letter-spacing: 1px; color: inherit; text-shadow: inherit; background: none; box-shadow: none; border: 0; border-radius: 6px; padding: 3px 8px; text-align: right; opacity: .82; }
-  #rooms button .zh { display: block; font-size: 11px; letter-spacing: 2px; opacity: .8; }
+  #rooms button { font: inherit; font-size: var(--fs-m); letter-spacing: 1px; color: inherit; text-shadow: inherit; background: none; box-shadow: none; border: 0; border-radius: 6px; padding: 3px 8px; text-align: right; opacity: .82; }
+  #rooms button .zh { display: block; font-size: var(--fs-xs); letter-spacing: 2px; opacity: .8; }
   #rooms button { transition: color .2s, opacity .2s, transform .2s ease; transform-origin: right center; }
   #rooms button:hover { background: none; color: #fff; opacity: 1; transform: scale(1.06); } /* 悬停变亮白 + 以右边为原点轻微放大（不往屏幕外挤）、当前房间暖黄，不加底框 / 图标 */
   #rooms button.on, #rooms button.on:hover { color: #e8c89a; opacity: 1; }
@@ -204,12 +211,12 @@
   #rooms.fade { opacity: 0; pointer-events: none; }
   #rooms.bottom { position: static; transform: none; flex-direction: row; flex-wrap: wrap; justify-content: center; align-items: flex-start; gap: 2px 10px; width: min(760px, calc(100vw - 32px)); }
   #rooms.bottom button { text-align: center; transform-origin: center; }
-  #skyPanel { width: min(320px, calc(100vw - 32px)); font-size: 13px; display: flex; flex-direction: column; gap: 10px; }
+  #skyPanel { width: min(320px, calc(100vw - 32px)); font-size: var(--fs-s); display: flex; flex-direction: column; gap: 10px; }
   #skyPanel[hidden] { display: none; }
   #skyPanel label { display: flex; flex-direction: column; gap: 4px; text-align: center; }
   #skyPanel input[type=range] { width: 100%; accent-color: #e8c89a; }
   #skyPresets { display: grid; grid-template-columns: repeat(6, 1fr); gap: 4px; }
-  #skyPresets button { padding: 4px 2px; font-size: 11px; }
+  #skyPresets button { padding: 4px 2px; font-size: var(--fs-xs); }
   #skyPresets button.on { background: rgba(232,200,154,.3); border-color: #e8c89a; }
   #skyPanel .row { display: flex; gap: 6px; }
   #skyPanel select { flex: 1; }
@@ -218,7 +225,7 @@
   #skyL .btns { display: flex; gap: 10px; align-items: baseline; }
   #skyL .btns button { white-space: nowrap; }
   #skyClock { display: inline-block; text-align: right; font-variant-numeric: tabular-nums; }
-  #skyL #wxBtn { border: 0; font-size: 15px; letter-spacing: 1px; }
+  #skyL #wxBtn { border: 0; font-size: var(--fs-m); letter-spacing: 1px; }
   /* 天气图标：抽象细线 SVG（WX_ICON），描边跟文字颜色，阴影用 drop-shadow 补上（SVG 不吃 text-shadow） */
   #wxIco { display: inline-block; width: 1.2em; height: 1.2em; margin-right: .4em; vertical-align: -.25em; }
   #wxIco svg { display: block; width: 100%; height: 100%; fill: none; stroke: currentColor; stroke-width: 1.15; stroke-linecap: round; stroke-linejoin: round;
@@ -228,17 +235,20 @@
   #jBtn .sec { margin-right: .35em; font-family: "IM Fell English", Georgia, serif; }
   #wxPanel { width: min(320px, calc(100vw - 32px)); display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; }
   #wxPanel[hidden] { display: none; }
-  #wxPanel button { padding: 5px 2px; font-size: 11px; }
+  #wxPanel button { padding: 5px 2px; font-size: var(--fs-xs); }
   #wxPanel button.on { background: rgba(232,200,154,.3); border-color: #e8c89a; }
-  @media (max-width: 600px) { #subs, #note, #roomNote, #quest:not(.end) { bottom: 140px; font-size: 14px; } #quest.end, #fpHud .help { bottom: 140px; } #fpHud .help { width: calc(100vw - 32px); box-sizing: border-box; white-space: normal; } #prog { bottom: 116px; } #opening .box { font-size: 14px; } }
+  @media (max-width: 600px) { #subs, #note, #roomNote, #quest:not(.end) { bottom: 140px; font-size: var(--fs-s); } #quest.end, #fpHud .help { bottom: 140px; } #fpHud .help { width: calc(100vw - 32px); box-sizing: border-box; white-space: normal; } #prog { bottom: 116px; } #opening .box { font-size: var(--fs-s); } }
   @media (max-width: 600px) { body:has(#card:not([hidden])) :is(#quest, #prog) { opacity: 0; } }
-  @media (max-width: 600px) { #card { left: 16px; top: 50%; transform: translateY(-50%); width: calc(100vw - 32px); max-height: calc(100vh - 160px); } #rooms { right: 8px; gap: 2px; } #rooms button { font-size: 13px; padding: 2px 6px; } #rooms button .zh { font-size: 10px; } #rooms.bottom { gap: 0 4px; } #skyPresets { grid-template-columns: repeat(3, 1fr); } #skyL .btns { flex-direction: column; align-items: flex-start; gap: 0; } #skyName { display: none; } }
+  @media (max-width: 600px) { #card { left: 16px; top: 50%; transform: translateY(-50%); width: calc(100vw - 32px); max-height: calc(100vh - 160px); } #rooms { right: 8px; gap: 2px; } #rooms button { font-size: var(--fs-s); padding: 2px 6px; } #rooms button .zh { font-size: var(--fs-xs); } #rooms.bottom { gap: 0 4px; } #skyPresets { grid-template-columns: repeat(3, 1fr); } #skyL .btns { flex-direction: column; align-items: flex-start; gap: 0; } #skyName { display: none; } }
 </style>
 </head>
 <body>
 <div id="app"></div>
 <div id="loader"><div><span class="en">The way through the woods is being prepared…</span><span class="zh">林间的路正在铺开……</span></div><div id="bar"><div></div></div><div id="pct">0%</div></div>
+<script>try { const g = /[?&]reset/.test(location.search) ? {} : JSON.parse(localStorage.getItem('cabin.game.v1') || '{}'), t = g.found && g.found.includes('ended') ? null : g.day >= 3 ? ['The third morning. Still the fog has not lifted…', '第三天早上。雾还是没有散……'] : g.day === 2 ? ['The second morning. The fog came down in the night…', '第二天早上。夜里起的雾还没有散……'] : null; // 加载页按存档的天数换字
+  if (t) document.querySelector('#loader > div').innerHTML = `<span class="en">${t[0]}</span><span class="zh">${t[1]}</span>`; } catch (e) { /* 读不到存档就用第 1 天那句 */ }</script>
 <div id="title"><h1><span class="en">The Surveyor's Cabin</span><span class="zh">无名测绘员的遗稿</span></h1></div>
+<button id="viewBtn" hidden></button>
 <button id="langBtn" aria-label="中文 / English"><b class="l-zh">CN</b><b class="l-en">EN</b></button>
 <div id="by">Vibe Coding by Fxrc</div>
 <div id="tip" hidden></div>
@@ -543,7 +553,7 @@ function applySky() {
   }
   // 天黑自动开灯、天亮自动关（只在跨过时切换，用户手动开关的不会被每帧覆盖）
   const dark = h >= 18.8 || h < 6.2;
-  if (sky.dark !== null && dark !== sky.dark) for (const name of Object.keys(LAMPS)) { const t = toggles.get(name); if (t) t.on = dark; }
+  if (sky.dark !== null && dark !== sky.dark) for (const name of Object.keys(LAMPS)) { const t = toggles.get(name); if (t && name !== 'entry_porch_lamp') t.on = dark; } // 门廊灯一直亮（故事：他走时留着灯）
   sky.dark = dark;
 }
 // 屋里的间接光：半球光和环境光（RoomEnvironment）不受阴影遮挡，会穿墙把屋里照亮，夜里关灯后窗户里还发亮。
@@ -1627,6 +1637,7 @@ loader.load('cabin.glb', async (gltf) => {
   setupToggles();
   setupFire();
   for (const n of ['loft_gate', ...Object.keys(DOORS).filter((n) => DOORS[n].closeOnLoad)]) { const d = toggles.get(n); if (d) { d.on = true; d.k = 1; for (const p of d.parts) p(1); } } // 和故事一致：大门保持 Rhino 里敞开的样子、阁楼横杆放下；开着建模的柜门初始关上
+  { const d = toggles.get('entry_porch_lamp'); if (d) d.on = true; } // 开场：门廊灯亮着
   gameInit(); // 游戏第 1 天：冷炉子、炉膛里的信、时刻、Journal（要在 loadPeople 之前：书记员按进度决定站哪）
 
   const box = new THREE.Box3().setFromObject(model);
@@ -1663,8 +1674,9 @@ loader.load('cabin.glb', async (gltf) => {
     prewarm();
     T('prewarm');
     pct.textContent = '100%'; bar.style.width = '100%';
-    document.getElementById('loader').classList.add('done');
-    startIntro(); startOpening(); resumeAsk(); if (!opening) { enterBtn.classList.remove('wait'); $('jBtn').classList.remove('wait'); } // 有开场字幕就等播完再出「进屋」「遗稿」
+    const go = () => { document.getElementById('loader').classList.add('done'); startIntro(); startOpening(); resumeAsk(); if (!opening) { enterBtn.classList.remove('wait'); $('jBtn').classList.remove('wait'); } }; // 有开场字幕就等播完再出「进屋」「遗稿」
+    if (navigator.webdriver) go(); // 无头测试直接进
+    else { const b = document.createElement('button'); b.id = 'startBtn'; b.innerHTML = lbl('Enter', '进入'); b.onclick = go; pct.replaceWith(b); } // 加载完先点「进入」再放开场：浏览器要先有一次点击才让配音出声
   });
 }, (e) => {
   // GitHub Pages 用 gzip 传，e.total 是压缩后大小（约 16.9MB）而 e.loaded 是解压后字节 → 会超 100%；按解压后约 27.3MB 算，并封顶 99%
@@ -1749,6 +1761,61 @@ function aimPlan(a, e, dt) {
   const d = a.d0 + (a.d1 - a.d0) * e;
   controls.target.set(Math.sin(yaw) * Math.cos(pitch), Math.sin(pitch), Math.cos(yaw) * Math.cos(pitch)).multiplyScalar(d).add(camera.position);
 }
+// 屋里换房间的相机路线（2026-10-28 第二版，平面图见 _test/plan_new.png）：节点 = ROOMS 站位 + 三个门洞点，Dijkstra 最短路，直线段 + 0.3m 圆角（第一版 Catmull-Rom 穿一串挨得近的点会冲过头、来回扭）。
+// C 门帘（x 0.64，从 0.85m 挂到 2.1m 整幅挡死，飞近时临时藏起 = 撩开；梯子推到阁楼口时占住过道 z 0.92–1.32，所以走 z 1.5）；
+// S 过道北头（梯子在原处时斜挡在通高厅 ↔ 起居的直线上，先往北走再拐）；U/T 梯口（先在过道里升到 2.6m，再沿栏杆缺口 z 1.15 水平进去，从楼板沿 2.35 和放下的拦杆 2.95 之间穿过，再直起身到阁楼视角；斜着直上会擦楼板沿和梯子滑轨 <5cm）。测试 tools/headless/paths.py
+const CAM_NAV = { C: [0.64, 1.68, 1.5], S: [1.2, 1.68, 0], U: [1.05, 2.6, 1.15], T: [0.45, 2.7, 1.15] };
+const RN = { Entry: 'E', 'Water Closet': 'W', Hall: 'H', Parlour: 'P', 'Kitchen & Dining': 'K', Loft: 'L' };
+for (const r of ROOMS) CAM_NAV[RN[r.name]] = r.pos;
+const CAM_EDGES = [['E', 'W'], ['E', 'C'], ['W', 'C'], ['C', 'H'], ['H', 'S'], ['S', 'P'], ['S', 'K'], ['K', 'P'], ['H', 'U'], ['U', 'T'], ['T', 'L']];
+const camSees = (a, b) => { // a → b 之间没东西挡（门帘、人不算）
+  const d = b.clone().sub(a), L = d.length(); raycaster.set(a, d.normalize()); raycaster.far = L;
+  const h = raycaster.intersectObjects(meshes.filter(isShown), false).find((h) => !/^(entry_noren|person_)/.test(h.object.parent.name)); raycaster.far = Infinity; return !h;
+};
+function camRoute(from, room) { // 当前相机位置 → 房间站位：先找最近的、看得见的节点上路；返回途经点（Vector3），第一个是相机自己
+  const to = RN[room], V = (n) => new THREE.Vector3(...CAM_NAV[n]), adj = {};
+  for (const [a, b] of CAM_EDGES) { const w = V(a).distanceTo(V(b)); (adj[a] ||= []).push([b, w]); (adj[b] ||= []).push([a, w]); }
+  const near = Object.keys(CAM_NAV).sort((a, b) => V(a).distanceTo(from) - V(b).distanceTo(from));
+  const s = near.find((n) => V(n).distanceTo(from) < 0.05 || camSees(from, V(n))) || near[0];
+  const dist = { [s]: V(s).distanceTo(from) }, prev = {}, todo = new Set(Object.keys(CAM_NAV));
+  while (todo.size) {
+    let u = null; for (const n of todo) if (dist[n] !== undefined && (u === null || dist[n] < dist[u])) u = n;
+    if (u === null || u === to) break; todo.delete(u);
+    for (const [m, w] of adj[u] || []) if (dist[u] + w < (dist[m] ?? Infinity)) { dist[m] = dist[u] + w; prev[m] = u; }
+  }
+  const out = []; for (let n = to; n; n = prev[n]) out.unshift(V(n));
+  if (out.length > 1 && camSees(from, out[1]) && from.distanceTo(out[1]) < out[0].distanceTo(out[1])) out.shift(); // 第一个节点在身后、下一个直接看得见：抄近路
+  if (out[0].distanceTo(from) < 0.05) out[0] = from.clone(); else out.unshift(from.clone());
+  return out;
+}
+function routeCurve(pts, r = 0.3) { // 折线拐角切进 r 换成二次贝塞尔圆角；CurvePath 按弧长取点
+  const c = new THREE.CurvePath(); let a = pts[0];
+  for (let i = 1; i < pts.length - 1; i++) {
+    const p = pts[i], q = pts[i + 1], k = Math.min(r, a.distanceTo(p) / 2, p.distanceTo(q) / 2);
+    const p0 = p.clone().lerp(a, k / a.distanceTo(p)), p1 = p.clone().lerp(q, k / p.distanceTo(q));
+    if (a.distanceTo(p0) > 1e-3) c.add(new THREE.LineCurve3(a.clone(), p0));
+    c.add(new THREE.QuadraticBezierCurve3(p0, p.clone(), p1)); a = p1;
+  }
+  c.add(new THREE.LineCurve3(a.clone(), pts[pts.length - 1].clone()));
+  return c;
+}
+window.__camCurve = (a, b) => { const c = routeCurve(camRoute(new THREE.Vector3(...ROOMS.find((r) => r.name === a).pos), b)); return c.getSpacedPoints(Math.max(2, Math.ceil(c.getLength() / 0.05))).map((p) => p.toArray()); }; // 测试用
+// 匀速走、两头 0.25 慢起慢停（梯形速度）
+const routeEase = (t) => { const a = 0.25, v = 1 / (1 - a); return t < a ? v * t * t / (2 * a) : t > 1 - a ? 1 - v * (1 - t) ** 2 / (2 * a) : v * (t - a / 2); };
+// 沿路线飞时的视线：从起点朝向单向、平滑地转到房间朝向，不跟路线转（试过「朝前看、拐角处转、到了再转回房间视角」：起步和到达各要转身 100°+，
+// tools/headless/yawlog.py 实测 11 段合计转角 3117°、来回扭 13 次；单向 1113°、0 次）；限速 150°/s 同 aimPlan
+function aimRoute(a, e, dt) {
+  const p = camera.position;
+  const k = e * e * (3 - 2 * e), yaw = a.y0 + a.dy * k, pitch = a.p0 + (a.p1 - a.p0) * k;
+  const lim = 2.6 * dt;
+  if (a.oy === undefined) { a.oy = yaw; a.op = pitch; }
+  else { a.oy += THREE.MathUtils.clamp(angDiff(a.oy, yaw), -lim, lim); a.op += THREE.MathUtils.clamp(pitch - a.op, -lim, lim); }
+  const d = a.d0 + (a.d1 - a.d0) * e;
+  controls.target.set(Math.sin(a.oy) * Math.cos(a.op), Math.sin(a.op), Math.cos(a.oy) * Math.cos(a.op)).multiplyScalar(d).add(p);
+  const nr = layers.get('entry_noren'); // 门帘：飞到跟前就藏起来（撩开），过去了再放下；飞行被打断时渲染循环里放下
+  if (nr) { const near = e < 1 && Math.abs(p.x - 0.64) < 0.3 && p.z > 0.75 && p.z < 1.75 && p.y < 2.3; if (near && nr.visible) { nr.visible = false; norenOff = nr; } else if (!near && norenOff) { nr.visible = true; norenOff = null; } }
+}
+let norenOff = null;
 let inside = null; // 当前所在的 ROOMS 项，null = 在屋外
 const enterBtn = document.getElementById('enter'), roomsBox = document.getElementById('rooms');
 for (const r of ROOMS) {
@@ -1759,7 +1826,7 @@ for (const r of ROOMS) {
 function goRoom(r) {
   if (!home) return;
   endIntro(true); // 开场还没飞完就点进屋：先结束开场，否则下面的飞行会被开场覆盖
-  inside = r; select(null); endClose(); enterBtn.innerHTML = lbl('Step Outside', '出门'); enterBtn.classList.remove('glow');
+  inside = r; select(null); endClose(); enterBtn.innerHTML = lbl('Step Outside', '出门'); enterBtn.classList.remove('glow'); showQuest(); placeSpots(r);
   if (!game.entered) { game.entered = true; showQuest(); } // 「已找到 n · 还剩 m」进过屋才出现
   if (STOVE_ROOMS.includes(r.name) && !game.stoveSeen) { game.stoveSeen = true; showQuest(); } // 到了看得见炉子的房间才提「先生火」
   clearTimeout(idleTimer); spin = false;
@@ -1790,24 +1857,57 @@ function goRoom(r) {
     fly.v0 = UP.clone().cross(from.clone().sub(fly.fromTgt)).multiplyScalar(sa); fly.w0 = sa; spinK = 0;
     placeRooms(null); // 底部那排先淡出，飞到了再在右侧淡入（渲染循环里飞完时）
   } else {
-    // 屋里换房间：直线过去（穿楼板、隔墙也行，用户要直接），时长按距离和要转的角度定，慢起慢停
-    fly.look = lookPlan(fly.fromPos, fly.fromTgt, toPos, fly.toTgt);
-    fly.dur = Math.max(THREE.MathUtils.clamp(0.8 + camera.position.distanceTo(toPos) * 0.4, 1.2, 2.4), 0.9 + Math.abs(fly.look.dy) * 0.7);
+    // 屋里换房间（2026-10-28 改，原来直线穿墙）：沿门洞节点走最短路，直线 + 圆角（routeCurve），视线只在拐角转、最后一段转向房间视角（aimRoute）
+    const pts = camRoute(camera.position, r.name);
+    if (camera.position.z > 1.75 || r.name === 'Entry') { const dw = toggles.get('door_wood'); if (dw) dw.on = false; } // 从门槛（玄关视角）出发也要开门
+    const L = pts.length > 1 ? routeCurve(pts) : null, len = L ? L.getLength() : 0;
+    if (len > 0.1) { fly.curve = L; fly.route = lookPlan(fly.fromPos, fly.fromTgt, toPos, fly.toTgt); fly.ease = routeEase; fly.dur = THREE.MathUtils.clamp(0.8 + len * 0.8, 1.4, 6); }
+    else { fly.look = lookPlan(fly.fromPos, fly.fromTgt, toPos, fly.toTgt); fly.dur = 0.9 + Math.abs(fly.look.dy) * 0.7; } // 已经站在这间：原地转回视角
   }
   for (const b of roomsBox.children) b.classList.toggle('on', b.dataset.room === r.name);
   showRoomNote(ROOM_NOTES[r.name]);
 }
-// 进房间：提示区（画面中下方）淡入一句开场白，7 秒后淡出；书记员的话、「他什么都没带」也走这里
+// —— 配音（2026-10-28，edge-tts 免费语音，生成脚本 tools/voice/make_voice.py）：voice/manifest.json 记「编号 → 毫秒」，编号 = 英文原句的 FNV-1a ——
+// 配音只有英文（用户定），中文界面也播英文、字幕停到念完；没生成的句子照原来计时。src = 'sub' / 'room' / 'note'，收哪块字幕只停哪块的声音
+const VOICE = { ms: null, a: null, src: '', until: 0, keep: false, wait: null };
+fetch('voice/manifest.json').then((r) => (r.ok ? r.json() : null)).then((m) => { VOICE.ms = m; }).catch(() => { /* 没有配音就全按计时 */ });
+function vkey(t) { let h = 0x811c9dc5; for (let i = 0; i < t.length; i++) { h ^= t.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; } return h.toString(16).padStart(8, '0'); }
+function say(en, src, keep) { // en = 英文原句；返回字幕该停的毫秒数，0 = 没有配音；keep = 剧情台词，别的提示排在它后面
+  stopVoice(); (window.__said ||= new Set()).add(en); // __said：试玩时出现过的句子，生成脚本拿来查漏
+  const ms = en && VOICE.ms && VOICE.ms[vkey(en)];
+  if (!ms) return 0;
+  const a = VOICE.a = new Audio(`voice/${vkey(en)}.mp3`); a.play().catch(() => { VOICE.wait = a; }); // 还没点过页面浏览器不让出声：等第一次点击
+  Object.assign(VOICE, { src, keep: !!keep, dur: ms, until: performance.now() + ms });
+  return ms + 700;
+}
+function stopVoice(src) { if (VOICE.a && (!src || VOICE.src === src)) { VOICE.a.pause(); VOICE.a = null; VOICE.until = 0; } }
+function unlockVoice() { // 浏览器在第一次点击 / 按键前不让出声：这一下把被拦的那句从头放，字幕重新计时；这一下不算跳过（justUnlocked）
+  const a = VOICE.wait; VOICE.wait = null; if (!a || a !== VOICE.a) return;
+  a.currentTime = 0; a.play().catch(() => {}); VOICE.until = performance.now() + VOICE.dur; VOICE.unlockAt = performance.now();
+  const ms = VOICE.dur + 700, hide = (id) => () => $(id).classList.remove('on');
+  if (VOICE.src === 'sub' && opening && !opening.card) { clearTimeout(opening.timer); opening.timer = setTimeout(nextSub, ms); }
+  else if (VOICE.src === 'room') { clearTimeout(noteTimer); noteTimer = setTimeout(hide('roomNote'), ms); }
+  else if (VOICE.src === 'note') { clearTimeout(noteTimer2); noteTimer2 = setTimeout(hide('note'), ms); }
+}
+const justUnlocked = () => performance.now() - (VOICE.unlockAt ?? -1e9) < 100;
+for (const ev of ['pointerdown', 'keydown']) addEventListener(ev, unlockVoice, true);
+// 进房间：提示区（画面中下方）淡入一句开场白，7 秒后（有配音就念完）淡出；书记员的话、「他什么都没带」也走这里
 let noteTimer = 0;
 function showRoomNote(text) {
   const el = $('roomNote'); clearTimeout(noteTimer);
-  if (!text) { el.classList.remove('on'); return; }
+  if (!text) { el.classList.remove('on'); stopVoice('room'); return; }
   if (!$('card').hidden) { noteTimer = setTimeout(() => showRoomNote(text), 500); return; } // 线索卡片开着（如「他什么都没带」跟卡片同时来）：排队，关了再出
+  const now = performance.now(), intro = Object.values(ROOM_NOTES).includes(text);
+  if (VOICE.keep && VOICE.a && now < VOICE.until) { setTimeout(() => showRoomNote(text), VOICE.until - now + 300); return; } // 剧情台词还在念：排在它后面，不截断
   showNote(null); // 提示区同一时间只放一条：顶掉物件说明
   el.innerHTML = lbl(text[0], text[1]);
   el.classList.add('on');
-  noteTimer = setTimeout(() => el.classList.remove('on'), 7000);
+  noteTimer = setTimeout(() => el.classList.remove('on'), say(text[0], 'room', !intro) || 7000);
 }
+// 点字幕跳过：开场字幕直接下一句，提示和物件说明点了就收
+$('subs').onclick = (e) => { e.stopPropagation(); if (opening && !opening.card && !justUnlocked()) { clearTimeout(opening.timer); stopVoice('sub'); nextSub(); } };
+$('roomNote').onclick = (e) => { e.stopPropagation(); showRoomNote(null); };
+$('note').onclick = (e) => { e.stopPropagation(); showNote(null); };
 // Journal：整页阅读序章、测绘员、各房间、终章
 const journal = $('journal');
 $('jBtn').onclick = () => { for (const [q] of PANELS) q.hidden = true; journal.hidden = false; journal.scrollTop = 0; };
@@ -1870,7 +1970,7 @@ function placeRooms(mode) {
 enterBtn.onclick = () => {
   if (!home) return;
   // 屋外点进屋：直接飞到玄关，飞到了右侧再出房间列表（渲染循环里）
-  if (inside) { placeRooms(null); enterBtn.innerHTML = lbl('Enter the Cabin', '进屋'); enterBtn.classList.add('glow'); leaveCabin(); }
+  if (inside) { placeRooms(null); enterBtn.innerHTML = lbl('Enter the Cabin', '进屋'); enterBtn.classList.add('glow'); leaveCabin(); enterBtn.classList.remove('nogo'); }
   else goRoom(ROOMS[0]);
 };
 
@@ -1950,6 +2050,7 @@ const INFO = {
   loft_rug: ['Rug', 'Loft', 'Thicker than the parlour\'s.'],
   loft_hanging_towel: ['Towel', 'Loft', 'Hung on a cord, for drying the hands.'],
   person_man: ['The Inspector', 'Parlour', 'Keeping the stove going, in the hollow of the settee.'],
+  desk_page: ['A Page on the Desk', 'Parlour', ''], // v2 第 1 天：书桌上那页还没写的记录（makePage）
   stove_letter: ['Unburnt Letter', 'Kitchen', ''], // 游戏第 1 天：炉膛灰里的纸片（makeLetter），卡片由 gameSeen 换成信
   person_woman: ['The Clerk', 'Loft', ''], // 区域、说明加载时按她坐哪儿填（PEOPLE 里的 pick）
 };
@@ -2138,6 +2239,8 @@ const LEAD_ZH = {
   'Writing up the day at the desk.': '在书桌前写今天的调查记录。',
   'Looking the house over, room by room.': '一间一间地查看屋子。',
   'In the clerk\'s hand, the ink still wet.': '书记员的笔迹，墨还没干。',
+  'In the clerk\'s hand.': '书记员的笔迹。',
+  'In the clerk\'s hand, the ink still wet. The page from this afternoon is gone.': '书记员的笔迹，墨还没干。下午那页纸不见了。',
 };
 const ROOM_NOTES = {
   'Entry': ['The border where man and forest held their parley: take off the boots, and the wildness stays outside.', '人与森林交涉的边境——脱下靴子，把野性留在门外。'],
@@ -2414,11 +2517,13 @@ function wakePerson(id, act) {
 // 线索：fire 生火（点炉膛柴点着）、letter 炉膛灰里没烧完的信（stove_letter；先生火的话生火时顺手翻出来）、map 墙上地图、drawer 书桌抽屉、log 书架（工作日志前段）、
 // took = coat + boots + lantern 三样都看过（「他什么都没带」）。找齐 DAY1_NEED → startNight；夜里点书桌 / 书记员 → notes1。
 const GAME_KEY = 'cabin.game.v1';
-const DAY1_NEED = ['fire', 'letter', 'map', 'drawer', 'log', 'took'];
+// 改版 v2（2026-10-27）：开头先有书桌上那页「还没写的记录」（page），线索砍到 page / fire / letter / map（地图和抽屉合成一条）；书架日志、「他什么都没带」还在，但不算过关条件
+const DAY1_NEED = ['page', 'fire', 'letter', 'map'];
 const game = (() => {
   if (/[?&]reset\b/.test(location.search)) try { localStorage.removeItem(GAME_KEY); } catch (e) { /* 读写不了就当没存过 */ }
   let s = null; try { s = JSON.parse(localStorage.getItem(GAME_KEY)); } catch (e) { s = null; }
   const g = { day: (s && s.day) || 1, found: new Set(s && Array.isArray(s.found) ? s.found : []), night: false, dusk: false };
+  if (g.found.has('fire') && !g.found.has('page')) g.found.add('page'); // v2 之前的存档没有这页纸
   g.night = g.day >= 3 ? false : g.day >= 2 ? g.found.has('log2') : DAY1_NEED.every((k) => g.found.has(k)); // 第 2 天：回屋读到日志中段才天黑
   if (g.night) g.found.add('journal'); // 老存档：第 1 天已找齐但没弹过「解锁遗稿」，直接算解锁
   g.saved = g.found.size > 0; // 有存档：刷新时问「继续上次 / 重新开始」（resumeAsk）
@@ -2427,35 +2532,47 @@ const game = (() => {
 function saveGame() { try { localStorage.setItem(GAME_KEY, JSON.stringify({ day: game.day, found: [...game.found] })); } catch (e) { /* 存不了就只在这次打开里有效 */ } }
 // Journal「第一天」：键 → [英标题, 中标题, 英, 中]，按这个顺序列出已找到的
 const DAY1_TEXT = {
-  fire: ['The Cold Stove', '冷了的炉子', 'The stove was stone cold, the ash cold; not a spark of red beneath it. We lit it again.', '炉子冷透了，灰是凉的，底下一点红也没有。我们重新生了火。'],
+  page: ['A Page on the Desk', '书桌上的一页纸', 'A page of inquiry notes, in the clerk\'s hand, lying on the desk before she had sat down to it: "The inspector lit the stove. In the firebox, a letter not burnt through."', '书桌上压着一页调查记录，是书记员的笔迹，可她还没坐下来写过：“稽查生了火。炉膛里有一封没烧完的信。”'],
+  fire:['The Cold Stove', '冷了的炉子', 'The stove was stone cold, the ash cold; not a spark of red beneath it. We lit it again.', '炉子冷透了，灰是凉的，底下一点红也没有。我们重新生了火。'],
   letter: ['The Unburnt Letter', '没烧完的信', GAME_TEXT.letter[1], GAME_TEXT.letter[2]],
-  map: ['The ✕ on the Map', '地图上的 ✕', 'Deep in the woods he drew a great ✕, and beside it wrote "Do Not Enter". The contours round it have been drawn and rubbed out and drawn again.', '林子深处画了一个巨大的 ✕，旁注“勿入”。周围的等高线画了又擦、擦了又画。'],
+  map: ['The ✕ on the Map', '地图上的 ✕', 'Deep in the woods he drew a great ✕, and beside it wrote "Do Not Enter". In the desk drawer, a draft whose last line gives the same spot, to three places of decimals.', '林子深处画了一个大 ✕，旁注“勿入”。书桌抽屉里的草稿，最后一行是同一处的坐标，精确到小数点后三位。'],
   drawer: ['The Desk Drawer', '书桌抽屉', 'An unfinished draft in the drawer; its last line a string of bearings, to three places of decimals.', '抽屉里一张没画完的草稿，最后一行是一串坐标，精确到小数点后三位。'],
   log: ['Field Log, First Part', '工作日志 · 前段', GAME_TEXT.logIntro[1] + '\n\n' + GAME_TEXT.log1[1], GAME_TEXT.logIntro[2] + '\n\n' + GAME_TEXT.log1[2]],
   took: ['He Took Nothing', '他什么都没带', 'His greatcoat on its peg, his boots by the tray, his lantern where it always hung. He went out with nothing.', '大衣挂在钉子上，靴子立在托盘边，提灯挂在老地方。他出门什么都没带。'],
   notes1: ['Inquiry Notes, Night of Day 1', '调查记录 · 第 1 天夜里', GAME_TEXT.notes1[1], GAME_TEXT.notes1[2]],
 };
 const QUEST = { // 屏幕上那一行任务提示：[英, 中]
+  page: ['There is a page lying on the writing desk.', '书桌上压着一页纸。'],
   fire: ['It is cold in here. Get the fire going first.', '有点冷，先把火升起来吧。'],
-  look: ['He left things behind in the house.', '屋里还有他留下的东西。'],
+  look: ['Where did he go?', '他往哪儿去了？'],
   dusk: ['Night is coming on.', '天快黑了。'],
   night: ['Night. The clerk is writing up the day at the desk.', '天黑了。书记员在书桌前写今天的调查记录。'],
   end: ['Day the Second — to be continued.', '第 2 天 · 待续'],
 };
 const CLERK_SAYS = ['The clerk: "This house is newer than the reports made it."', '书记员：“这屋子比报告里写的新。”'];
 // 换掉的卡片：[标题, 区域, 中文标题, 英, 中, 说明]
-const LETTER_CARD = ['Unburnt Letter', 'Kitchen', '没烧完的信', GAME_TEXT.letter[1], GAME_TEXT.letter[2]];
-const LOG_CARD = ['Field Log', 'Parlour', '工作日志', DAY1_TEXT.log[2], DAY1_TEXT.log[3]];
-const NOTES_CARD = ['Inquiry Notes', 'Parlour', '调查记录', GAME_TEXT.notes1[1], GAME_TEXT.notes1[2], 'In the clerk\'s hand, the ink still wet.'];
-function questNow() { const f = game.found; if (game.day >= 3) return quest3(); if (game.day >= 2) return quest2(); return f.has('notes1') ? 'end' :game.dusk ? 'dusk' : game.night ? 'night' : f.has('fire') ? 'look' : 'fire'; }
+// v2：卡片只留一两句，全文在遗稿（Journal）里
+const PAGE_CARD = ['A Page on the Desk', 'Parlour', '书桌上的一页纸', 'Inquiry Notes, the First Day.\n\nThe inspector lit the stove. In the firebox, a letter not burnt through.', '调查记录，第一天。\n\n稽查生了火。炉膛里有一封没烧完的信。', 'In the clerk\'s hand.'];
+const PAGE_SAYS = ['The clerk reads it twice. "That is my hand. But I have not written it yet."', '书记员看了两遍：“是我的字。可我还没写呢。”'];
+const LETTER_SAYS = ['The clerk looks from the letter to the page in her hand, and says nothing.', '书记员看看信，又看看手里那页纸，没说话。'];
+const LETTER_CARD = ['Unburnt Letter', 'Kitchen', '没烧完的信', '"…seven degrees east of north, about four miles. Beneath an old spruce the ground has split… Marked ✕. This place is not fit…"\n\nThe rest is burnt away.', '“……北偏东七度，约四里。老云杉根下地面开裂……已标 ✕。此处不宜……”\n\n后面烧没了。'];
+const MAP_CARD = ['The ✕ on the Map', 'Parlour', '地图上的 ✕', DAY1_TEXT.map[2], DAY1_TEXT.map[3]];
+const LOG_CARD = ['Field Log', 'Parlour', '工作日志', 'His field log, bark paper stitched together: neat at the front, more and more disordered towards the back. Tonight there will be time to read it.', '他的工作日志，桦树皮纸订成的，前面工整，越往后越乱。今晚再细读。'];
+const NOTES_CARD = ['Inquiry Notes', 'Parlour', '调查记录', '', '', 'In the clerk\'s hand, the ink still wet. The page from this afternoon is gone.'];
+function notes1Text() { // 第 1 夜的记录 = 下午那页一字不差，加上房间变化那句（写成稽查做的）和最后一行；Journal 和卡片共用
+  const c = [...game.found].find((k) => k.startsWith('chg:')), l = c ? chgLine(c) : ['', ''];
+  const en = `Inquiry Notes, the First Day.\n\nThe inspector lit the stove. In the firebox, a letter not burnt through.\n\n${l[0] ? l[0] + ' ' : ''}The house is newer than the reports made it.\n\nTomorrow he will go out, northward.`;
+  const zh = `调查记录，第一天。\n\n稽查生了火。炉膛里有一封没烧完的信。\n\n${l[1]}这屋子比报告里写的新。\n\n明天他会出门，往北。`;
+  NOTES_CARD[3] = DAY1_TEXT.notes1[2] = en; NOTES_CARD[4] = DAY1_TEXT.notes1[3] = zh;
+}
+function questNow() { const f = game.found; if (game.day >= 3) return quest3(); if (game.day >= 2) return quest2(); return f.has('notes1') ? 'end' :game.dusk ? 'dusk' : game.night ? 'night' : !f.has('page') ? 'page' : f.has('fire') ? 'look' : 'fire'; }
 const STOVE_ROOMS = ['Parlour']; // 「先生火」只在进起居室时提示（用户定的），屋外、厨房、第一人称都不提（让玩家自己摸索）
 function showQuest() {
   const el = $('quest'), k = questNow();
-  el.innerHTML = k === 'fire' && !game.stoveSeen ? '' : lbl(QUEST[k][0], QUEST[k][1]);
-  // 线索进度：提示区下面一行小字；找齐就不显示（天转夜）
-  const need = game.day >= 3 ? X_NEED : game.day >= 2 ? DAY2_NEED : DAY1_NEED, n = need.filter((c) => game.found.has(c)).length, left = need.length - n;
+  el.innerHTML = (k === 'fire' && !game.stoveSeen) || (k === 'page' && !game.deskSeen) ? '' : lbl(QUEST[k][0], QUEST[k][1]);
   $('walkBtn').hidden = !(game.day >= 3 ? game.found.has('log3') && !game.found.has('ended') : game.day >= 2 && !game.night) || !!fp; // 第 2 天白天：「出门走走」直接站到门口、第一人称
-  $('prog').innerHTML = (k === 'fire' || k === 'look' || k === 'out' || k === 'x3') && !opening && n > 0 && left > 0 ?lbl(`${n} found · ${left} to find`, `已找到 ${n} · 还剩 ${left}`) : '';
+  enterBtn.classList.toggle('nogo', !!inside && !(game.found.has('ended') || (game.day >= 3 ? game.found.has('log3') : game.day >= 2 && !game.night))); // 「出门」不常驻：剧情要出去时才有
+  $('prog').innerHTML = ''; // v2 删掉「已找到 n · 还剩 m」：找线索不再像清单
   el.classList.toggle('end', k === 'end'); el.classList.toggle('on', !opening && !!el.innerHTML);
   $('jBtn').hidden = !game.found.has('journal'); // 遗稿：开局不出现，集齐第 1 天线索、弹过「解锁遗稿」才有
 }
@@ -2497,10 +2614,10 @@ function nextSub() {
   if (i >= OPENING.length) return endOpening();
   el.innerHTML = lbl(...OPENING[i]); el.classList.add('on');
   const zh = document.documentElement.dataset.lang === 'zh', n = OPENING[i][zh ? 1 : 0].length;
-  opening.timer = setTimeout(nextSub, (zh ? 2200 + n * 120 : 2200 + n * 45)); // 按字数给阅读时间
+  opening.timer = setTimeout(nextSub, say(OPENING[i][0], 'sub') || (zh ? 2200 + n * 120 : 2200 + n * 45)); // 有配音念完再换，没有按字数给阅读时间
 }
 function endOpening() {
-  clearTimeout(opening && opening.timer); opening = null;
+  clearTimeout(opening && opening.timer); opening = null; stopVoice('sub');
   $('subs').classList.remove('on'); $('opening').classList.remove('on'); setTimeout(() => { $('opening').hidden = true; }, 600);
   game.found.add('opening'); saveGame(); showQuest(); enterBtn.classList.remove('wait'); $('jBtn').classList.remove('wait');
 }
@@ -2516,7 +2633,7 @@ function isClue(name) { // 第 1 天的线索物件（找到后再点也算）�
   const t = infoOf(name)?.[0];
   if (game.day >= 3) return x3.on ? ['xcoat', 'xwatch', 'xnotes', 'xfire'].some((k) => X_CARDS[k][0] === t) || ['Coat Rail & Greatcoat', 'Boots & Bench', 'Lantern', 'Night Table', 'Writing Desk, Chair & Wall Lamp', 'Rocking Chair', 'The Fire', 'Cast-Iron Stove'].includes(t) || name === 'x_light' : t === 'Bookcase' || name === 'd3_spruce';
   if (game.day >= 2) return name.startsWith('d2_') || (game.night && t === 'Writing Desk, Chair & Wall Lamp');
-  return name === 'stove_letter' || name.startsWith('desk_drawer') || ['Map', 'Bookcase', 'Coat Rail & Greatcoat', 'Boots & Bench', 'Lantern'].includes(t)
+  return name === 'stove_letter' || name === 'desk_page' || name.startsWith('desk_drawer') || ['Map', 'Bookcase', 'Coat Rail & Greatcoat', 'Boots & Bench', 'Lantern'].includes(t)
     || (game.night && t === 'Writing Desk, Chair & Wall Lamp');
 }
 function gameSeen(name) { // select 里调：这次点的东西算不算线索；返回要换上的卡片或 null
@@ -2526,12 +2643,12 @@ function gameSeen(name) { // select 里调：这次点的东西算不算线索�
   mmReveal(infoOf(name)?.[1]); // 小地图：点过哪个房间的东西就散开那块雾
   if (game.day >= 3) return gameSeen3(name, title, add, got);
   if (game.day >= 2) return gameSeen2(name, title, add, got);
-  if (name === 'stove_fire' || name === 'stove_firebox') {
+  if (name === 'desk_page') { add('page'); over = PAGE_CARD; }
+  else if (name === 'stove_fire' || name === 'stove_firebox') {
     game.stoveSeen = true; // 自己找到炉膛了：之后进起居室不再提「先生火」
     if (toggles.get('stove_fire')?.on) { add('fire'); if (!f.has('letter')) { add('letter'); over = LETTER_CARD; } } // 生火前先扒开灰：信就压在底下
   } else if (name === 'stove_letter') { add('letter'); over = LETTER_CARD; }
-  else if (title === 'Map') add('map');
-  else if (name.startsWith('desk_drawer')) add('drawer');
+  else if ((title === 'Map' || name.startsWith('desk_drawer')) && !f.has('map')) { add('map'); over = MAP_CARD; } // 地图和抽屉合成一条
   else if (title === 'Bookcase') { add('log'); over = LOG_CARD; }
   else if (title === 'Coat Rail & Greatcoat') add('coat');
   else if (title === 'Boots & Bench') add('boots');
@@ -2544,14 +2661,18 @@ function gameSeen(name) { // select 里调：这次点的东西算不算线索�
   if (!got.length) return over;
   saveGame(); renderJournal();
   if (got.includes('took')) showRoomNote([DAY1_TEXT.took[2], DAY1_TEXT.took[3]]);
+  if (got.includes('page')) showRoomNote(PAGE_SAYS); // 卡片关了才出（showRoomNote 会排队）
+  if (got.includes('letter') && f.has('page')) showRoomNote(LETTER_SAYS);
   if (!game.night && DAY1_NEED.every((k) => f.has(k))) startNight(got.includes('took'));
-  if (got.includes('notes1')) endDay(); // 读完第 1 夜的调查记录：卡片关了弹「第一天结束」→ 第二天早上
+  if (got.includes('notes1')) setTimeout(endDay, 500); // 读完第 1 夜的调查记录：卡片关了弹「第一天结束」→ 第二天早上
   showQuest();
   return over;
 }
 // —— 卡关提示：屋里 90 秒没找到新线索、或连点 6 样东西都没进展，就提示下一条没找到的线索；同一条最多三级 ——
 // 一级只暗示，二级说在哪，三级让那件东西描边亮 5 秒。找到任何线索就从一级重新算。文字在 HINTS：[[英, 中] 一级, [英, 中] 二级, 图层]
 const HINTS = {
+  page: [['Someone has left a page on the writing desk.', '有人在书桌上留了一页纸。'],
+    ['The writing desk under the wall lamp, in the Parlour.', '起居室壁灯下的书桌。'], 'desk_page'],
   fire: [['The cold creeps into the bones. Where did his warmth come from?', '冷意往骨头里钻。这屋里的暖和是从哪儿来的？'],
     ['The iron stove on the kitchen side — look into the firebox.', '厨房那边的铁炉子——看看炉膛里。'], 'stove_firebox'],
   letter: [['Not everything in the stove burnt away.', '炉子里有东西没烧干净。'],
@@ -2567,12 +2688,12 @@ const HINTS = {
   boots: [['And on his feet?', '脚上呢？'], ['The boots by the bench in the Entry.', '玄关换鞋凳边的靴子。'], 'entry_bench_stool'],
   lantern: [['And a light to find the way home?', '还有回来时照路的灯呢？'], ['The lantern on its peg in the Entry.', '玄关钉子上的提灯。'], 'entry_lantern'],
 };
-const HINT_ORDER = ['fire', 'letter', 'map', 'drawer', 'log', 'coat', 'boots', 'lantern'];
+const HINT_ORDER = ['page', 'fire', 'letter', 'map']; // v2：只提示过关要的；日志、大衣靴子提灯是选看
 const HINT_IDLE = 90, HINT_CLICKS = 6, HINT_GLOW = 5000;
 const hint = { idle: 0, clicks: 0, key: null, lvl: 0 };
 let hintGlow = null, hintGlowT = 0; // 三级提示时描边的图层（drawHighlight 当悬停画）
 function hintReset() { hint.idle = 0; hint.clicks = 0; }
-const HINT_Q = ['fire', 'look', 'out', 'dusk2']; // 这几步任务里才提示
+const HINT_Q = ['page', 'fire', 'look', 'out', 'dusk2']; // 这几步任务里才提示
 function hintActive() { const q = questNow(); return game.entered && (inside || fp) && HINT_Q.includes(q) &&!opening && card.hidden && journal.hidden && $('dlg').hidden && document.visibilityState === 'visible'; }
 function hintFire() { // 升一级并显示
   const key = (game.day >= 3 ? HINT_ORDER3.filter((k) => x3.on ? X_NEED.includes(k) : !X_NEED.includes(k)) : game.day >= 2 ? HINT_ORDER2 : HINT_ORDER).find((k) => !game.found.has(k) && (game.day < 2 || k !== 'd2light' || d2.lamp));
@@ -2599,8 +2720,47 @@ function startNight(late) { // 线索找齐：书记员说一句 → 天色转�
   const t0 = late ? 6000 : 1500;
   setTimeout(() => showRoomNote(CLERK_SAYS), t0);
   setTimeout(() => { sky.play = false; sky.goal = 21; sky.goalRate = 1; clerkToDesk(); }, t0 + 3500);
-  setTimeout(() => { game.dusk = false; const w = toggles.get('wall_lamp'); if (w) w.on = true; showQuest(); unlockJournal(); }, t0 + 10500);
+  setTimeout(() => { game.dusk = false; const w = toggles.get('wall_lamp'); if (w) w.on = true; const pg = layers.get('desk_page'); if (pg) pg.visible = false; showQuest(); unlockJournal(); }, t0 + 10500); // 她坐下写：下午那页纸不见了
 }
+// —— 房间变化（v2，第 1 天）：玩家亲手关 / 开过的灯、炉门、抽屉，等他离开那里（看不见、或走远）4 秒后悄悄变回去；
+// 回来看见时书记员问一句，夜里的调查记录写成「稽查又把…打开了」。只动玩家碰过的东西（会动的摇椅、怀表不算，怕被当成环境动画）。一天一次。
+const CHG_MAX = 1, CHG_KEYS = { stove_door: ['stove door', '炉门', false], desk_drawer: ['desk drawer', '抽屉', true] }; // [英, 中, on = 开着]（炉门 k=1 是关上）
+const chg = { pend: null };
+function chgNoun(key) { return /^(wall_lamp|ceiling_light_|hall_pendant_)/.test(key) ? ['lamp', '灯', true, 1] : CHG_KEYS[key]; }
+function chgLine(c) { // 'chg:键:1' → 夜里记录那句 [英, 中]（1 = 变回去之后的 on）
+  const [, key, v] = c.split(':'), n = chgNoun(key); if (!n) return ['', ''];
+  const open = (v === '1') === n[2];
+  if (n[3]) return open ? ['The inspector lit again a lamp he had put out.', '稽查把关掉的灯又打开了。'] : ['The inspector put out again a lamp he had lit.', '稽查把开着的灯又关了。'];
+  return open ? [`The inspector opened the ${n[0]} again after shutting it.`, `稽查把关上的${n[1]}又打开了。`] : [`The inspector shut the ${n[0]} again after opening it.`, `稽查把${n[1]}又关上了。`];
+}
+window.__voiceLines = () => [ // 要配音的句子（英文原句），tools/voice/make_voice.py 用；漏的靠 __said 补
+  ...OPENING, ...Object.values(ROOM_NOTES), PAGE_SAYS, LETTER_SAYS, CLERK_SAYS, ...Object.values(D2_SAYS), ...Object.values(D3_SAYS), [DAY1_TEXT.took[2]], ['Look — there.'],
+  ...Object.values(HINTS).flatMap((h) => [h[0], h[1]]), ...[...Object.keys(CHG_KEYS), 'wall_lamp'].flatMap((k) => [true, false].map((on) => { try { return chgSay(k, on); } catch (e) { return null; } })),
+].filter(Boolean).map((l) => l[0]).concat(Object.values(STORY), Object.values(INFO).map((i) => i[2])).filter((t) => typeof t === 'string' && /[a-z]/i.test(t));
+function chgSay(key, on) {
+  const n = chgNoun(key), open = on === n[2];
+  if (n[3]) return open ? ['The clerk: "Did you light the lamp?"', '书记员：“灯是你开的？”'] : ['The clerk: "Did you put the lamp out?"', '书记员：“灯是你关的？”'];
+  return open ? [`The clerk: "Did you open the ${n[0]}?"`, `书记员：“${n[1]}是你打开的？”`] : [`The clerk: "Did you shut the ${n[0]}?"`, `书记员：“${n[1]}是你关上的？”`];
+}
+function chgTouch(name) { // toggle 里调：玩家刚开 / 关了一样东西
+  const key = toggles.has(name) ? name : DOORS[name]?.parent;
+  if (game.day !== 1 || game.night || !game.found.has('page') || !key || !chgNoun(key)) return;
+  if ([...game.found].filter((k) => k.startsWith('chg:')).length >= CHG_MAX || chg.pend?.flipped) return;
+  const g = layers.get(key); if (!g) return;
+  chg.pend = { key, t: toggles.get(key), on: toggles.get(key).on, pos: new THREE.Box3().setFromObject(g).getCenter(new THREE.Vector3()), away: 0, back: 0 };
+}
+const chgFr = new THREE.Frustum(), chgM = new THREE.Matrix4();
+setInterval(() => {
+  const p = chg.pend; if (!p || game.night) return;
+  chgM.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse); chgFr.setFromProjectionMatrix(chgM);
+  const seen = camera.position.distanceTo(p.pos) < 4.5 && chgFr.containsPoint(p.pos);
+  if (!p.flipped) {
+    if (p.t.on !== p.on) { chg.pend = null; return; } // 玩家自己又改回去了
+    p.away = seen ? 0 : p.away + 0.5;
+    if (p.away >= 4) { p.t.on = !p.t.on; p.flipped = true; game.found.add(`chg:${p.key}:${p.t.on ? 1 : 0}`); saveGame(); notes1Text(); }
+  } else if (seen && card.hidden && ++p.back >= 2) { showRoomNote(chgSay(p.key, p.t.on)); chg.pend = null; }
+}, 500);
+window.cabinChg = { chg, toggle: (n) => toggle(n) }; // 调试 / 无头测试
 function clerkToDesk() { // 天黑：书记员走到书桌坐下写（正在走的那一段走完再去；书桌被人占着就等）
   const p = people.get('person_woman'); if (!p) return;
   p.home = 'loft_chair'; INFO.person_woman[1] = 'Parlour'; INFO.person_woman[2] = 'Writing up the day at the desk.';
@@ -2633,6 +2793,30 @@ function makeLetter() {
   m.rotation.set(...LETTER.rot); m.receiveShadow = true;
   const g = new THREE.Group(); g.name = 'stove_letter'; g.position.set(...LETTER.at); g.add(m);
   scene.add(g); layers.set('stove_letter', g); meshes.push(m); indoorShade(g);
+}
+function makePage() { // v2：书桌上那页调查记录（干净纸 + 墨水字行），放在桌面 loft_desk 包围盒顶上、靠前一点
+  const d = layers.get('loft_desk'); if (!d) return;
+  const W = 192, H = 256, c = document.createElement('canvas'), x = c.getContext('2d'), R = rng(23);
+  c.width = W; c.height = H; x.fillStyle = '#d9cfb4'; x.fillRect(0, 0, W, H);
+  x.strokeStyle = 'rgba(30,28,48,.85)'; x.lineWidth = 1.8;
+  for (let y = 30; y < H - 40; y += 16) for (let px = 16, end = W - 16 - (y > H - 70 ? 70 : 0); px < end;) { const w = 6 + R() * 20; x.beginPath(); x.moveTo(px, y + (R() - 0.5) * 2); x.lineTo(Math.min(end, px + w), y + (R() - 0.5) * 2); x.stroke(); px += w + 4 + R() * 6; }
+  const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 4;
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(0.15, 0.2), new THREE.MeshStandardMaterial({ map: tex, roughness: 0.9, side: THREE.DoubleSide }));
+  m.rotation.set(-Math.PI / 2, 0, 0.25); m.receiveShadow = true;
+  const b = new THREE.Box3().setFromObject(d), g = new THREE.Group(); g.name = 'desk_page';
+  g.position.set((b.min.x + b.max.x) / 2, b.max.y + 0.002, (b.min.z + b.max.z) / 2); g.add(m);
+  scene.add(g); layers.set('desk_page', g); meshes.push(m); indoorShade(g);
+}
+// 开场飞行时雾里远远有第二盏门廊灯（v2）：只在第一次来、开场飞到中段时亮一会儿，落地前淡掉
+function makeOpenLamp(P, Lk, S) {
+  const T = S[S.length - 1]; let i = S.findIndex((s) => s >= T * 0.45); if (i < 0) i = P.length >> 1;
+  const dir = Lk[i].clone().sub(P[i]).setY(0).normalize().applyAxisAngle(new THREE.Vector3(0, 1, 0), 0.3);
+  const c = document.createElement('canvas'); c.width = c.height = 64; const x = c.getContext('2d'), gr = x.createRadialGradient(32, 32, 0, 32, 32, 32);
+  gr.addColorStop(0, 'rgba(255,226,170,1)'); gr.addColorStop(0.12, 'rgba(255,196,110,.9)'); gr.addColorStop(0.4, 'rgba(240,150,60,.3)'); gr.addColorStop(1, 'rgba(230,140,60,0)'); x.fillStyle = gr; x.fillRect(0, 0, 64, 64);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: t, fog: false, transparent: true, depthWrite: false, opacity: 0 }));
+  sp.scale.set(3, 3, 1); sp.position.copy(P[i]).addScaledVector(dir, 55); sp.position.y = ground.position.y + 2.4;
+  scene.add(sp); return sp;
 }
 function setupJournal() { // 把 Journal 按 h3 分节（中英各一份）好按进度锁；开场后面插「第一天」
   const page = journal.querySelector('.page'), zh = page.querySelector('div.zh'), KEYS = ['open', 'prologue', 'surveyor', 'epilogue', 'after'];
@@ -2677,6 +2861,8 @@ function gameInit() { // 模型和开关都建好后调（loadPeople 之前）�
   const f = toggles.get('stove_fire');
   if (f && !game.found.has('fire')) { f.on = false; f.k = 0; for (const q of f.parts) q(0); fire.smoke = 0; }
   if (!game.found.has('letter')) makeLetter();
+  if (game.day === 1 && !game.night) makePage(); // 天黑后（她坐下写了）那页纸就不在了
+  notes1Text();
   sky.goal = null; sky.play = false; sky.hour = game.night ? 21 : game.day >= 3 ? 9.5 : game.day >= 2 ? (DAY2_NEED.every((k) => game.found.has(k)) ? 17.5 : 9.5) : 15.5;
   if (game.day === 2 && game.found.has('notes2')) endDay2(); // 读完第 2 夜的记录还没点「第三天早上」就刷新了
   if (game.day === 1 && game.found.has('notes1')) endDay(); // 读完第 1 夜的记录还没点「第二天早上」就刷新了 // 下午到，找齐线索时天黑；时间不自己走，免得找着找着天就黑了
@@ -2750,7 +2936,7 @@ function gameSeen2(name, title, add, got) {
   if (!got.length) return over;
   saveGame(); renderJournal();
   if (got.some((k) => DAY2_NEED.includes(k)) && DAY2_NEED.every((k) => game.found.has(k))) startDusk2();
-  if (got.includes('notes2')) endDay2(); // 读完第 2 夜的记录：卡片关了弹「第二天结束」→ 第三天早上
+  if (got.includes('notes2')) setTimeout(endDay2, 500); // 读完第 2 夜的记录：卡片关了弹「第二天结束」→ 第三天早上
   mmDirty = true;
   showQuest();
   return over;
@@ -3048,8 +3234,15 @@ const MM_ROOM = { Entry: 'Entry', 'Water Closet': 'Water Closet', Kitchen: 'Kitc
 const MM_CELL = { Parlour: [-1, -1], Kitchen: [0, -1], 'Water Closet': [-1, 0], Entry: [0, 0] }; // 屋里四格：西北起居、东北厨房、西南卫生间、东南玄关；阁楼画在正中
 let mmDirty = true, mmT = 0, mmFar = 0;
 function mmReveal(area) { const r = MM_ROOM[area]; if (r && !x3.on && !game.found.has('m:' + r)) { game.found.add('m:' + r); saveGame(); mmDirty = true; } }
+function deskCheck() { // 第 1 天：人在屋里、书桌那页纸进了画面中间才提「书桌上压着一页纸」
+  if (game.deskSeen || game.day > 1 || opening || (fp ? outdoors(fp.p.root.position) : !inside)) return;
+  const g = layers.get('desk_page'); if (!g) return;
+  const c = deskCheck.c || (deskCheck.c = new THREE.Box3().setFromObject(g).getCenter(new THREE.Vector3())), v = c.clone().project(camera);
+  if (v.z < 1 && Math.abs(v.x) < 0.85 && Math.abs(v.y) < 0.85 && camera.position.distanceTo(c) < 7) { game.deskSeen = true; showQuest(); }
+}
 function mmTick(dt) {
-  const c = $('mmap'); c.hidden = !!opening || !game.found.has('opening');
+  deskCheck(); // 很便宜：找到后第一行就返回
+  const c = $('mmap'); c.hidden = !!opening || !game.found.has('page'); // 拿到书桌那页纸（接到调查）才出现
   if (c.hidden || (mmT += dt) < 0.3) return; mmT = 0;
   if (fp && !x3.on) { // 第一人称走到哪：屋里按位置认房间，屋外记沿路走过的最远处
     const r = fp.p.root.position;
@@ -3888,7 +4081,7 @@ const toggleOf = (name) => toggles.get(name === 'stove_firebox' ? 'stove_fire' :
 // 有人坐在马桶上时折叠门不动（像从里面闩上了）：坐着的人脚伸到 x −0.82~−0.93，门折到一半（k 0.4–0.5）会扫到脚；改成往玄关那边折也不行：打开时两块板贴在隔墙上，会撞衣帽架挂杆（y 1.65–1.75）
 const wcBusy = () => [...people.values()].some((q) => q.seat === 'entry_toilet' && q.mode === 'sit');
 const shutBusy = (name) => Object.entries(SEATS).some(([n, S]) => S.shut?.includes(name) && [...people.values()].some((q) => q.seat === n || q.claim === n)); // 有人坐着 / 正要坐的座位旁，抽屉点了不动
-function toggle(name) { const t = toggleOf(name); if (t.click) return t.click(); if (/^toilet_door_/.test(name) && wcBusy()) return; if (!t.on && shutBusy(name)) return; t.on = !t.on; } // click：不是开/关，点一下触发一次动作（摇椅）
+function toggle(name) { const t = toggleOf(name); if (t.click) return t.click(); if (/^toilet_door_/.test(name) && wcBusy()) return; if (!t.on && shutBusy(name)) return; t.on = !t.on; chgTouch(name); } // click：不是开/关，点一下触发一次动作（摇椅）
 let toggleT = 0;
 function updateToggles() {
   const now = performance.now(), dt = Math.min(0.1, (now - (toggleT || now)) / 1000); toggleT = now;
@@ -4115,20 +4308,22 @@ function select(name) {
   cardData = { t: title, a: area, lead: desc, story: STORY[title + '|' + area], zt: zh?.[0], zs: zh?.[1] };
   const g = gameSeen(name); // 游戏线索：有的换成信 / 日志 / 调查记录的卡片
   hintClick(); // 卡关提示：没进展的点击计数
-  if (g) cardData = { t: g[0], a: g[1], zt: g[2], story: g[3], zs: g[4], lead: g[5] };
+  if (g) cardData = { t: g[0], a: g[1], zt: g[2], story: g[3], zs: g[4], lead: g[5], paper: isPaper(g) };
+  $('focus').hidden = false;
   if (g || gameSeen.got || people.has(name) || isClue(name)) { showNote(null); card.hidden = cardBg.hidden = false; drawCard(); } // 线索、人物：卡片居中，只能点 × / Esc 关
   else { const d = cardData; showNote({ t: d.t, zt: d.zt, text: d.story || d.lead || '', ztext: d.zs || LEAD_ZH[d.lead] || '' }); } // 普通物件：不强制读；有故事只放故事（短说明多半是故事第一句的缩写）
 }
 // 普通物件的说明：画面中下方，和开场字幕同款，按字数停一会儿自己淡掉；null = 收起
 function showNote(d) {
   const el = $('note'); clearTimeout(noteTimer2); noteData = d;
-  if (!d) { el.classList.remove('on'); return; }
+  if (!d) { el.classList.remove('on'); stopVoice('note'); return; }
   showRoomNote(null); // 和进房间那句在同一块地方
   const zh = lang() === 'zh', t = zh ? d.zt || d.t : d.t, x = zh ? d.ztext || d.text : d.text;
   el.innerHTML = (t ? `<span class="t">${esc(t)}</span>` : '') + `<p>${esc(x)}</p>`;
   el.classList.add('on');
-  noteTimer2 = setTimeout(() => el.classList.remove('on'), Math.min(20000, zh ? 2600 + x.length * 120 : 2600 + x.length * 45));
+  noteTimer2 = setTimeout(() => el.classList.remove('on'), say(d.text, 'note') || Math.min(20000, zh ? 2600 + x.length * 120 : 2600 + x.length * 45));
 }
+const isPaper = (g) => [PAGE_CARD, LETTER_CARD, NOTES_CARD, LOG2_CARD, NOTES2_CARD, LOG3_CARD, X_CARDS.xnotes].includes(g); // 纸上写着字的线索：先只给标题，「走近看」在卡片里展开字（不拉镜头，信拿出来后炉膛里已经没有了）
 function drawCard() { // 英文版：英文标题 + 区域 + 说明 + 故事；中文版：中文标题 + 区域 + 说明（LEAD_ZH）+ 中文故事
   const d = cardData, zh = lang() === 'zh', h = card.querySelector('h2'), a = document.createElement('span'), lead = card.querySelector('p.lead');
   h.innerHTML = ''; a.className = 'area';
@@ -4136,8 +4331,9 @@ function drawCard() { // 英文版：英文标题 + 区域 + 说明 + 故事；�
   else { h.append(d.t); a.textContent = d.a; }
   if (d.a) h.append(a);
   lead.classList.toggle('cn', zh); lead.textContent = zh ? LEAD_ZH[d.lead] || '' : d.lead || '';
-  card.querySelector('p.story').textContent = d.story || '';
-  card.querySelector('p.zh').textContent = d.zs || '';
+  const shut = d.paper && !d.open; card.classList.toggle('paper', !!d.open);
+  card.querySelector('p.story').textContent = shut ? '' : d.story || '';
+  card.querySelector('p.zh').textContent = shut ? '' : d.zs || '';
   card.scrollTop = 0; cardMore();
 }
 function focusSelected() {
@@ -4250,9 +4446,11 @@ const FP = { R: 0.17, STEP: 0.22, RUN: 2.6, SENS: 0.0022, HIDE: /^(HeadSkin|Eyeb
 let fp = null; // { p, yaw, pitch, keys, solid, floors, solidT, eye, paused, climb, crouch, bob, inspect }
 const fpRay = new THREE.Raycaster(); fpRay.firstHitOnly = true;
 const fpHud = document.createElement('div'); fpHud.id = 'fpHud'; fpHud.hidden = true;
-fpHud.innerHTML = '<div class="dot"></div><div class="help"><span class="en"><b>Click</b> to look about · <b>WASD</b> to walk · <b>Shift</b> to hurry · <b>Esc</b> to stop'
+const FP_HELP = '<span class="en"><b>Click</b> to look about · <b>WASD</b> to walk · <b>Shift</b> to hurry · <b>Esc</b> to stop'
   + '<br><b>E</b> to take a thing · <b>E</b> again to put it back or drop it · hold <b>right button</b> to turn it over</span>'
-  + '<span class="zh">点画面开始 · WASD 走动 · Shift 快走 · E 拿取，再按 E 放回原处或丢在地上 · 按住右键翻看 · Esc 结束</span></div><div class="hint"></div>';
+  + '<span class="zh">点画面开始 · WASD 走动 · Shift 快走 · E 拿取，再按 E 放回原处或丢在地上 · 按住右键翻看 · Esc 结束</span>';
+const FP_HELP_TOUCH = '<span class="en"><b>Tap</b> where to go, or a thing to use it · <b>Drag</b> to look about</span><span class="zh">点哪走到哪，点物件走过去用 · 拖动转头</span>';
+fpHud.innerHTML = '<div class="dot"></div><div class="help">' + FP_HELP + '</div><div class="hint"></div>';
 document.body.append(fpHud);
 const fpHint = fpHud.querySelector('.hint');
 // 不挡路的：墙上的挂件（贴着墙，墙本身会挡）、门帘、挂着的大衣、卫生纸架、毛巾架、地毯、正端在手里的东西
@@ -4463,7 +4661,9 @@ function startFP(id) {
   controls.enabled = false;
   camera.fov = 72; camera.updateProjectionMatrix();
   roomsBox.hidden = true; enterBtn.hidden = true; fpHud.hidden = false; fpHud.classList.remove('live');
-  canvas.requestPointerLock?.();
+  fpHud.querySelector('.help').innerHTML = touchFP ? FP_HELP_TOUCH : FP_HELP;
+  if (touchFP) fp.paused = false; else canvas.requestPointerLock?.(); // 触屏没有指针锁：点哪走哪 + 拖动转头（fpTap），头一次碰屏幕才收起说明
+  if (SLICE) sliceView();
 }
 function stopFP() {
   if (!fp) return;
@@ -4472,11 +4672,12 @@ function stopFP() {
   p.player = false; p.hit.visible = true; p.next = 6; p.roam = 8; // 过一会儿走回自己的座位
   p.root.traverse((o) => { if (FP.HIDE.test(o.name)) o.visible = true; });
   if (document.pointerLockElement) document.exitPointerLock();
-  fpHud.hidden = true; roomsBox.hidden = false; enterBtn.hidden = false;
+  fpHud.hidden = true; roomsBox.hidden = false; enterBtn.hidden = false; if (SLICE) sliceView();
   controls.enabled = true; lookAround(); // 相机留在他眼睛的位置，接着原地环顾
   if (climbs(p) && p.S != null && !p.tasks.length) p.tasks = p.S > CLIMB.top / 2 ? [['climb', CLIMB.top], ['top']] : [['climb', 0], ['dismount']]; // 在梯子上退出：自己爬完
   if (!p.tasks.length) p.play(moodOf(p).idle);
   if (game.day >= 2) day2StopFP(p); // 第 2 天在屋外退出：回鸟瞰、他就站在原地等
+  else if (SLICE) p.roam = p.next = 1e9; // 切片：站在原地等，「回到稽查」从这里接着走
 }
 document.addEventListener('pointerlockchange', () => {
   if (!fp) return;
@@ -4494,7 +4695,7 @@ canvas.addEventListener('contextmenu', (e) => { if (fp) e.preventDefault(); });
 addEventListener('mouseup', (e) => { if (fp && e.button === 2) fp.inspect = false; });
 canvas.addEventListener('mousedown', (e) => {
   if (fp && e.button === 2 && !fp.paused) { fp.inspect = true; return; }
-  if (!fp || e.button !== 0) return;
+  if (!fp || e.button !== 0 || performance.now() - fpT.at < 800) return; // 触屏点完浏览器还会补一个 mousedown：不当准星点击
   if (fp.paused) { canvas.requestPointerLock?.(); return; }
   if (!card.hidden) { select(null); return; } // 线索卡片开着（指针锁着点不到 ×）：点一下就是关
   const name = pick(fpCenter());
@@ -4616,6 +4817,7 @@ function fpClimb(r, dt, f, run) {
 }
 function updateFP(dt) {
   const p = fp.p, r = p.root, s = r.scale.x, k = fp.keys;
+  fpTouchTick(dt); sliceTick(dt); // 触屏点物件后转头 + 动手；切片按位置认房间、书记员跟进门
   if ((fp.solidT -= dt) < 0) { fp.solid = fpSolid(); fp.floors = fp.solid.concat(ground); fp.solidT = 0.5; } // 门开关、积雪会变，半秒刷新一次
   const f = (k.has('KeyW') || k.has('ArrowUp') ? 1 : 0) - (k.has('KeyS') || k.has('ArrowDown') ? 1 : 0);
   const st = (k.has('KeyD') || k.has('ArrowRight') ? 1 : 0) - (k.has('KeyA') || k.has('ArrowLeft') ? 1 : 0);
@@ -4631,9 +4833,12 @@ function updateFP(dt) {
     if (fp.climb) fpClimb(r, dt, f, run);
     else {
       r.rotation.y += THREE.MathUtils.clamp(angDiff(r.rotation.y, fp.yaw), -8 * dt, 8 * dt); // 身体朝向跟着视线转
-      if (f || st) {
+      if (f || st) fp.go = null; // 按键接管：取消点地面走路
+      const go = fp.go ? fpSteer(r, dt) : null; // 触屏点了地面 / 物件：沿路点走过去
+      if (f || st || go) {
         const sp = (run ? FP.RUN : WALK_SPEED) * s * (f < 0 ? 0.7 : 1) * (fp.crouch ? 0.6 : 1) * (game.day >= 2 && outdoors(r) ? 1.8 : 1); // 屋外路长（到 ✕ 110m）：走快些
-        _fpV.set(Math.sin(fp.yaw) * f - Math.cos(fp.yaw) * st, 0, Math.cos(fp.yaw) * f + Math.sin(fp.yaw) * st).normalize().multiplyScalar(sp * dt);
+        if (go) _fpV.set(go[0], 0, go[1]).multiplyScalar(sp * dt);
+        else _fpV.set(Math.sin(fp.yaw) * f - Math.cos(fp.yaw) * st, 0, Math.cos(fp.yaw) * f + Math.sin(fp.yaw) * st).normalize().multiplyScalar(sp * dt);
         moving = fpTryMove(r, _fpV.x, _fpV.z, s);
       }
       if (moving) { p.play(run && !fp.crouch ? 'Jog_Fwd_Loop' : 'Walk_Loop', 0.25); p.cur.timeScale = f < 0 ? -0.7 : 1; } // 倒着走 = 走路动画倒放
@@ -4668,7 +4873,7 @@ function updateFP(dt) {
   updateHeld(dt);
   const key = (k, zh, en) => `<b class="key">${k}</b> ${lbl(en, zh)}`;
   const barred = !gateOpen() && ((fp.climb && !climbs(p) && r.position.y > LADDER.top - 0.4) || (ladderNear(r) && r.position.y > 2)); // 她爬到顶会自己推拦杆
-  const hint = barred ? lbl('Lift the bar first', '先点拦杆抬起') : fp.climb ? (fp.climb.ph === 'on' ? lbl('W up · S down', 'W 上 · S 下') : '') // 梯子提示让着拿取提示（梯子边上也挂着东西）
+  const hint = touchFP ? '' : barred ? lbl('Lift the bar first', '先点拦杆抬起') : fp.climb ? (fp.climb.ph === 'on' ? lbl('W up · S down', 'W 上 · S 下') : '') // 梯子提示让着拿取提示（梯子边上也挂着东西）
     : held ? (held.mode === 'hold' && aimingAtHome(held) ? key('E', '放回', 'Put back') : '') // 拿着时只在对准原位时提示；放下、翻看写在操作说明里
     : p.mode === 'sit' ? (!p.tasks.length && fp.satT < 4 ? key('E', '起身', 'Stand') : '')
     : seatAim() ? key('E', '坐下', 'Sit')
@@ -4677,22 +4882,220 @@ function updateFP(dt) {
   if (hint !== fpHint.dataset.h) { fpHint.dataset.h = hint; fpHint.innerHTML = hint; } // 变了才改 DOM
 }
 
+// —— 第一人称切片（2026-10-28，网址带 ?fp）：开场落在门廊，玩家就是稽查，推门进屋；书记员当同伴。手机：点哪走哪 + 拖动转头（不做摇杆）——
+// 试玩过了再变成默认、删屋里的房间按钮和换房间飞行；现在不带 ?fp 一切照旧。?touch：电脑上测触屏那套
+const SLICE = /[?&]fp\b/.test(location.search), touchFP = matchMedia('(pointer: coarse)').matches || /[?&]touch\b/.test(location.search);
+const SL = { man: [-0.05, 3.4], woman: [0.6, 3.25], door: [[-0.05, 2.45], [-0.05, 1.5]], sofa: [0.19, -0.17], seen: new Set(), room: undefined, t: 0, w: null, inT: 0 }; // door：门外 → 门里（门轴 x -0.49、z 1.9）
+const FP_DRAG = 0.006, _slO = new THREE.Vector3(), _slD = new THREE.Vector3();
+const fpT = { id: null, x: 0, y: 0, x0: 0, y0: 0, t: 0, drag: false, at: 0 };
+window.__slice = SL; // 调试 / 无头测试
+function sliceOn() { return SLICE && game.day === 1 && !game.night; }
+function floorAt(x, z) { // 门廊地板高（从 1.4m 往下找，别打到门廊顶）
+  raycaster.set(_slO.set(x, ground.position.y + 1.4, z), _fpDn);
+  const h = raycaster.intersectObjects(meshes.filter(isShown).concat(ground), false)[0];
+  return h ? h.point.y : ground.position.y;
+}
+function sliceEye() { const [x, z] = SL.man; return new THREE.Vector3(x, floorAt(x, z) + 1.62 * 0.94, z - 0.12 * 0.94); } // 同 updateFP 的眼睛：眼高 1.62×scale、朝门往前 12cm
+function sliceStart() {
+  const m = people.get('person_man'), w = people.get('person_woman');
+  if (!m) { setTimeout(sliceStart, 200); return; } // 人物还没载完
+  placeMan(m, ...SL.man, Math.PI); m.root.position.y = floorAt(...SL.man); m.roam = m.next = 1e9;
+  if (w) { placeMan(w, ...SL.woman, Math.PI - 0.5); w.root.position.y = floorAt(...SL.woman); w.roam = w.next = 1e9; SL.w = 'porch'; }
+  const dw = toggles.get('door_wood'); if (dw) dw.on = true; // 门原本虚掩（on = false 是开）：关上，让玩家自己推开
+  spin = false; fly = null; startFP('person_man'); if (!fp) return;
+  fp.yaw = Math.PI; fp.pitch = -0.1; inside = null; SL.room = null; SL.fp = fp;
+}
+function sliceView() { // 右上角：第一人称时「看模型」（作品集用，回到原来的鸟瞰和房间按钮），鸟瞰时「回到稽查」
+  const b = $('viewBtn'); b.hidden = !SLICE || game.day !== 1 || !!intro;
+  b.innerHTML = fp ? lbl('View the model', '看模型') : lbl('Back to him', '回到稽查');
+}
+$('viewBtn').onclick = () => {
+  if (fp) { stopFP(); inside = null; placeRooms(null); enterBtn.innerHTML = lbl('Enter the Cabin', '进屋'); enterBtn.classList.add('glow'); controls.minDistance = 1; controls.maxDistance = 220; resetView(true); return; }
+  fly = null; startFP('person_man'); SL.room = undefined; // 位置照旧，sliceTick 重新认房间
+};
+function roomAt(P) { // 稽查站在哪间（切片按位置触发房间说明、「先生火」；门槛 z 1.9 外算屋外）
+  if (P.z > 1.9 || outdoors(P)) return null;
+  if (P.y > home.floorY + 1.6) return 'Loft';
+  if (P.z > 0.75) return P.x < -0.5 ? 'Water Closet' : P.x > 0.77 ? 'Hall' : 'Entry';
+  return P.x > 0.5 ? 'Kitchen & Dining' : 'Parlour';
+}
+function sliceTick(dt) {
+  if (!SLICE || game.day !== 1 || (SL.t -= dt) > 0) return; SL.t = 0.3;
+  const rn = roomAt(fp.p.root.position);
+  if (rn !== SL.room) { // 原来 goRoom 里做的那几件，改成走进去时做
+    SL.room = rn; inside = rn ? ROOMS.find((r) => r.name === rn) : null;
+    if (rn) game.entered = true;
+    if (STOVE_ROOMS.includes(rn)) game.stoveSeen = true;
+    if (rn && !SL.seen.has(rn)) { SL.seen.add(rn); showRoomNote(ROOM_NOTES[rn]); } // 每间只说一次（走来走去不重复）
+    showQuest();
+  }
+  const w = people.get('person_woman');
+  if (rn) SL.inT += 0.3;
+  if (w && SL.w === 'porch' && (SL.inT > 6 || (rn && rn !== 'Entry'))) { // 稽查进门走开了（或 6 秒后）她才跟进来，站到书架前看着书桌（不站路点 sw，挡稽查的路；之后照白天的样子在楼下转）；跟太紧会堵在玄关挡他的路
+    SL.w = 'in'; w.tasks = [['walk', ...SL.door[0]], ['walk', ...SL.door[1]], ...goTasks(w, ...SL.door[1], 'books'), ['walk', ...NAV.books], ['face', -1.4, -1.15]]; w.roam = 25; w.next = 8;
+  }
+}
+// 触屏：单指拖动转头（拖世界：手指往右，视线往左），轻点（<600ms、移动 <10px）= 走过去
+canvas.addEventListener('pointerdown', (e) => {
+  if (!fp || !touchFP) return;
+  e.preventDefault(); fpT.at = performance.now(); // 挡掉浏览器补的 mousedown
+  if (fpT.id !== null) return; // 第二根手指不管
+  Object.assign(fpT, { id: e.pointerId, x: e.clientX, y: e.clientY, x0: e.clientX, y0: e.clientY, t: performance.now(), drag: false });
+  fpHud.classList.add('live'); // 碰过屏幕就收起说明
+});
+canvas.addEventListener('pointermove', (e) => {
+  if (!fp || e.pointerId !== fpT.id) return;
+  const dx = e.clientX - fpT.x, dy = e.clientY - fpT.y; fpT.x = e.clientX; fpT.y = e.clientY;
+  if (!fpT.drag && Math.hypot(e.clientX - fpT.x0, e.clientY - fpT.y0) > 10) fpT.drag = true;
+  if (!fpT.drag) return;
+  fp.turn = null; fp.yaw += dx * FP_DRAG; fp.pitch = THREE.MathUtils.clamp(fp.pitch + dy * FP_DRAG, -1.35, 1.25);
+});
+for (const ev of ['pointerup', 'pointercancel']) canvas.addEventListener(ev, (e) => {
+  if (e.pointerId !== fpT.id) return;
+  fpT.id = null; fpT.at = performance.now();
+  if (fp && !fpT.drag && ev === 'pointerup' && performance.now() - fpT.t < 600) fpTap(e);
+  fpT.drag = false;
+});
+function fpTap(e) {
+  if (!card.hidden) { select(null); return; } // 卡片开着：点画面 = 关
+  const p = fp.p, P = p.root.position;
+  if (p.tasks.length || fp.climb) return; // 起身、爬梯中
+  if (p.mode === 'sit') { p.tasks = fpRise(p); return; }
+  let name = pick(e); if (name && /_rug$|doormat/.test(name)) name = null; // 地毯、门垫当地面
+  if (name === 'stove_iron_body' && !toggles.get('stove_fire')?.on) name = 'stove_firebox'; // 炉膛在炉身里，站着点总打到炉身：没生火时点炉子 = 点炉膛（电脑上是低头对准炉膛）
+  if (name && name !== 'roof_snow' && name !== p.id) {
+    const g = layers.get(name) || people.get(name)?.root; if (!g) return;
+    const box = new THREE.Box3().setFromObject(g), c = box.getCenter(new THREE.Vector3());
+    SL.tap = name; // 调试
+    fpGo(c.x, c.z, { name, box, reach: name === 'door_wood' ? 1 : 0.5 }); return; // 大门往外开、扫过门前 1m：站远点，别被门板推开
+  }
+  const h = raycaster.intersectObjects(fp.floors, false)[0]; // pick 刚按这一点设好了射线
+  SL.tap = h ? h.object.parent.name + '@' + h.point.y.toFixed(2) : 'none'; // 调试
+  if (h && Math.abs(h.point.y - P.y) < 1) fpGo(h.point.x, h.point.z, null);
+}
+function fpClear(x0, y0, z0, x1, z1, pad = 0) { // 两点之间脚边（矮茶几）、齐膝、齐胸都没东西挡（pad：终点是物件时停在它前面这么远）
+  const d = Math.hypot(x1 - x0, z1 - z0) - pad; if (d < 0.05) return true;
+  _slD.set(x1 - x0, 0, z1 - z0).normalize();
+  const ms = fp.solid.filter((m) => !people.has(m.parent.name)); // 人会走开，不算挡路
+  for (const h of [0.15, 0.45, 1.0]) { fpRay.set(_slO.set(x0, y0 + h, z0), _slD); fpRay.far = d; if (fpRay.intersectObjects(ms, false).length) return false; }
+  return true;
+}
+function fpRoute(x0, y0, z0, x1, z1, pad, nav) { // 看得见就直走；不然（或 nav：直走卡住了）沿 NAV 走（屋外 ↔ 屋里经门口两点）
+  const IN = 1.9, loft = y0 > home.floorY + 1.6;
+  if ((z0 > IN && z1 > IN) || (!nav && fpClear(x0, y0, z0, x1, z1, pad))) return [[x1, z1]];
+  const pts = [];
+  if (z0 > IN) { const b = nearNode(x1, z1); pts.push(...SL.door, NAV.entry, ...navPath('entry', b)); }
+  else if (z1 > IN) { const a = nearNode(x0, z0, loft); pts.push(NAV[a], ...navPath(a, 'entry'), SL.door[1], SL.door[0]); }
+  else { const a = nearNode(x0, z0, loft), b = nearNode(x1, z1, loft); pts.push(NAV[a], ...navPath(a, b)); }
+  pts.push([x1, z1]);
+  return pts.map((q) => (q === NAV.sofa ? SL.sofa : q)); // sofa 是坐垫上的点：玩家走沙发和茶几之间
+}
+function fpGo(x, z, act) {
+  const P = fp.p.root.position;
+  fp.go = { pts: fpRoute(P.x, P.y, P.z, x, z, act ? 0.7 : 0), act, stuck: 0, last: null, dt: 0, chk: 0 }; fp.turn = null;
+}
+const fpNear = (b, P) => Math.hypot(Math.max(b.min.x - P.x, 0, P.x - b.max.x), Math.max(b.min.z - P.z, 0, P.z - b.max.z)); // 水平方向到包围盒的距离
+function fpSteer(r, dt) { // 返回这一帧往哪走（单位向量），到了 / 卡住返回 null
+  const g = fp.go, P = r.position;
+  if (g.last) g.stuck = Math.hypot(P.x - g.last[0], P.z - g.last[1]) < WALK_SPEED * r.scale.x * g.dt * 0.25 ? g.stuck + dt : 0;
+  g.last = [P.x, P.z]; g.dt = dt;
+  if ((g.chk -= dt) < 0) { g.chk = 0.25; while (g.pts.length > 1 && fpClear(P.x, P.y, P.z, ...g.pts[1], g.act && g.pts.length === 2 ? 0.7 : 0)) g.pts.shift(); } // 下一个点看得见就跳过这个，路不绕
+  if (g.act && fpNear(g.act.box, P) < g.act.reach) return fpArrive();
+  let dx, dz, d;
+  for (;;) { dx = g.pts[0][0] - P.x; dz = g.pts[0][1] - P.z; d = Math.hypot(dx, dz); if (d > 0.12) break; g.pts.shift(); if (!g.pts.length) return fpArrive(); }
+  if (g.stuck > 0.6 && !g.nav && g.pts.length === 1 && d > 0.5) { const [x, z] = g.pts[0]; Object.assign(g, { pts: fpRoute(P.x, P.y, P.z, x, z, 0, true), nav: true, stuck: 0, chk: 1 }); return null; } // 直走卡住：改沿路网走一次
+  if (g.stuck > 0.6) return fpArrive(true);
+  if (!fpT.drag) fp.yaw += THREE.MathUtils.clamp(angDiff(fp.yaw, Math.atan2(dx, dz)), -2.5 * dt, 2.5 * dt); // 视线慢慢转向走的方向（拖着时听手指的）
+  return [dx / d, dz / d];
+}
+function fpArrive(stuck) { // 走到了：点的是物件就转过去看着它，再开关 / 出卡片
+  const g = fp.go; fp.go = null; SL.end = stuck ? 'stuck' : 'arrived'; // 调试
+  const a = g.act; if (!a || (stuck && fpNear(a.box, fp.p.root.position) > 1.4)) return null;
+  const c = a.box.getCenter(new THREE.Vector3()), e = fp.eye || camera.position, h = Math.hypot(c.x - e.x, c.z - e.z);
+  fp.turn = { yaw: Math.atan2(c.x - e.x, c.z - e.z), pitch: THREE.MathUtils.clamp(Math.atan2(c.y - e.y, h), -1.2, 1.1), t: 0, name: a.name };
+  return null;
+}
+function fpTouchTick(dt) {
+  const t = fp.turn; if (!t) return;
+  const k = Math.min(1, dt * 6); t.t += dt;
+  fp.yaw += angDiff(fp.yaw, t.yaw) * k; fp.pitch += (t.pitch - fp.pitch) * k;
+  if (t.t < 0.45) return;
+  fp.turn = null;
+  if (toggleOf(t.name)) toggle(t.name);
+  select(t.name);
+}
+
+// 地板光点（2026-10-28，同日改到门口）：屋里时在通往「相邻」房间的门口地上各放一个（每间 1–3 个，不相邻的用右侧按钮），点了沿门洞走过去（camRoute）。
+// 平时淡淡可见、很慢地呼吸（透明度 0.1–0.25），鼠标 140px 内渐亮、40px 内可点，触屏按点的位置算；在光点上不出物件名字。原来按可见性在别的房间地面里挑点，位置东一个西一个，改成固定门口
+// [去哪间, x, z]：玄关→卫生间折叠门 / 门帘；通高厅→门帘 / 灶台那头 / 梯子脚；厨房、起居室同一个开间，放在对方那半边、从这边视角看得见（茶几会挡）；阁楼→阁楼口
+const SPOT_AT = {
+  'Entry': [['Water Closet', -0.4, 1.25], ['Hall', 0.42, 1.4]], 'Water Closet': [['Entry', -0.45, 1.15]],
+  'Hall': [['Entry', 0.85, 1.55], ['Kitchen & Dining', 1.1, -0.6], ['Loft', 1.45, 1.12]],
+  'Kitchen & Dining': [['Hall', 0.95, -0.3], ['Parlour', 0.45, -0.15]], 'Parlour': [['Hall', 0.95, -0.3], ['Kitchen & Dining', -0.8, -0.2]],
+  'Loft': [['Hall', 0.3, 1.1]],
+};
+let spots = null, spotHot = null, spotEv = null, spotNearCache = [null, Infinity];
+function makeSpots() {
+  const cv = document.createElement('canvas'); cv.width = cv.height = 64;
+  const x = cv.getContext('2d'), gr = x.createRadialGradient(32, 32, 0, 32, 32, 32);
+  gr.addColorStop(0, 'rgba(255,236,200,.35)'); gr.addColorStop(0.5, 'rgba(255,236,200,.4)'); gr.addColorStop(0.62, 'rgba(255,240,210,1)'); gr.addColorStop(0.75, 'rgba(255,220,170,.35)'); gr.addColorStop(1, 'rgba(255,200,140,0)'); // 一圈亮环：鼠标的圆环盖在中间也看得见
+  x.fillStyle = gr; x.fillRect(0, 0, 64, 64);
+  const tex = new THREE.CanvasTexture(cv), geo = new THREE.PlaneGeometry(0.5, 0.5).rotateX(-Math.PI / 2), ms = meshes.filter(isShown), down = new THREE.Vector3(0, -1, 0), o = new THREE.Vector3();
+  spots = [];
+  for (const [from, list] of Object.entries(SPOT_AT)) for (const [to, sx, sz] of list) {
+    const m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ map: tex, transparent: true, opacity: 0, depthWrite: false, toneMapped: false, fog: false, blending: THREE.AdditiveBlending })); // 叠加：暖色木地板上也看得出
+    raycaster.set(o.set(sx, from === 'Loft' ? 3.2 : 1.2, sz), down); const h = raycaster.intersectObjects(ms, false)[0]; // 落到地板 / 阁楼楼板上
+    m.position.set(sx, (h ? h.point.y : 0.2) + 0.015, sz);
+    m.renderOrder = 2; m.visible = false; m.userData.room = ROOMS.find((r) => r.name === to); m.userData.from = from; m.userData.ph = Math.random() * 7; scene.add(m); spots.push(m);
+  }
+}
+function placeSpots(r) { // 进了房间 r：只亮它门口那几个
+  if (!home) return; if (!spots) makeSpots();
+  for (const m of spots) m.userData.ok = m.userData.from === r.name;
+}
+function spotNear(cx, cy) { // 屏幕上离 (cx, cy) 最近、没被挡住的光点和像素距离
+  const rect = renderer.domElement.getBoundingClientRect(), v = new THREE.Vector3(); let best = null, bd = Infinity;
+  for (const m of spots || []) {
+    if (!m.visible) continue; v.copy(m.position).project(camera); if (v.z > 1) continue;
+    const d = Math.hypot((v.x + 1) / 2 * rect.width + rect.left - cx, (1 - v.y) / 2 * rect.height + rect.top - cy); if (d < bd) { bd = d; best = m; }
+  }
+  if (best && bd < 140) { // 只给最近那个打一条射线看挡没挡（人走过来会挡住）
+    const to = best.position.clone().sub(camera.position), L = to.length(); raycaster.set(camera.position, to.normalize());
+    const h = raycaster.intersectObjects(meshes.filter(isShown), false)[0]; if (h && h.distance < L - 0.2) return [null, Infinity];
+  }
+  return [best, bd];
+}
+function spotsTick(dt) {
+  if (!spots) return;
+  const on = !!inside && !fp && !fly && !intro && !x3.on && card.hidden, e = pointer.lastEvent;
+  for (const m of spots) m.visible = on && m.userData.ok;
+  if (e !== spotEv) { spotEv = e; spotNearCache = on && e ? spotNear(e.clientX, e.clientY) : [null, Infinity]; } // 鼠标动了才重算
+  const [near, d] = on ? spotNearCache : [null, Infinity];
+  const tt = performance.now() / 1000;
+  for (const m of spots) { // 平时 0.1–0.25 慢呼吸（约 6 秒一次，各自错开），鼠标靠近往 0.9 亮
+    const base = 0.175 + 0.075 * Math.sin(tt * 1.05 + m.userData.ph), goal = Math.max(base, m === near ? 0.9 * Math.min(1, Math.max(0, (140 - d) / 100)) : 0);
+    m.material.opacity += (goal - m.material.opacity) * Math.min(1, dt * 8);
+  }
+  const hot = near && d < 40 ? near : null;
+  if (hot !== spotHot) { spotHot = hot; hoverDirty = true; renderer.domElement.style.cursor = hot || hovered ? 'pointer' : ''; } // 在光点上不显示物件名字
+}
 canvas.addEventListener('pointerdown', (e) => { downAt = [e.clientX, e.clientY]; });
 canvas.addEventListener('pointerup', (e) => {
   if (fp || !home || !downAt || e.button !== 0 || Math.hypot(e.clientX - downAt[0], e.clientY - downAt[1]) > 5) return; // 拖动不算点击
+  if (inside && !fly && spots && spots.some((m) => m.visible)) { const [m, d] = spotNear(e.clientX, e.clientY); if (m && d < 40) { spotEv = null; goRoom(m.userData.room); return; } } // 地板光点：触屏没悬停，按点的位置算
   const name = pick(e);
   if (name === 'roof_snow') { slideSnow(pick.side); setHovered(null); return; } // 点积雪：这一坡马上滑下来
   if (name && toggleOf(name)) { toggle(name); select(name); return; } // 门、灯：点一下开/关，卡片留着
   select(name === selected ? null : name);
 });
 card.querySelector('.x').onclick = () => select(null);
-document.getElementById('focus').onclick = () => { focusSelected(); card.hidden = cardBg.hidden = true; };
+document.getElementById('focus').onclick = () => { if (cardData && cardData.paper) { cardData.open = true; $('focus').hidden = true; drawCard(); return; } focusSelected(); card.hidden = cardBg.hidden = true; };
 document.getElementById('playAs').onclick = () => startFP(selected);
 addEventListener('keydown', (e) => { if (e.key === 'Escape') select(null); });
 function updateHover() {
   if (!hoverDirty || !home) return;
   hoverDirty = false;
-  setHovered(fly || intro ? null : pick(pointer.lastEvent));
+  setHovered(fly || intro || spotHot ? null : pick(pointer.lastEvent));
 }
 
 // —— 开场动画：像无人机一样沿小路从林子深处贴着路飞进来，最后停在首页视角 ——
@@ -4708,14 +5111,14 @@ const introDist = (s) => THREE.MathUtils.lerp(INTRO_FROM, 6, 1 - Math.pow(1 - s,
 const DIVE = 0.39, BLEND = 0.6; // 俯冲落在离院子约 65m（S 弯开头），贴路段短一点 // u 的前 36% 俯冲；60% 起过渡到首页视角
 const smoothstep = (a, b, x) => { const t = THREE.MathUtils.clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
 function startIntro() {
-  if (!pathCurve) return;
+  if (!pathCurve) { if (sliceOn()) sliceStart(); return; } // 没有开场路线（无头测试）：切片直接站到门廊
   // resetView 刚摆好的就是最终画面
-  const homePos = camera.position.clone(), homeTgt = controls.target.clone();
+  const slice = sliceOn(), homePos = slice ? sliceEye() : camera.position.clone(), homeTgt = slice ? homePos.clone().add(new THREE.Vector3(0, -0.1, -1)) : controls.target.clone(); // 切片：落在门廊稽查的眼睛，朝门
   const len = pathCurve.getLength(), gy = ground.position.y;
   const at = (m) => pathCurve.getPointAt(THREE.MathUtils.clamp(m / len, 0, 1));
   const omega = 2 * Math.PI / 60 * controls.autoRotateSpeed; // OrbitControls 自动旋转角速度（rad/s）
   const dEnd = introDist(DIVE), A = at(INTRO_FROM), B = at(dEnd), dir = B.clone().sub(A).normalize();
-  const v1 = Math.abs(omega) * Math.hypot(homePos.x - homeTgt.x, homePos.z - homeTgt.z); // 自动旋转时相机的线速度
+  const v1 = slice ? 0.6 : Math.abs(omega) * Math.hypot(homePos.x - homeTgt.x, homePos.z - homeTgt.z); // 自动旋转时相机的线速度
   const N = 900, P = [], Lk = [], F = [], Bob = [], V = [], S = [0];
   for (let i = 0; i <= N; i++) {
     const u = BLEND * i / N, d = introDist(u);
@@ -4740,11 +5143,11 @@ function startIntro() {
   const sg = Math.sign(omega), rel = homePos.clone().sub(homeTgt);
   const p0 = P[N], t0 = p0.clone().sub(P[N - 1]).normalize(), l0 = Lk[N], vS = V[N];
   const arcPt = (k) => rel.clone().applyAxisAngle(UP, sg * INTRO_ARC * (1 - k)).add(homeTgt); // k: 0 圆弧入口 → 1 首页
-  const q = arcPt(0), rq = q.clone().sub(homeTgt), t1 = new THREE.Vector3(rq.z, 0, -rq.x).multiplyScalar(-sg).normalize();
+  const q = slice ? homePos : arcPt(0), rq = q.clone().sub(homeTgt), t1 = slice ? new THREE.Vector3(0, 0, -1) : new THREE.Vector3(rq.z, 0, -rq.x).multiplyScalar(-sg).normalize(); // 切片：贴路走到门廊、朝门停下，不接圆弧
   const a = 0.45 * p0.distanceTo(q), c1 = p0.clone().addScaledVector(t0, a), c2 = q.clone().addScaledVector(t1, -a);
   const bez = new THREE.CubicBezierCurve3(p0, c1, c2, q), TP = [], TL = [0];
   for (let j = 1; j <= 300; j++) TP.push(bez.getPoint(j / 300));
-  for (let j = 1; j <= 150; j++) TP.push(arcPt(j / 150));
+  if (!slice) for (let j = 1; j <= 150; j++) TP.push(arcPt(j / 150));
   TP.forEach((p, j) => TL.push(TL[j] + p.distanceTo(j ? TP[j - 1] : p0)));
   TP.forEach((p, j) => {
     const f = TL[j + 1] / TL[TP.length];
@@ -4752,16 +5155,18 @@ function startIntro() {
     // 接着林间的减速继续减（起点不再从 0 加速度开始急刹），到首页时导数为 0 接上自动旋转（用户嫌抬起来那下减速太猛）
     V.push(v1 + (vS - v1) * Math.pow(1 - f, INTRO_RISE));
     const g = Math.min(1, f / 0.75), lk = g * g * g * (g * (g * 6 - 15) + 10);
-    P.push(p); Lk.push(l0.clone().lerp(homeTgt, lk)); F.push(FOV1); Bob.push(1 - smoothstep(0, 0.3, f));
+    P.push(p); Lk.push(l0.clone().lerp(homeTgt, lk)); F.push(slice ? THREE.MathUtils.lerp(FOV1, 72, lk) : FOV1); Bob.push(1 - smoothstep(0, 0.3, f));
   });
   for (let i = 1; i < P.length; i++) S.push(S[i - 1] + P[i].distanceTo(P[i - 1]) / ((V[i] + V[i - 1]) / 2)); // S 存到达每个采样点的时间（秒）
-  intro = { t0: performance.now(), homePos, homeTgt, P, Lk, F, Bob, S };
+  intro = { t0: performance.now(), slice, homePos, homeTgt, P, Lk, F, Bob, S, lamp: opening ? makeOpenLamp(P, Lk, S) : null };
   controls.enabled = false;
   updateIntro(intro.t0);
 }
 function endIntro(skip) {
   if (!intro) return;
-  const { homePos, homeTgt } = intro;
+  const { homePos, homeTgt, lamp } = intro;
+  if (lamp) { scene.remove(lamp); lamp.material.map.dispose(); lamp.material.dispose(); }
+  if (intro.slice) { intro = null; if (skip) openingCard(); sliceStart(); return; } // 切片：直接交给玩家（跳过也一样，镜头跳到门廊）
   intro = null; if (skip) openingCard(); controls.enabled = true; spin = true; spinK = skip ? 0 : 1; // 开场结束就绕小屋转着展示
   camera.fov = FOV1; camera.updateProjectionMatrix();
   if (skip) fly = { t: 0, fromPos: camera.position.clone(), fromTgt: controls.target.clone(), toPos: homePos, toTgt: homeTgt };
@@ -4779,11 +5184,12 @@ function updateIntro(now) {
   controls.target.lerpVectors(Lk[lo], Lk[hi], f); controls.target.y += bob;
   camera.lookAt(controls.target);
   camera.fov = THREE.MathUtils.lerp(F[lo], F[hi], f); camera.updateProjectionMatrix();
+  if (intro.lamp) intro.lamp.material.opacity = 0.85 * smoothstep(0.25, 0.35, x) * (1 - smoothstep(0.55, 0.65, x)) * (0.85 + 0.15 * Math.sin(now / 130)); // 中段亮一会儿，微微闪
   if (x === 1) endIntro(false);
 }
 // 动画中点击、滚轮、按键：跳过，平滑飞到首页视角
-for (const ev of ['pointerdown', 'wheel']) canvas.addEventListener(ev, () => endIntro(true));
-addEventListener('keydown', () => endIntro(true));
+for (const ev of ['pointerdown', 'wheel']) canvas.addEventListener(ev, () => { if (!justUnlocked()) endIntro(true); }); // 头一下是放出配音（unlockVoice），再点才跳过
+addEventListener('keydown', () => { if (!justUnlocked()) endIntro(true); });
 
 // 自适应分辨率：帧间隔平均持续 >24ms（不到 ~42 帧）就把像素比降 0.25（最低 1，大屏/高分屏上像素着色是大头）；持续 <12ms 再慢慢升回去
 const RES_MAX = Math.min(devicePixelRatio, 2), res = { ema: 0.016, at: 0 };
@@ -4880,17 +5286,18 @@ renderer.setAnimationLoop(() => {
   else if (fly) {
     // 按真实时间飞（原来每帧固定 +0.025，高刷屏 0.3 秒就到）；smooth = 慢起慢停，否则先快后慢
     fly.t = Math.min(1, fly.t + dt / (fly.dur || 1.2));
-    const t = fly.t, e = fly.smooth ? t * t * t * (t * (t * 6 - 15) + 10) : 1 - Math.pow(1 - t, 3);
+    const t = fly.t, e = fly.ease ? fly.ease(t) : fly.smooth ? t * t * t * (t * (t * 6 - 15) + 10) : 1 - Math.pow(1 - t, 3);
     if (fly.curve) camera.position.copy(fly.curve.getPointAt(e)); else camera.position.lerpVectors(fly.fromPos, fly.toPos, e);
     if (fly.v0) { const g = t * fly.dur * (1 - t) ** 3; camera.position.addScaledVector(fly.v0, g); fly.look.yx = fly.w0 * g; } // 进屋：接住自动旋转的初速度
-    if (fly.look) aimPlan(fly.look, fly.curve ? e * e * (3 - 2 * e) : e, dt); else controls.target.lerpVectors(fly.fromTgt, fly.toTgt, e);
+    if (fly.route) aimRoute(fly.route, e, dt); else if (fly.look) aimPlan(fly.look, fly.curve ? e * e * (3 - 2 * e) : e, dt); else controls.target.lerpVectors(fly.fromTgt, fly.toTgt, e);
     if (fly.t === 1) controls.target.copy(fly.toTgt);
     if (fly.toFov !== undefined) { camera.fov = fly.fromFov + (fly.toFov - fly.fromFov) * e; camera.updateProjectionMatrix(); }
     if (fly.t === 1) {
       if (fly.out) { controls.minDistance = fly.minD ?? 1; controls.maxDistance = 220; }
-      const came = fly.in; fly = null; if (inside) { lookAround(); placeRooms('side'); if (came) showNote({ t: '', zt: '', text: 'Have a look around inside.', ztext: '往室内看看吧。' }); } // 进屋飞到了：房间列表在右侧淡入，下方一句提示
+      const came = fly.in; fly = null; if (inside) { lookAround(); placeRooms('side'); if (came && !$('roomNote').classList.contains('on')) showNote({ t: '', zt: '', text: 'Have a look around inside.', ztext: '往室内看看吧。' }); } // 进屋飞到了：房间列表在右侧淡入，下方一句提示
     }
   }
+  if (norenOff && !(fly && fly.route)) { norenOff.visible = true; norenOff = null; } // 路线飞完或被打断：门帘放下
   updateHover();
   updateToggles();
   updateFire(dt);
@@ -4919,6 +5326,7 @@ renderer.setAnimationLoop(() => {
   if (veilEl.style.opacity !== '0' && !(fly && fly.veil) && !d2.veil) veilEl.style.opacity = 0;
   if (game.day >= 3) updateDay3(dt); // 走到老云杉、✕ 那间屋（摇椅、门廊、院子）
   mmTick(dt); // 迷雾小地图
+  spotsTick(dt); // 地板光点
   if (game.day >= 2) updateDay2(dt); // 雾、走远了绕回门口、傍晚的灯 // 出屋飞行被打断/结束：撤掉黑幕
   // 屋里离东西很近，用最小 near；出屋飞行中 inside 已是 null，但相机还在屋里/门口（原来按离地高度算 near，阁楼约 0.65m，把近处的墙和家具切开）
   // 进屋飞行中 inside 已经设了，但相机还在屋外高处：离小屋远时照常按高度算，靠近（含屋顶上方）才切 0.05

@@ -2,7 +2,8 @@
 .claude/
 # 内部文档和工具（只在本机，完整历史在私有仓库 log-cabin-archive）
 CLAUDE.md
-HANDOFF.md
+HANDOFF*.md
+FEATURES.md
 story/
 tools/
 publish/
