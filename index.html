@@ -2904,7 +2904,7 @@ function gameInit() { // 模型和开关都建好后调（loadPeople 之前）�
   sky.goal = null; sky.play = false; sky.hour = game.night ? 21 : game.day >= 3 ? 9.5 : game.day >= 2 ? (DAY2_NEED.every((k) => game.found.has(k)) ? 17.5 : 9.5) : 15.5;
   if (game.day === 2 && game.found.has('notes2')) endDay2(); // 读完第 2 夜的记录还没点「第三天早上」就刷新了
   if (game.day === 1 && game.found.has('notes1')) endDay(); // 读完第 1 夜的记录还没点「第二天早上」就刷新了 // 下午到，找齐线索时天黑；时间不自己走，免得找着找着天就黑了
-  if (game.day >= 2) { setWeather('Fog', true); clearTimeout(wxTimer); game.entered = true; } // 第 2 天整天起雾、不自动换天气
+  if (game.day >= 2) { setWeather('Snow', true); clearTimeout(wxTimer); cover.uSnow.value = 1; game.entered = true; } // 第 2、3 天：地面积雪 + 小雪，不自动换天气（2026-10-29 起不再起雾；玩家走过留脚印）
   if (game.night) { const w = toggles.get('wall_lamp'); if (w) w.on = true; }
   setupJournal(); showQuest();
 }
@@ -3055,7 +3055,10 @@ function day2Setup() {
     const o = new THREE.Object3D();
     for (let i = 0; i < n; i++) { const u = (i + 0.5) / n, p = route.getPointAt(u), t = route.getTangentAt(u), side = i % 2 ? 1 : -1;
       o.position.set(p.x - t.z * 0.11 * side, ground.position.y + 0.02, p.z + t.x * 0.11 * side); o.rotation.set(0, Math.atan2(-t.x, -t.z), 0); o.updateMatrix(); im.setMatrixAt(i, o.matrix); }
-    im.name = 'd2_prints'; im.renderOrder = 2; scene.add(im); OUTDOOR.push(im); d2.prints = im; }
+    im.name = 'd2_prints'; im.renderOrder = 2; scene.add(im); OUTDOOR.push(im); d2.prints = im;
+    // 玩家自己的脚印：同一套几何和材质（大小一致才能比），固定 200 个循环复用，走路时 stepPrint 往里写
+    const pool = new THREE.InstancedMesh(im.geometry, im.material, 200); pool.count = 0; pool.frustumCulled = false; pool.name = 'fp_prints'; pool.renderOrder = 2;
+    scene.add(pool); OUTDOOR.push(pool); d2.pool = { im: pool, i: 0, n: 0, side: 1, o: new THREE.Object3D() }; }
   if (game.day >= 3) day3Setup(); // 小路尽头的老云杉、✕ 那边的灯
 }
 function pathNear(x, z) { // 离小路最近的采样点：{ d 离路中心, s 沿路米数 }
@@ -4950,6 +4953,15 @@ function fpClimb(r, dt, f, run) {
   if (r.position.y <= g && f <= 0) { r.position.y = g; fp.climb = null; }
   else if (r.position.y >= LADDER.top - 0.25 && f > 0 && !C.lock && gateOpen()) fp.climb = { ph: 'board', t: 0, y0: r.position.y };
 }
+function stepPrint(r, moving) { r = r.position; // 野外雪地上每走 0.7m 留一个脚印，左右交替、朝走向
+  const P = d2.pool; if (!P || !moving || !outdoors(r) || cover.uSnow.value < 0.5) return;
+  if (!fp.lp) { fp.lp = r.clone(); return; }
+  const dx = r.x - fp.lp.x, dz = r.z - fp.lp.z, d = Math.hypot(dx, dz);
+  if (d < 0.7) return;
+  const tx = dx / d, tz = dz / d, o = P.o; fp.lp.copy(r); P.side = -P.side;
+  o.position.set(r.x - tz * 0.11 * P.side, r.y + 0.02, r.z + tx * 0.11 * P.side); o.rotation.set(0, Math.atan2(-tx, -tz), 0); o.updateMatrix();
+  P.im.setMatrixAt(P.i, o.matrix); P.i = (P.i + 1) % 200; P.im.count = P.n = Math.min(200, P.n + 1); P.im.instanceMatrix.needsUpdate = true;
+}
 function updateFP(dt) {
   const p = fp.p, r = p.root, s = r.scale.x, k = fp.keys;
   fpTouchTick(dt); sliceTick(dt); // 触屏点物件后转头 + 动手；切片按位置认房间、书记员跟进门
@@ -4983,6 +4995,7 @@ function updateFP(dt) {
       fpTrees(r.position);
       const q = fpProbe(r.position.x, r.position.y, r.position.z);
       if (q.floor !== null) r.position.y += (q.floor - r.position.y) * Math.min(1, dt * 12);
+      stepPrint(r, moving);
     }
   }
   // 相机：站立点 + 眼高（不跟头骨，头骨在待机/走路里前后晃，会钻进脸里），沿视线往前 12cm；头顶矮就弯腰（相机压到净空下 14cm）
