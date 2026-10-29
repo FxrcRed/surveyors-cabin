@@ -167,8 +167,8 @@
   #dlg h2 { margin: 0; font-weight: normal; font-size: var(--fs-l); line-height: 1.25; letter-spacing: .3px; }
   html[data-lang="zh"] #dlg h2 { letter-spacing: 2px; }
   #dlg p { margin: 12px 0 0; font-size: var(--fs-s); white-space: pre-line; }
-  #mmap { position: fixed; left: 16px; bottom: 56px; z-index: 6; width: 72px; height: auto; pointer-events: none; border-radius: 4px; opacity: .88; box-shadow: 0 1px 4px rgba(0,0,0,.35); } /* 迷雾小地图 */
-  @media (max-width: 600px) { #mmap { left: 8px; bottom: 52px; width: 52px; } }
+  #mmap { position: fixed; left: 16px; bottom: 56px; z-index: 6; width: 124px; height: auto; pointer-events: none; border-radius: 4px; opacity: .88; box-shadow: 0 1px 4px rgba(0,0,0,.35); } /* 迷雾小地图 */
+  @media (max-width: 600px) { #mmap { left: 8px; bottom: 52px; width: 92px; } }
   #dlg .row { display: flex; gap: 8px; margin-top: 14px; }
   #dlg button { font: inherit; font-size: var(--fs-xs); color: inherit; text-shadow: inherit; background: none; box-shadow: none; border: 1px solid rgba(244,239,230,.45); border-radius: 6px; padding: 5px 10px; cursor: pointer; }
   #dlg button:hover { background: rgba(255,255,255,.12); }
@@ -1687,6 +1687,7 @@ loader.load('cabin.glb', async (gltf) => {
   ground.position.y = box.min.y - 0.01;
   matchGround(center);
   extendPath();
+  mapWall(); // 墙上那张换成按世界坐标画的羊皮纸地图
   if (game.day >= 2) day2Setup(); // 第 2 天的木桩、标桩、刻记号的树、石堆、雾里的灯（要等地面高度和小路曲线）
   controls.minDistance = 1;
   controls.maxDistance = 220; // 可以一直拉远看整片森林（雾跟着相机距离变，见渲染循环）
@@ -2296,7 +2297,7 @@ const GAME_TEXT = {
   log3: ['Field Log, last part · Day 3, before setting out', 'Thirtieth year. I draw it, and it draws me.\n\nIt draws slowly, a little each year. First the stake, then the woodpile, then the roof. This spring it has drawn its way indoors. I sit here, and over there its rocking chair is rocking too.\n\nTonight I go to see whether the likeness is good. The fire is banked, the door left a crack, the lamp left burning. I shall not go to the post-house this year; the Office will have no report, and will send someone. One must leave them a light.', '第三十年。我画它，它也在画我。\n\n它画得很慢，一年一点。先是桩子，后是柴堆，后是屋顶。今年开春，它画到屋里了。我在这边坐着，它那边的摇椅也在摇。\n\n今晚我去看看画得像不像。炉火压好了，门留条缝，灯留着。今年不去驿站了，局里收不到报告，会派人来，总得给他们留个亮处。'],
   notes1: ['Inquiry Notes · Night of Day 1', 'Arrived. Door ajar, porch lamp burning, no one in the house. Stove stone cold, the ash cold; gone a month at least. His greatcoat, boots and lantern all in their places. Lit the fire. We stop here.\n\nThe house is newer than the reports made it. Timber thirty years old ought not to be this colour. Perhaps his reports exaggerated.', '到达。大门虚掩，门廊灯亮着，屋里无人。炉子冷透了，灰是凉的，少说走了一个月。他的大衣、靴子、提灯都在原处。生了火，住下。\n\n这屋子比报告里写的新。三十年的木头，不该是这个颜色。也许是他报告写得夸张。'],
   notes2: ['Inquiry Notes · Night of Day 2', 'A survey stake in the woods, its notch the very same as the chopping-block by the door. The inspector says he set it himself, as a matter of course.\n\nAt dusk, a light in the fog, east of north. The inspector says I was mistaken. I was not mistaken.', '林子里有一根标桩，刻口和门口劈柴的木桩一模一样。稽查说是他自己立的，顺手。\n\n傍晚雾里有一盏灯，在北偏东。稽查说是看错了。我没有看错。'],
-  xArrive: ['Day 3 · At the ✕', 'Into the fog along the pebbled path, by the marks in the log. The compass turns faster and faster, until at last it points nowhere. Beside the roots of an old spruce the path gives out; the earth beneath the roots is split open, and the pine needles are scorched black.\n\nThe fog parts a little. Beside the rift stands a cabin.\n\nThe very same as the one they have been living in. Logs, shingles, an iron stovepipe, a lamp hung by the porch, burning. The door is open.', '沿卵石小路走进雾里，照着日志里的记号走。罗盘越转越快，最后不再指任何方向。小路在一棵老云杉的树根旁边没了，树根下的土地裂开一道口子，松针是焦黑的。\n\n雾散开一点，裂口旁边立着一间小屋。\n\n和他们住的那间一模一样。原木、木瓦、铁皮烟囱，门廊上挂着一盏灯，亮着。门开着。'],
+  xArrive: ['Day 3 · At the ✕', 'Into the fog along the trail, by the marks in the log. The compass turns faster and faster, until at last it points nowhere. Beside the roots of an old spruce the trail gives out; the earth beneath the roots is split open, and the pine needles are scorched black.\n\nAhead in the fog a lamp is burning. Then a roof, a stovepipe, a porch. A chopping block by the step, a slanting cut across its top.\n\nThe door is open.', '沿着林间踪迹走进雾里，照着日志里的记号走。罗盘越转越快，最后不再指任何方向。踪迹在一棵老云杉的树根旁边断了，树根下的土地裂开一道口子，松针是焦黑的。\n\n前面雾里亮着一盏灯。然后是屋顶、烟囱、门廊。台阶边一个劈柴木桩，顶上一道斜刀口。\n\n门开着。'],
   xNote: ['Day 3 · The page on the other desk', 'Day three. The inspector went out early, seven degrees east of north. I stayed in the house. He did not take the lantern.', '第三天。稽查一早出门，往北偏东七度。我留在屋里。他没带提灯。'],
   xLook: ['Day 3 · From the other porch', 'Standing under this porch and looking south, far off in the fog, there is a light.', '站在这间屋的门廊下往南看，雾里很远的地方有一盏灯。'],
   endBack: ['Ending · Going Back', 'You back out of the door and go the way you came. Slowly the compass settles, and points north again. At the end of the fog the porch lamp is burning, the fire is lit, and the clerk is waiting in the rocking chair.\n\nShe hears you out, thinks a long while, and writes in the report: "No irregularity found. The Surveyor\'s whereabouts unknown." Then she puts his field log back on the shelf.', '你退出门，沿着来路走。罗盘慢慢停下来，指回北方。雾的尽头，门廊灯亮着，炉火在烧，书记员在摇椅上等你。\n\n她听你说完，想了很久，在报告上写：“未发现异常。测绘员下落不明。”然后把他的工作日志放回书架。'],
@@ -3046,6 +3047,15 @@ function day2Setup() {
   const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: glow, fog: false, depthTest: false, transparent: true, depthWrite: false })); sp.scale.set(7, 7, 1); sp.renderOrder = 10; lamp.add(sp);
   lamp.add(new THREE.Mesh(new THREE.SphereGeometry(1.8, 8, 6), new THREE.MeshBasicMaterial({ visible: false })));
   d2Add('d2_lamp', lamp, D2.lamp[0], D2.lamp[2]); lamp.position.y = gy + D2.lamp[1]; lamp.visible = false; d2.lamp = lamp; d2.glow = sp;
+  // 脚印：出门沿卵石路走几步，拐进林间踪迹，一直到雾里（和你的一样大；只出不进）
+  { const pl = pathCurve.getLength(), tl = trailCurve.getLength(), at = (c, l, s) => c.getPointAt(Math.min(1, s / l));
+    const route = new THREE.CatmullRomCurve3([new THREE.Vector3(D2.door[0], 0, D2.door[1]), at(pathCurve, pl, 0), at(pathCurve, pl, 2.5), ...[5, 9, 14, 20, 27, 34, 42, 50].map((s) => at(trailCurve, tl, s))]);
+    const n = Math.floor(route.getLength() / 0.38), pm = d2Canvas(32, 64, (x, w, h) => { x.fillStyle = '#fff'; x.beginPath(); x.ellipse(16, 22, 11, 19, 0, 0, 7); x.fill(); x.beginPath(); x.ellipse(16, 52, 8, 10, 0, 0, 7); x.fill(); });
+    const im = new THREE.InstancedMesh(new THREE.PlaneGeometry(0.13, 0.3).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ color: '#3a3128', alphaMap: pm, transparent: true, opacity: 0.6, depthWrite: false, roughness: 1, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -8 }), n);
+    const o = new THREE.Object3D();
+    for (let i = 0; i < n; i++) { const u = (i + 0.5) / n, p = route.getPointAt(u), t = route.getTangentAt(u), side = i % 2 ? 1 : -1;
+      o.position.set(p.x - t.z * 0.11 * side, ground.position.y + 0.02, p.z + t.x * 0.11 * side); o.rotation.set(0, Math.atan2(-t.x, -t.z), 0); o.updateMatrix(); im.setMatrixAt(i, o.matrix); }
+    im.name = 'd2_prints'; im.renderOrder = 2; scene.add(im); OUTDOOR.push(im); d2.prints = im; }
   if (game.day >= 3) day3Setup(); // 小路尽头的老云杉、✕ 那边的灯
 }
 function pathNear(x, z) { // 离小路最近的采样点：{ d 离路中心, s 沿路米数 }
@@ -3110,7 +3120,7 @@ const X_HIDE = ['entry_coat', 'entry_boots', 'entry_lantern']; // ✕ 那间：�
 const x3 = { on: false, wasIn: false, spruce: null, light: null };
 window.cabinX = x3; // 调试
 const D3_CARDS = { // 图层 → [标题, 区域, 中文标题, 英, 中, 说明]
-  d3_spruce: ['The Old Spruce', 'Exterior', '老云杉', GAME_TEXT.xArrive[1].split('\n\n')[0], GAME_TEXT.xArrive[2].split('\n\n')[0], 'Where the path gives out.'],
+  d3_spruce: ['The Old Spruce', 'Exterior', '老云杉', GAME_TEXT.xArrive[1].split('\n\n')[0], GAME_TEXT.xArrive[2].split('\n\n')[0], 'Where the trail gives out.'],
   x_light: ['A Light to the South', 'Exterior', '南边的灯', GAME_TEXT.xLook[1], GAME_TEXT.xLook[2], 'A light, far off in the fog.'],
 };
 for (const [n, c] of Object.entries(D3_CARDS)) { INFO[n] = [c[0], c[1], c[5]]; STORY[c[0] + '|' + c[1]] = c[3]; STORY_ZH[c[0] + '|' + c[1]] = [c[2], c[4]]; }
@@ -3227,7 +3237,7 @@ function shiftWorld() { // 第 3 天离家够远（家已被雾盖住）：屋�
   if (fp) mv(fp.p.root);
   xLook(); mmDirty = true;
 }
-function applyX() { x3.on = true; shiftWorld(); xLook(); }
+function applyX() { x3.on = true; shiftWorld(); xLook(); mapWall(); }
 function enterX() { // 走到那间屋的门廊下：不压黑，记一笔、一句感受
   game.found.add('xarrive'); saveGame(); renderJournal(); applyX(); mmDirty = true; select(null);
   cardData = { t: X_ARRIVE[0], a: X_ARRIVE[1], zt: X_ARRIVE[2], story: X_ARRIVE[3], zs: X_ARRIVE[4], lead: X_ARRIVE[5] };
@@ -3286,12 +3296,9 @@ function updateDay3(dt) {
   d2.lostT = Math.hypot(r.x, r.z) < D3.yard ? 0 : d2.lostT + dt; // 这边走远了也是雾，绕回门口
   if (d2.lostT > D2.lost) { d2.lostT = 0; loopBack(); }
 }
-// —— 迷雾小地图（2026-10-27）：左下角一张竖长的纸图，北在上；没去过的地方盖着雾。屋里五块（按点过的物件区域和第一人称站的位置）、
-// 第 2 天四样地标和灯、小路（认出的记号 / 走过的最远处）、✕。0.3 秒重画一次（几百笔 2D，不碰 WebGL）。屋子画大了（实际 3.4m 见方，图上约 20m）。
-const MM = { x0: -30, z0: -80, w: 170, h: 110, cab: 10 }; // v3：踪迹往东北，图改成横的；整张羊皮纸地图留给下一批
+// —— 迷雾小地图（2026-10-27，v3 起底图 = 墙上那张羊皮纸地图，见下面 mapBase）：左下角，北在上；没去过的地方盖着雾。0.3 秒重画一次（2D，不碰 WebGL）。
 const MM_ROOM = { Entry: 'Entry', 'Water Closet': 'Water Closet', Kitchen: 'Kitchen', 'Kitchen & Dining': 'Kitchen', Parlour: 'Parlour', Hall: 'Parlour', Loft: 'Loft' };
-const MM_CELL = { Parlour: [-1, -1], Kitchen: [0, -1], 'Water Closet': [-1, 0], Entry: [0, 0] }; // 屋里四格：西北起居、东北厨房、西南卫生间、东南玄关；阁楼画在正中
-let mmDirty = true, mmT = 0, mmFar = 0;
+let mmDirty = true, mmT = 0, mmFar = 0, mmPath = 0; // mmFar / mmPath：沿踪迹 / 卵石路走过的最远米数
 function mmReveal(area) { const r = MM_ROOM[area]; if (r && !x3.on && !game.found.has('m:' + r)) { game.found.add('m:' + r); saveGame(); mmDirty = true; } }
 function deskCheck() { // 第 1 天：人在屋里、书桌那页纸进了画面中间才提「书桌上压着一页纸」
   if (game.deskSeen || game.day > 1 || opening || (fp ? outdoors(fp.p.root.position) : !inside)) return;
@@ -3302,57 +3309,117 @@ function deskCheck() { // 第 1 天：人在屋里、书桌那页纸进了画面
 function mmTick(dt) {
   deskCheck(); // 很便宜：找到后第一行就返回
   const c = $('mmap'); c.hidden = !!opening || !game.found.has('page'); // 拿到书桌那页纸（接到调查）才出现
-  if (c.hidden || (mmT += dt) < 0.3) return; mmT = 0;
+  if (c.hidden || !trailCurve || (mmT += dt) < 0.3) return; mmT = 0; // trailCurve：存档里已拿到那页纸时，加载中小地图就显示了，要等路画好
   if (fp && !x3.on) { // 第一人称走到哪：屋里按位置认房间，屋外记沿路走过的最远处
     const r = fp.p.root.position;
     if (!outdoors(r)) mmReveal(r.y > home.floorY + 1.6 ? 'Loft' : r.x < 0 ? (r.z > 0.6 ? 'Water Closet' : 'Parlour') : (r.z > 0.6 ? 'Entry' : 'Kitchen'));
-    else if (d2.samples) { const q = pathNear(r.x, r.z); if (q.d < D2.width && q.s > mmFar) { mmFar = q.s; mmDirty = true; } }
+    else {
+      if (d2.samples) { const q = pathNear(r.x, r.z); if (q.d < D2.width && q.s > mmFar) { mmFar = q.s; mmDirty = true; } }
+      for (let i = Math.floor(mmPath / 0.933); i < pathClear.length; i += 3) if (Math.hypot(pathClear[i][0] - r.x, pathClear[i][1] - r.z) < 6) { mmPath = i * 0.933; mmDirty = true; } // pathClear 约 0.93m 一个点
+    }
   }
   mmDraw();
 }
+// —— 羊皮纸地图（v3，2026-10-29）：墙上 wall_map 和左下小地图是同一张，按自家世界坐标画（北 = -z 在上），风格照 story/map-sketch.png。
+// 红圈 = 小屋（原点）、黄线 = 卵石路 pathCurve → 湖、河；绿线 = 林间踪迹 trailCurve → ✕（老云杉，踪迹 D3.s 处）。✕ 那间屋墙上同一张图，✕ 画在红圈的位置。
+const MAP = { x0: -200, z0: -100, w: 570, h: 410, W: 1024 }; // 墙上那张纸 0.64×0.46m，横的
+const mapP = (x, z) => [(x - MAP.x0) * MAP.W / MAP.w, (z - MAP.z0) * MAP.W / MAP.w];
+function mapBase() { // 不带记号的底图：纸、等高线、点状树、湖河、两条线、罗盘（只画一次）
+  if (mapBase.c) return mapBase.c;
+  const W = MAP.W, k = W / MAP.w, H = Math.round(MAP.h * k), c = mapBase.c = document.createElement('canvas'); c.width = W; c.height = H;
+  const g = c.getContext('2d'), R = rng(11);
+  g.fillStyle = '#d8c7a0'; g.fillRect(0, 0, W, H);
+  for (let i = 0; i < 700; i++) { g.fillStyle = `rgba(${R() < 0.55 ? '120,88,48' : '250,240,214'},${0.025 + R() * 0.05})`; g.beginPath(); g.arc(R() * W, R() * H, 4 + R() * 46, 0, 7); g.fill(); }
+  const vg = g.createRadialGradient(W / 2, H / 2, H * 0.3, W / 2, H / 2, W * 0.62); vg.addColorStop(0, 'rgba(80,52,22,0)'); vg.addColorStop(1, 'rgba(80,52,22,.5)'); g.fillStyle = vg; g.fillRect(0, 0, W, H);
+  // 等高线：一个随便的起伏函数，marching squares 描十几条
+  const hf = (x, z) => 1.2 * Math.sin(x * 0.011 + 1.3) + 1.1 * Math.cos(z * 0.014 - 0.4) + 0.9 * Math.sin((x + z) * 0.007) + 0.35 * Math.sin(x * 0.031 - z * 0.022);
+  const st = 6, nx = Math.ceil(W / st) + 1, ny = Math.ceil(H / st) + 1, V = new Float32Array(nx * ny);
+  for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) V[j * nx + i] = hf(MAP.x0 + i * st / k, MAP.z0 + j * st / k);
+  g.strokeStyle = 'rgba(105,76,42,.42)'; g.lineWidth = 1.3;
+  for (let L = -3; L <= 3; L += 0.42) {
+    g.beginPath();
+    for (let j = 0; j < ny - 1; j++) for (let i = 0; i < nx - 1; i++) {
+      const X = i * st, Y = j * st, q = [];
+      const cr = (a, b, x0, y0, x1, y1) => { if ((a < L) !== (b < L)) { const t = (L - a) / (b - a); q.push(x0 + (x1 - x0) * t, y0 + (y1 - y0) * t); } };
+      const a = V[j * nx + i], b = V[j * nx + i + 1], d = V[(j + 1) * nx + i], e = V[(j + 1) * nx + i + 1];
+      cr(a, b, X, Y, X + st, Y); cr(b, e, X + st, Y, X + st, Y + st); cr(e, d, X + st, Y + st, X, Y + st); cr(d, a, X, Y + st, X, Y);
+      for (let n = 0; n + 3 < q.length; n += 4) { g.moveTo(q[n], q[n + 1]); g.lineTo(q[n + 2], q[n + 3]); }
+    }
+    g.stroke();
+  }
+  // 点状树：避开路、踪迹、湖河、院子
+  const [lx, lz, lr] = WATER.lake || [0, 0, 0];
+  g.fillStyle = 'rgba(52,44,26,.72)';
+  for (let i = 0; i < 1500; i++) {
+    const x = MAP.x0 + R() * MAP.w, z = MAP.z0 + R() * MAP.h;
+    if (Math.hypot(x, z) < 14 || nearAny(pathClear, x, z, 5) || nearAny(trailClear, x, z, 4) || nearAny(WATER.river, x, z, 9) || Math.hypot((x - lx) / 1.35, (z - lz) / 0.85) < lr * 1.3) continue;
+    const [a, b] = mapP(x, z), r = 1.2 + R() * 1.3; g.beginPath(); g.arc(a, b, r, 0, 7); g.fill();
+  }
+  const line = (pts, col, w) => { g.strokeStyle = col; g.lineWidth = w; g.lineCap = g.lineJoin = 'round'; g.beginPath(); pts.forEach(([x, z], i) => g[i ? 'lineTo' : 'moveTo'](...mapP(x, z))); g.stroke(); };
+  if (WATER.river.length) line(WATER.river, '#55707c', 4.5);
+  if (WATER.lake) {
+    g.fillStyle = '#5b7886'; g.strokeStyle = '#3c5260'; g.lineWidth = 2; g.beginPath();
+    for (let i = 0; i <= 48; i++) { const t = i / 48 * Math.PI * 2, r = lr * (1 + 0.12 * Math.sin(t * 3 + 1) + 0.07 * Math.sin(t * 5)); g[i ? 'lineTo' : 'moveTo'](...mapP(lx + Math.cos(t) * r * 1.35, lz - Math.sin(t) * r * 0.85)); } // 同 extendPath 里湖的形状（rotateX(-π/2)：shape y → -z）
+    g.fill(); g.stroke();
+  }
+  if (pathCurve) line(pathCurve.getSpacedPoints(160).map((p) => [p.x, p.z]), '#d6a51c', 5);
+  if (trailCurve) line(trailCurve.getSpacedPoints(80).map((p) => [p.x, p.z]), '#4c8a3a', 4.5);
+  // 罗盘：右上角，N 朝上
+  const cx = W - 74, cy = 74; g.strokeStyle = g.fillStyle = 'rgba(60,40,20,.8)'; g.lineWidth = 1.5;
+  g.beginPath(); g.arc(cx, cy, 40, 0, 7); g.stroke(); g.beginPath(); g.arc(cx, cy, 34, 0, 7); g.stroke();
+  for (let i = 0; i < 8; i++) { const t = i * Math.PI / 4, r = i % 2 ? 18 : 32; g.beginPath(); g.moveTo(cx + Math.sin(t) * r, cy - Math.cos(t) * r); g.lineTo(cx + Math.sin(t + 0.5) * 6, cy - Math.cos(t + 0.5) * 6); g.lineTo(cx + Math.sin(t - 0.5) * 6, cy - Math.cos(t - 0.5) * 6); g.fill(); }
+  g.font = '20px "IM Fell English", Georgia, serif'; g.textAlign = 'center'; g.fillText('N', cx, cy - 46);
+  return c;
+}
+function mapXat() { const p = trailCurve.getPointAt(Math.min(1, D3.s / trailCurve.getLength())); return [p.x, p.z]; } // 老云杉 = 踪迹 D3.s 处（同 pathAt(D3.s)）
+function mapPaint(c, xHouse) { // 底图 + 记号：家里那张红圈在小屋、✕ 在老云杉；✕ 那间屋的那张 ✕ 在红圈的位置，旁注一样
+  const b = mapBase(); c.width = b.width; c.height = b.height; const g = c.getContext('2d'); g.drawImage(b, 0, 0);
+  const [hx, hz] = mapP(0, 0), [xx, xz] = xHouse ? [hx, hz] : mapP(...mapXat());
+  if (!xHouse) { g.strokeStyle = '#b02e1a'; g.lineWidth = 5; g.beginPath(); g.ellipse(hx, hz, 19, 15, -0.3, 0.3, Math.PI * 2.15); g.stroke(); }
+  g.strokeStyle = '#a3281a'; g.lineWidth = 6; g.lineCap = 'round'; g.beginPath(); g.moveTo(xx - 15, xz - 15); g.lineTo(xx + 15, xz + 15); g.moveTo(xx + 15, xz - 15); g.lineTo(xx - 15, xz + 15); g.stroke();
+  g.fillStyle = 'rgba(70,30,18,.9)'; g.font = 'italic 22px "IM Fell English", Georgia, serif'; g.textAlign = 'left'; g.fillText('Do Not Enter', xx + 22, xz - 10);
+  return c;
+}
+function mapWall() { // 墙上那张：换成画出来的图（材质先克隆，别动共用的）
+  let m; layers.get('wall_map')?.traverse((q) => { if (q.isMesh && q.material.name === 'wall_old_map') m = q; }); if (!m) return;
+  if (!mapWall.t) { mapWall.c = document.createElement('canvas'); mapWall.t = new THREE.CanvasTexture(mapWall.c); mapWall.t.colorSpace = THREE.SRGBColorSpace; mapWall.t.anisotropy = 8;
+    m.material = m.material.clone(); m.material.map = mapWall.t; document.fonts.ready.then(mapWall); } // u 从左到右、v 从下到上，CanvasTexture 默认 flipY 正好对上
+  mapPaint(mapWall.c, x3.on); mapWall.t.needsUpdate = true;
+}
 function mmDraw() {
-  const c = $('mmap'), W = 168, H = Math.round(W * MM.h / MM.w), k = W / MM.w, f = game.found;
+  const c = $('mmap'), W = 260, k = W / MAP.w, H = Math.round(MAP.h * k), f = game.found;
   if (c.width !== W) { c.width = W; c.height = H; }
-  const x = c.getContext('2d'), P = (wx, wz) => [(wx - MM.x0) * k, (wz - MM.z0) * k], ox = x3.shifted ? XSHIFT.x : 0, oz = x3.shifted ? XSHIFT.y : 0, Pm = (wx, wz) => P(wx + ox, wz + oz); // Pm：挪过的东西加回 X，图上仍是自家坐标
+  const x = c.getContext('2d'), P = (wx, wz) => [(wx - MAP.x0) * k, (wz - MAP.z0) * k], ox = x3.shifted ? XSHIFT.x : 0, oz = x3.shifted ? XSHIFT.y : 0, Pm = (wx, wz) => P(wx + ox, wz + oz); // Pm：挪过的东西加回 X，图上仍是自家坐标
   if (mmDirty || !mmDraw.base) { // 底图 + 雾只在进度变了才重画，放进离屏 canvas
     mmDirty = false;
     const b = mmDraw.base || (mmDraw.base = document.createElement('canvas')); b.width = W; b.height = H;
     const g = b.getContext('2d');
-    g.fillStyle = '#d8ccb4'; g.fillRect(0, 0, W, H);
-    const S = d2.samples || (pathCurve ? pathCurve.getSpacedPoints(400).slice(0, 90) : []);
-    g.strokeStyle = '#7a6448'; g.lineWidth = 2.2; g.setLineDash([5, 3]); g.beginPath();
-    S.forEach((p, i) => { const [a, d] = Pm(p.x, p.z); i ? g.lineTo(a, d) : g.moveTo(a, d); }); g.stroke(); g.setLineDash([]);
-    const [cx, cz] = P(0, 0), cs = MM.cab * k;
-    g.fillStyle = '#efe6d2'; g.strokeStyle = '#4a3a2a'; g.lineWidth = 1.5;
-    for (const [n, [i, j]] of Object.entries(MM_CELL)) { g.fillRect(cx + i * cs, cz + j * cs, cs, cs); g.strokeRect(cx + i * cs, cz + j * cs, cs, cs); }
-    g.strokeRect(cx - cs / 2, cz - cs / 2, cs, cs); // 阁楼
+    g.drawImage(mmDraw.home || (mmDraw.home = mapPaint(document.createElement('canvas'), false)), 0, 0, W, H);
     const mark = (wx, wz, col, r = 3) => { const [a, d] = P(wx, wz); g.fillStyle = col; g.beginPath(); g.arc(a, d, r, 0, 7); g.fill(); };
-    mark(...D2.block, '#5a4632');
-    for (const n of ['d2_stake', 'd2_blaze', 'd2_cairn']) { const o = layers.get(n); if (o) mark(o.position.x + ox, o.position.z + oz, n === 'd2_stake' ? '#8a3a2a' : n === 'd2_blaze' ? '#2f3a2e' : '#6d6a62'); }
-    mark(D2.lamp[0], D2.lamp[2], '#e8a040', 4);
-    const xp = x3.home || (d2.samples ? [pathAt(D3.s)[0].x, pathAt(D3.s)[0].z] : null);
-    if (xp) { const [a, d] = P(...xp); g.strokeStyle = '#8a2a1a'; g.lineWidth = 2.5; g.beginPath(); g.moveTo(a - 5, d - 5); g.lineTo(a + 5, d + 5); g.moveTo(a + 5, d - 5); g.lineTo(a - 5, d + 5); g.stroke(); }
-    // 雾：整张盖住，再按进度挖洞
+    for (const n of ['d2_stake', 'd2_blaze', 'd2_cairn']) { const o = layers.get(n); if (o) mark(o.position.x + ox, o.position.z + oz, n === 'd2_stake' ? '#8a3a2a' : n === 'd2_blaze' ? '#2f3a2e' : '#6d6a62', 2.5); }
+    mark(D2.lamp[0], D2.lamp[2], '#e8a040', 3.5);
+    // 雾：整张盖住，再按进度挖洞：红圈（拿到那页纸就开）→ 黄线（沿卵石路走过的，第 2 天起整条）→ 绿线（沿踪迹一段段）
     const fog = mmDraw.fog || (mmDraw.fog = document.createElement('canvas')); fog.width = W; fog.height = H;
     const m = fog.getContext('2d'); m.fillStyle = 'rgba(206,208,204,0.97)'; m.fillRect(0, 0, W, H);
     m.globalCompositeOperation = 'destination-out';
     const hole = (wx, wz, r) => { const [a, d] = P(wx, wz), R = r * k, gr = m.createRadialGradient(a, d, R * 0.4, a, d, R); gr.addColorStop(0, '#000'); gr.addColorStop(1, 'rgba(0,0,0,0)'); m.fillStyle = gr; m.fillRect(a - R, d - R, 2 * R, 2 * R); };
-    for (const [n, [i, j]] of Object.entries(MM_CELL)) if (f.has('m:' + n)) m.fillRect(cx + i * cs - 1, cz + j * cs - 1, cs + 2, cs + 2);
-    if (f.has('m:Loft')) m.fillRect(cx - cs / 2 - 1, cz - cs / 2 - 1, cs + 2, cs + 2);
+    hole(0, 0, 34);
+    const pMax = game.day >= 2 ? 1e9 : mmPath;
+    for (let i = 0; i < pathClear.length && i * 0.933 <= pMax; i += 12) hole(...pathClear[i], 22);
+    const S = d2.samples || trailCurve.getSpacedPoints(80);
     const sMax = Math.max(mmFar, f.has('xarrive') ? D3.s : 0, ...['d2stake', 'd2blaze', 'd2cairn'].map((n, i) => f.has(n) ? [24, 44, 64][i] + 4 : 0));
-    for (let i = 0; i < S.length && i * (S.ds || 1) <= sMax; i += 4) hole(S[i].x + ox, S[i].z + oz, 7);
-    if (f.has('d2block')) hole(...D2.block, 9);
-    for (const n of ['d2_stake', 'd2_blaze', 'd2_cairn']) { const o = layers.get(n); if (o && f.has(n.replace('_', ''))) hole(o.position.x + ox, o.position.z + oz, 11); }
-    if (f.has('d2light')) hole(D2.lamp[0], D2.lamp[2], 12);
-    if (xp && f.has('xarrive')) hole(...xp, 14);
+    for (let i = 0; i < S.length && i * (S.ds || 1e9) <= sMax; i += 6) hole(S[i].x + ox, S[i].z + oz, 18);
+    for (const n of ['d2_stake', 'd2_blaze', 'd2_cairn']) { const o = layers.get(n); if (o && f.has(n.replace('_', ''))) hole(o.position.x + ox, o.position.z + oz, 18); }
+    if (f.has('d2light')) hole(D2.lamp[0], D2.lamp[2], 18);
+    if (f.has('xarrive')) hole(...mapXat(), 24);
     m.globalCompositeOperation = 'source-over';
     g.drawImage(fog, 0, 0);
   }
   x.clearRect(0, 0, W, H); x.drawImage(mmDraw.base, 0, 0);
   const pr = fp ? fp.p.root.position : people.get('person_man')?.root.position; // 老稽查在哪（在 ✕ 那间就画在 ✕）
   if (pr) {
-    const [a, d] = x3.on && x3.home ? P(...x3.home) : outdoors(pr) ? Pm(pr.x, pr.z) : P(pr.x * MM.cab / 1.7, pr.z * MM.cab / 1.7);
-    x.fillStyle = '#b8401f'; x.strokeStyle = '#fff'; x.lineWidth = 1.5; x.beginPath(); x.arc(a, d, 4, 0, 7); x.fill(); x.stroke();
+    const [a, d] = x3.on && x3.home ? P(...x3.home) : outdoors(pr) ? Pm(pr.x, pr.z) : P(0, 0);
+    x.fillStyle = '#b8401f'; x.strokeStyle = '#fff'; x.lineWidth = 1.5; x.beginPath(); x.arc(a, d, 4.5, 0, 7); x.fill(); x.stroke();
   }
 }
 // —— 爬梯子（2026-10-20，女调查员；动作 Climb_Ladder_Loop / Ladder_Top / Ladder_Top_Lift 是 Blender 里按梯子尺寸用 IK 摆的，../blender/scripts/climb.py）——
@@ -5171,21 +5238,24 @@ let intro = null;
 // 时长（秒）、从路上多远（米）开始、起始高度、起始/最终视场角；开头高空广角看整片林子 → 俯冲收窄 → 贴路拐两个弯（路在 15–65m 是 S 形）→ 小屋前
 // 先按参数 u 算出整条镜头轨迹（只管形状），再按三维弧长重新分配时间：全程速度平滑地从快降到慢（用户要“差不多匀速，开头快一点后面慢一点”），
 // 原来按 u 直接走，俯冲时垂直速度叠加、过渡段 lerp 忽快忽慢
-const INTRO_FROM = 220, INTRO_H = 70, FOV0 = 62, FOV1 = 40;
+const INTRO_FROM = 440, INTRO_H = 70, FOV0 = 62, FOV1 = 40;
 // 速度按高度定：70m 高空 40m/s，降到林间 10m/s（用户嫌林间 15–29m/s 冲太快），过渡段再平滑降到自动旋转的线速度；总时长由此算出（约 12 秒）
-const INTRO_VTOP = 40, INTRO_VLOW = 10, INTRO_SLOW = 0.6, INTRO_RISE = 1.6; // INTRO_SLOW：林间末尾速度倍数；INTRO_RISE：抬升段减速曲线指数（越大越早减）
+const INTRO_VTOP = 60, INTRO_VLOW = 10, INTRO_SLOW = 0.6, INTRO_RISE = 1.6; // INTRO_SLOW：林间末尾速度倍数；INTRO_RISE：抬升段减速曲线指数（越大越早减）
 const INTRO_ARC = Math.PI / 12; // 最后 15°（30° 时尾段慢速爬太久） 沿首页视角所在的圆弧飞进去，方向和速度都正好接上自动旋转
-const introDist = (s) => THREE.MathUtils.lerp(INTRO_FROM, 6, 1 - Math.pow(1 - s, 2.64)); // 轨迹形状：u → 离院子的路程（俯冲落在约 70m，S 弯之前）
+const introDist = (s) => THREE.MathUtils.lerp(INTRO_FROM, 6, 1 - Math.pow(1 - s, 4.04)); // 指数让俯冲仍落在约 65m（v3 起点 440m 在河上，原来 220m 用 2.64）；轨迹形状：u → 离院子的路程（俯冲落在约 70m，S 弯之前）
 const DIVE = 0.39, BLEND = 0.6; // 俯冲落在离院子约 65m（S 弯开头），贴路段短一点 // u 的前 36% 俯冲；60% 起过渡到首页视角
 const smoothstep = (a, b, x) => { const t = THREE.MathUtils.clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
 function startIntro() {
   if (!pathCurve) { if (sliceOn()) sliceStart(); return; } // 没有开场路线（无头测试）：切片直接站到门廊
   // resetView 刚摆好的就是最终画面
   const slice = sliceOn(), homePos = slice ? sliceEye() : camera.position.clone(), homeTgt = slice ? homePos.clone().add(new THREE.Vector3(0, -0.1, -1)) : controls.target.clone(); // 切片：落在门廊稽查的眼睛，朝门
-  const len = pathCurve.getLength(), gy = ground.position.y;
-  const at = (m) => pathCurve.getPointAt(THREE.MathUtils.clamp(m / len, 0, 1));
+  // v3：沿河（湖东边那段，自东往西）→ 湖 → 黄线卵石路进来；离院子的路程 m 在卵石路上和原来一样
+  const [lx, lz] = WATER.lake, east = WATER.river.filter(([x]) => x > lx + 40 && x < lx + 260).map(([x, z]) => new THREE.Vector3(x, 0, z));
+  const guide = new THREE.CatmullRomCurve3([...pathCurve.getSpacedPoints(200), new THREE.Vector3(lx, 0, lz), ...east]);
+  const len = guide.getLength(), gy = ground.position.y;
+  const at = (m) => guide.getPointAt(THREE.MathUtils.clamp(m / len, 0, 1));
   const omega = 2 * Math.PI / 60 * controls.autoRotateSpeed; // OrbitControls 自动旋转角速度（rad/s）
-  const dEnd = introDist(DIVE), A = at(INTRO_FROM), B = at(dEnd), dir = B.clone().sub(A).normalize();
+  const dEnd = introDist(DIVE), A = at(INTRO_FROM), B = at(dEnd), air = new THREE.CatmullRomCurve3([...Array(Math.ceil((INTRO_FROM - dEnd) / 60)).keys()].map((i) => at(INTRO_FROM - i * 60)).concat([B])); // 空中沿一条每 60m 取一点的平滑线（顺着河、湖、路的大方向，不跟小弯摆）
   const v1 = slice ? 0.6 : Math.abs(omega) * Math.hypot(homePos.x - homeTgt.x, homePos.z - homeTgt.z); // 自动旋转时相机的线速度
   const N = 900, P = [], Lk = [], F = [], Bob = [], V = [], S = [0];
   for (let i = 0; i <= N; i++) {
@@ -5196,7 +5266,7 @@ function startIntro() {
     const ahead = THREE.MathUtils.lerp(140, 12, dive);
     const p = at(d), look = at(d - ahead);
     // 空中不跟着弯弯的小路左右摆：沿起点 → 俯冲落点的直线飞、朝直线方向看，随下降逐渐换成沿路
-    const cp = A.clone().lerp(B, (INTRO_FROM - d) / (INTRO_FROM - dEnd)), cl = cp.clone().addScaledVector(dir, ahead);
+    const fa = THREE.MathUtils.clamp((INTRO_FROM - d) / (INTRO_FROM - dEnd), 0, 1), cp = air.getPointAt(fa), cl = cp.clone().addScaledVector(air.getTangentAt(fa), ahead);
     p.lerpVectors(cp, p, dive); look.lerpVectors(cl, look, dive);
     const h = THREE.MathUtils.lerp(INTRO_H, 2.4, dive);
     p.y = gy + h; look.y = gy + h - THREE.MathUtils.lerp(40, 0.5, dive);
