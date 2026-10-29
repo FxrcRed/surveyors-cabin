@@ -1440,6 +1440,13 @@ float ln(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
   // ✕ 那间屋在踪迹老云杉旁边：X = 老云杉位置 − 那间屋院子里老云杉的位置（D3.spruceX），种树时留出这块空地
   const sp = trailCurve.getPointAt(D3.s / trailCurve.getLength());
   XSHIFT.set(sp.x - D3.spruceX[0], sp.z - D3.spruceX[1]);
+  // 种树前先定好第 2 天的灯、标记树的位置：灯放在「林子突然分开」处，从该看见灯的地方到灯清出一条没树的视线
+  const tl = trailCurve.getLength(), on = (s, off = 0) => { const u = Math.min(1, s / tl), p = trailCurve.getPointAt(u), t = trailCurve.getTangentAt(u); return [p.x - t.z * off, p.z + t.x * off]; };
+  [D2.lamp[0], D2.lamp[2]] = on(86, -5); // 傍晚的灯：踪迹往前、石堆再过去的雾里
+  const xl = [XSHIFT.x, XSHIFT.y + 3.4]; // ✕ 那间屋门廊灯（大概位置，空地 12m 本来就没树）
+  for (const s of [10, 64]) SIGHT.push([...on(s), D2.lamp[0], D2.lamp[2]]); // 院子边（回家时看见）、石堆（第四样找到时天转傍晚）
+  for (const s of [60, 75, 90]) SIGHT.push([...on(s), ...xl]); // 第 3 天沿踪迹走：光晕 105m 内开始淡入
+  CROWN_KEEP.push([...on(D2_SPOTS.d2_blaze.s, D2_SPOTS.d2_blaze.off), MARK_TREES.blaze[1] * MARK_R], [...on(D3.s), MARK_TREES.spruce[1] * MARK_R]); // 两棵标记树先占位
 }
 
 // 沿曲线铺一条带子：cols(i) 给出每一行各列的 [离中心线的偏移, 不透明度]，uv 用平面映射
@@ -1471,7 +1478,9 @@ const CROWNS = [[0x2f3a2e, 0.30], [0x3d4a37, 0.26], [0x56604a, 0.18], [0x6e6e47,
 const TRUNK = 0x4a3a2c;
 const lite = matchMedia('(pointer: coarse)').matches; // 手机少种一些
 
-async function loadTree(url) { // → [{ geometry, material }]，底部中心在原点、高 1
+const treeCache = {};
+const loadTree = (url) => (treeCache[url] ||= loadTree0(url)); // 标记树和森林共用一份
+async function loadTree0(url) { // → [{ geometry, material }]，底部中心在原点、高 1
   const gltf = await loader.parseAsync(await (await fetch(url)).arrayBuffer(), '');
   gltf.scene.updateMatrixWorld(true);
   const parts = [], b = new THREE.Box3();
@@ -1539,6 +1548,19 @@ function nearAny(list, x, z, r) {
   }
   return false;
 }
+function nearD(list, x, z) { // 离 list 里最近的点多远（只查 8m 内，再远都当 8m）
+  const g = gridOf(list), cx = Math.floor(x / CELL), cz = Math.floor(z / CELL);
+  let d = CELL * CELL;
+  for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) {
+    const a = g.get((cx + i) * 100003 + cz + j);
+    if (a) for (const [px, pz] of a) d = Math.min(d, (px - x) ** 2 + (pz - z) ** 2);
+  }
+  return Math.sqrt(d);
+}
+function segD(x, z, [ax, az, bx, bz]) { // 点到线段的水平距离
+  const dx = bx - ax, dz = bz - az, u = THREE.MathUtils.clamp(((x - ax) * dx + (z - az) * dz) / (dx * dx + dz * dz), 0, 1);
+  return Math.hypot(x - ax - u * dx, z - az - u * dz);
+}
 function takeAt(taken, x, z) { gridOf(taken); taken.push([x, z]); gridAdd(taken, x, z); }
 function ringPoints(rand, n, r0, r1, gap, center, taken) {
   const pts = [];
@@ -1571,19 +1593,37 @@ function pathSidePoints(rand, n, gap, taken) {
 }
 
 let forestCenter;
-const TREE_K = 1.3; // 所有树整体放大（2026-10-20 用户要 1.3 倍）；靠近小屋的仍按下面的 fit 缩小
+// 树高 ×2.35（2026-10-29：原 1.3 时云杉中位 9m、第一人称眼高 1.52m，人像巨人；现中位约 17m、最高约 23m，接近真实云杉）
+// 树冠宽只 ×1.35（TREE_W）：云杉本来就细长，全按高度放大的话树冠半径 4m+，林子里挤成一团
+const TREE_K = 2.35, TREE_W = 0.75;
 const TREE_XZ = []; // 小屋 120m 内高于 2m 的树：x, z 交替
+const SIGHT = []; // 看灯的视线通道 [ax, az, bx, bz]：树冠不碰（extendPath 里定）
+const CROWN_KEEP = []; // 先占位的树冠 [x, z, 半径]：标记树
+const MARK_R = 0.28; // pine.glb 树冠半径 / 树宽
+const MARK_TREES = { blaze: [15, 6.5], spruce: [24, 11] }; // 刻「7」的云杉、老云杉：[树高, 树宽]（m）
+const crownGrid = new Map(); // 已种下的细模树冠 [x, z, 半径]，8m 一格
+function crownAdd(x, z, r) { const k = Math.floor(x / CELL) * 100003 + Math.floor(z / CELL), a = crownGrid.get(k); if (a) a.push([x, z, r]); else crownGrid.set(k, [[x, z, r]]); }
+// 这里的树冠最宽能到多少（m）：边缘不压卵石路、踪迹、看灯的视线；细模还不插进旁边的树冠（允许枝梢交错 15%）
+function crownRoom(x, z, mutual) {
+  let m = Math.min(nearD(pathClear, x, z) - 1.6, nearD(trailClear, x, z) - 1.0);
+  for (const sg of SIGHT) m = Math.min(m, segD(x, z, sg) - 0.8);
+  if (mutual) { const cx = Math.floor(x / CELL), cz = Math.floor(z / CELL);
+    for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) for (const [px, pz, r] of crownGrid.get((cx + i) * 100003 + cz + j) || []) m = Math.min(m, Math.hypot(px - x, pz - z) / 0.85 - r); }
+  return m;
+}
 function plant(parts, pts, rand, hMin, hMax, y) {
   const tint = new THREE.Color(), m = new THREE.Matrix4(), q = new THREE.Quaternion(), s = new THREE.Vector3(), p = new THREE.Vector3(), up = new THREE.Vector3(0, 1, 0);
   const ims = parts.map(({ geometry, material }) => new THREE.InstancedMesh(geometry, material, pts.length));
+  if (!crownGrid.size) for (const k of CROWN_KEEP) crownAdd(...k);
+  const R = parts.radius || 0.3, mutual = !!parts.radius; // 远处简化版（雾里）只避路和视线，彼此可以交叠，不然远山就稀了
   pts.forEach(([x, z], i) => {
-    let h = (hMin + (hMax - hMin) * rand()) * TREE_K, w = h * (0.7 + rand() * 0.6); // 胖瘦差别大一点
+    let h = (hMin + (hMax - hMin) * rand()) * TREE_K, w = h * (0.7 + rand() * 0.6) * TREE_W; // 胖瘦差别大一点
     // 树冠边缘离小屋中心至少 7m（院子角 5.7m + 屋檐余量），太胖就按比例缩小，缩太多就不种
-    const room = Math.hypot(x - forestCenter.x, z - forestCenter.z) - 7, fit = room / ((parts.radius || 0.3) * w);
+    const room = Math.hypot(x - forestCenter.x, z - forestCenter.z) - 7, fit = room / (R * w);
     if (fit < 1) { if (fit < 0.5) { h = w = 0; } else { h *= fit; w *= fit; } }
-    // 树放大后路边的树冠会伸到路上（开场贴路 2.4m 高飞过）：树冠边缘离路中心至少 1.3m，只收窄不降高，最多收到 0.6
-    if (w && room < 160) { let d = 1e9; for (const [px, pz] of pathClear) d = Math.min(d, (px - x) ** 2 + (pz - z) ** 2);
-      w *= THREE.MathUtils.clamp((Math.sqrt(d) - 1.3) / ((parts.radius || 0.3) * w), 0.6, 1); }
+    // 路、踪迹、视线通道、旁边的树冠：只收窄不降高，收到一半还不够就不种（开场贴路 2.4m 高飞过、第一人称走在踪迹上，都不钻树冠）
+    if (w) { const k = crownRoom(x, z, mutual) / (R * w); if (k < 0.5) h = w = 0; else if (k < 1) w *= k; }
+    if (w && mutual) crownAdd(x, z, R * w);
     m.compose(p.set(x, y, z), q.setFromAxisAngle(up, rand() * Math.PI * 2), s.set(w, h, w));
     if (h > 2 && room < 115) TREE_XZ.push(x, z); // 第一人称在屋外撞树干用（fpTrees）
     ims.forEach((im) => im.setMatrixAt(i, m));
@@ -2929,7 +2969,7 @@ function gameInit() { // 模型和开关都建好后调（loadPeople 之前）�
 const DAY2_NEED = ['d2block', 'd2stake', 'd2blaze', 'd2cairn'];
 const DAY2_MARKS = ['d2stake', 'd2blaze', 'd2cairn']; // 沿路的三样：每认出一样，雾里能走的那段就往前放一截（D2.reach）
 const D2 = { door: [-0.05, 3.4], block: [1.9, 3.0], yard: 13, width: 6.5, reach: [32, 52, 72, 90], lost: 1.2, lamp: [40, 2.4, -38], lampNear: 26 };
-const D2_SPOTS = { d2_stake: { s: 24, off: 2.3 }, d2_blaze: { s: 44, off: -2.0 }, d2_cairn: { s: 64, off: 2.0 } }; // s = 从院子边起沿小路的米数，off = 离路中心
+const D2_SPOTS = { d2_stake: { s: 24, off: 2.3 }, d2_blaze: { s: 44, off: 2.6 }, d2_cairn: { s: 64, off: 2.0 } }; // s = 从院子边起沿小路的米数，off = 离路中心
 const d2 = { veil: false, lamp: null, lostT: 0, samples: null, lampSaid: false };
 window.cabinD2 = d2; // 调试
 const D2_CARDS = { // 图层 → [标题, 区域, 中文标题, 英, 中, 说明]
@@ -3025,10 +3065,23 @@ function d2Add(name, g, x, z, yaw = 0) {
   scene.add(g); layers.set(name, g); g.traverse((o) => { if (o.isMesh) { meshes.push(o); o.receiveShadow = true; } });
   return g;
 }
+function markTree(g, H, W) { // 标记树：林子里的云杉模型（pine.glb）放大，不另建模型；→ 「离地 y 米处的树干半径」函数，贴刻痕用
+  return loadTree('trees/pine.glb').then((parts) => {
+    for (const { geometry, material, trunk } of parts) { // 单实例 InstancedMesh：树冠材质（色块、积雪）跟林子里一样，它的着色器要 instanceMatrix
+      const o = new THREE.InstancedMesh(geometry, material, 1);
+      o.setMatrixAt(0, new THREE.Matrix4().makeScale(W, H, W)); if (!trunk) o.setColorAt(0, new THREE.Color(CROWNS[0][0]));
+      o.computeBoundingSphere(); o.receiveShadow = true; g.add(o); meshes.push(o);
+    }
+    const pos = parts.find((p) => p.trunk).geometry.attributes.position, ring = new Map(); // 树干每一圈顶点的高度 → 半径
+    for (let i = 0; i < pos.count; i++) { const y = Math.round(pos.getY(i) * 1000) / 1000; ring.set(y, Math.max(ring.get(y) || 0, Math.hypot(pos.getX(i), pos.getZ(i)))); }
+    const rs = [...ring].sort((a, b) => a[0] - b[0]);
+    return (y) => { const v = y / H, j = Math.max(1, rs.findIndex(([ry]) => ry >= v)), [y0, r0] = rs[j - 1], [y1, r1] = rs[j] || rs[j - 1];
+      return W * (r0 + (r1 - r0) * THREE.MathUtils.clamp((v - y0) / ((y1 - y0) || 1), 0, 1)); };
+  });
+}
 function day2Setup() {
   const pts = trailCurve.getSpacedPoints(600), ds = trailCurve.getLength() / 600; // v3：记号都在林间踪迹上，不在卵石路上
   d2.samples = pts.slice(0, Math.ceil((game.day >= 3 ? 140 : 120) / ds)); d2.samples.ds = ds;
-  { const [p, rt] = pathAt(86); p.addScaledVector(rt, -5); D2.lamp[0] = p.x; D2.lamp[2] = p.z; } // 傍晚的灯：踪迹往前、石堆再过去的雾里
   const gy = ground.position.y, bark = d2Mat('#5a4632'), wood = d2Mat('#9c7a52'), dark = d2Mat('#2a1f16');
   // 劈柴木桩：齐腰高一截圆木，顶上一道斜刀口（深色细条）
   const blk = new THREE.Group(), BH = 0.62;
@@ -3040,14 +3093,13 @@ function day2Setup() {
   stk.add(new THREE.Mesh(new THREE.BoxGeometry(0.09, BH, 0.09), wood).translateY(BH / 2));
   const c2 = cut.clone(); c2.scale.set(0.3, 1, 1); c2.position.y = BH - 0.06; stk.add(c2);
   const rag = new THREE.Mesh(new THREE.PlaneGeometry(0.08, 0.22), new THREE.MeshStandardMaterial({ color: '#8a3a2a', roughness: 1, side: THREE.DoubleSide })); rag.position.set(0.05, BH - 0.14, 0); rag.rotation.set(0, 0.4, 0.15); stk.add(rag);
-  // 刻了记号的云杉：树干 + 两节树冠，齐眼高一块削白的树皮，canvas 画箭头和「7」
+  // 刻了记号的云杉：林子里同一种云杉模型（pine.glb）放大，齐眼高一块削白的树皮，canvas 画箭头和「7」
   const tree = new THREE.Group();
-  tree.add(new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.3, 8, 12), d2Mat('#4A3A2C')).translateY(4));
-  for (const [r, h, y] of [[1.9, 4.2, 4.2], [1.3, 3.4, 6.4]]) tree.add(new THREE.Mesh(new THREE.ConeGeometry(r, h, 10), d2Mat('#2F3A2E')).translateY(y));
   const mark = d2Canvas(64, 96, (x, w, h) => { x.fillStyle = '#c9b48a'; x.fillRect(0, 0, w, h); x.strokeStyle = '#3a2a1a'; x.lineWidth = 5; x.lineCap = 'round';
     x.beginPath(); x.moveTo(32, 50); x.lineTo(32, 12); x.moveTo(20, 24); x.lineTo(32, 12); x.lineTo(44, 24); x.stroke(); x.font = 'bold 34px serif'; x.fillStyle = '#3a2a1a'; x.textAlign = 'center'; x.fillText('7', 32, 86); });
-  const blaze = new THREE.Mesh(new THREE.PlaneGeometry(0.34, 0.5), d2Mat('#ffffff', mark)); blaze.position.set(0, 1.5, 0.3); tree.add(blaze); // 树干在 1.5m 高处半径约 0.28：第一版贴在 z 0.235 埋进树干里看不见，又小、离路 3.2m（用户第 2 天卡关）
-  const rag2 = rag.clone(); rag2.position.set(0.22, 1.05, 0.24); rag2.rotation.set(0, 0.6, 0.1); rag2.scale.set(1.6, 1.4, 1); tree.add(rag2); // 跟标桩一样系条红布，雾里好认
+  const blaze = new THREE.Mesh(new THREE.PlaneGeometry(0.34, 0.5), d2Mat('#ffffff', mark)); tree.add(blaze); // 第一版贴在 z 0.235 埋进树干里看不见，又小、离路 3.2m（用户第 2 天卡关）
+  const rag2 = rag.clone(); rag2.rotation.set(0, 0.6, 0.1); rag2.scale.set(1.6, 1.4, 1); tree.add(rag2); // 跟标桩一样系条红布，雾里好认
+  markTree(tree, ...MARK_TREES.blaze).then((r) => { blaze.position.set(0, 1.5, r(1.5) + 0.02); rag2.position.set(0.22, 1.05, r(1.05) + 0.03); }); // 贴在树干表面（按模型量出的树干半径）
   // 石堆：几块大小不一的石头摞到齐膝高
   const cairn = new THREE.Group(), R = rng(7), stone = d2Mat('#6d6a62');
   let y = 0;
@@ -3059,7 +3111,7 @@ function day2Setup() {
   // 雾里的灯：暖色光晕（不吃雾、不被挡）+ 一个看不见的大球好点；傍晚才出现
   const lamp = new THREE.Group();
   const glow = d2Canvas(64, 64, (x) => { const gr = x.createRadialGradient(32, 32, 0, 32, 32, 32); gr.addColorStop(0, 'rgba(255,226,170,1)'); gr.addColorStop(0.12, 'rgba(255,196,110,.9)'); gr.addColorStop(0.4, 'rgba(240,150,60,.3)'); gr.addColorStop(1, 'rgba(230,140,60,0)'); x.fillStyle = gr; x.fillRect(0, 0, 64, 64); });
-  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: glow, fog: false, depthTest: false, transparent: true, depthWrite: false })); sp.scale.set(7, 7, 1); sp.renderOrder = 10; lamp.add(sp);
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: glow, fog: false, depthTest: false, transparent: true, depthWrite: false })); sp.scale.set(9, 9, 1); sp.renderOrder = 10; lamp.add(sp); // 原 7：远处林缝里太小
   lamp.add(new THREE.Mesh(new THREE.SphereGeometry(1.8, 8, 6), new THREE.MeshBasicMaterial({ visible: false })));
   d2Add('d2_lamp', lamp, D2.lamp[0], D2.lamp[2]); lamp.position.y = gy + D2.lamp[1]; lamp.visible = false; d2.lamp = lamp; d2.glow = sp;
   // 脚印：出门沿卵石路走几步，拐进林间踪迹，一直到雾里（和你的一样大；只出不进）
@@ -3214,9 +3266,8 @@ function endDay2() { // 读完第 2 夜的调查记录：同 endDay，存成第 
     [['Next Morning', '第三天早上', () => { game.day = 3; saveGame(); try { sessionStorage.setItem('cabin.nextDay', '1'); } catch (e) { /* 存不了就照常问「继续上次」 */ } location.reload(); }]]);
 }
 function day3Setup() { // 小路尽头的老云杉 + 裂口 + 焦黑松针；✕ 那间屋往南看的灯（只在 ✕ 那边亮）
-  const g = new THREE.Group(), bark = d2Mat('#3e3024'), needle = d2Mat('#26302a');
-  g.add(new THREE.Mesh(new THREE.CylinderGeometry(0.45, 0.75, 16, 14), bark).translateY(8));
-  for (const [r, h, y] of [[3.2, 6, 7], [2.5, 5, 10.5], [1.7, 4, 13.5]]) g.add(new THREE.Mesh(new THREE.ConeGeometry(r, h, 12), needle).translateY(y));
+  const g = new THREE.Group(), bark = d2Mat('#3e3024');
+  markTree(g, ...MARK_TREES.spruce); // 林子里同一种云杉，最高最粗的一棵
   for (let i = 0; i < 6; i++) { // 树根：几根斜插进土里的圆木
     const a = i * 1.05 + 0.3, m = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.22, 1.8, 6), bark);
     m.position.set(Math.cos(a) * 0.95, 0.12, Math.sin(a) * 0.95); m.rotation.set(0, -a, Math.PI / 2 - 0.18); m.rotation.order = 'YZX'; g.add(m);
@@ -3234,7 +3285,7 @@ function day3Setup() { // 小路尽头的老云杉 + 裂口 + 焦黑松针；✕
   x3.light = d2Add('x_light', lamp, D3.light[0], D3.light[2]); lamp.position.y = ground.position.y + D3.light[1]; lamp.visible = false;
   // ✕ 那间屋的门廊灯：屋子还没「到」之前，雾里先亮这一团光晕（不吃雾），跟着世界一起平移
   const pl = layers.get('entry_porch_lamp'), pc = pl ? new THREE.Box3().setFromObject(pl).getCenter(new THREE.Vector3()) : new THREE.Vector3(0, ground.position.y + 2.2, 3.4);
-  x3.glow = new THREE.Sprite(d2.glow.material.clone()); x3.glow.scale.set(4, 4, 1); x3.glow.renderOrder = 10; x3.glow.visible = false;
+  x3.glow = new THREE.Sprite(d2.glow.material.clone()); x3.glow.scale.set(5.5, 5.5, 1); x3.glow.renderOrder = 10; x3.glow.visible = false;
   x3.glow.position.set(pc.x + XSHIFT.x, pc.y, pc.z + XSHIFT.y); scene.add(x3.glow); OUTDOOR.push(x3.glow);
   if (game.found.has('xarrive') && !game.found.has('ended')) applyX();
 }
