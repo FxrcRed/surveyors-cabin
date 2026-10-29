@@ -1422,6 +1422,21 @@ float ln(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
   const rv = new THREE.Mesh(ribbon(river, rp, (i) => { const w = 4 + 1.2 * Math.sin(i * 0.21); return [[w, 1], [-w, 1]]; }, () => [0, 0], P.y + 0.008), water);
   rv.name = 'river'; scene.add(rv);
   OUTDOOR.push(path, leaves, lake, rv);
+  // ✕ 那间屋周边（只在 ✕ 状态出现，不随世界平移：屋子就在原点）：① 院子地坪的材质往外铺一圈圆，顶点透明度 1→0，落地处不是生硬的边；
+  // ② 门前一段卵石路向外淡出，石块一块块稀掉、不通向任何地方
+  const ringG = new THREE.RingGeometry(0.01, 15, 72, 12).rotateX(-Math.PI / 2), rp2 = ringG.attributes.position, rc = [];
+  for (let i = 0; i < rp2.count; i++) { const r = Math.hypot(rp2.getX(i), rp2.getZ(i)), t = Math.min(1, Math.max(0, (r - 5) / 9.5)); rc.push(1, 1, 1, 1 - t * t * (3 - 2 * t)); }
+  ringG.setAttribute('color', new THREE.Float32BufferAttribute(rc, 4)); ringG.translate(x0, 0, z0 - 3);
+  setPlanarUV(ringG, L.uv); ringG.attributes.position.array.forEach((_, i) => i % 3 === 1 && (ringG.attributes.position.array[i] = L.y - 0.002));
+  const xRing = new THREE.Mesh(ringG, Object.assign(L.material.clone(), { transparent: true, depthWrite: false, vertexColors: true, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -2 }));
+  xRing.material.onBeforeCompile = (sh) => { antiTile(sh, ''); groundCover(sh); }; xRing.receiveShadow = true;
+  const xCurve = new THREE.CatmullRomCurve3([[0, 0], [0, 2], [1, 7], [3, 12], [2.5, 17], [0.5, 21]].map(([dx, dz]) => new THREE.Vector3(x0 + dx, 0, z0 + dz)));
+  const xPts = xCurve.getSpacedPoints(Math.round(xCurve.getLength() / 0.311)), xN = xPts.length - 1;
+  const xFade = (i) => { const t = i / xN; return 1 - Math.min(1, Math.max(0, (t - 0.25) / 0.7)); }; // 前四分之一实心，之后一路稀到消失
+  const xPath = new THREE.Mesh(ribbon(xCurve, xPts, (i) => { const L2 = w / 2 * jag(i, 1) * (0.5 + 0.5 * xFade(i)), R2 = w / 2 * jag(i, 6) * (0.5 + 0.5 * xFade(i)), f = xFade(i);
+    return [...edge(L2).map(([d, a]) => [d, a * f]), ...edge(R2).map(([d, a]) => [-d, a * f]).reverse()]; }, P.uv, P.y), pathMat);
+  xPath.receiveShadow = true;
+  x3.ground = [xRing, xPath]; x3.ground.forEach((m) => { m.visible = false; scene.add(m); });
   // ✕ 那间屋在踪迹老云杉旁边：X = 老云杉位置 − 那间屋院子里老云杉的位置（D3.spruceX），种树时留出这块空地
   const sp = trailCurve.getPointAt(D3.s / trailCurve.getLength());
   XSHIFT.set(sp.x - D3.spruceX[0], sp.z - D3.spruceX[1]);
@@ -3237,7 +3252,7 @@ function shiftWorld() { // 第 3 天离家够远（家已被雾盖住）：屋�
   if (fp) mv(fp.p.root);
   xLook(); mmDirty = true;
 }
-function applyX() { x3.on = true; shiftWorld(); xLook(); mapWall(); }
+function applyX() { x3.on = true; x3.ground?.forEach((m) => { m.visible = true; }); shiftWorld(); xLook(); mapWall(); }
 function enterX() { // 走到那间屋的门廊下：不压黑，记一笔、一句感受
   game.found.add('xarrive'); saveGame(); renderJournal(); applyX(); mmDirty = true; select(null);
   cardData = { t: X_ARRIVE[0], a: X_ARRIVE[1], zt: X_ARRIVE[2], story: X_ARRIVE[3], zs: X_ARRIVE[4], lead: X_ARRIVE[5] };
