@@ -5018,8 +5018,8 @@ function updateFP(dt) {
 }
 
 // —— 第一人称切片（2026-10-28，网址带 ?fp）：开场落在门廊，玩家就是稽查，推门进屋；书记员当同伴。手机：点哪走哪 + 拖动转头（不做摇杆）——
-// 试玩过了再变成默认、删屋里的房间按钮和换房间飞行；现在不带 ?fp 一切照旧。?touch：电脑上测触屏那套
-const SLICE = /[?&]fp\b/.test(location.search), touchFP = matchMedia('(pointer: coarse)').matches || /[?&]touch\b/.test(location.search);
+// 2026-10-29 起是默认（用户：旧的环视版第 1 天不要了）；?nofp 只留给老的无头测试 day1.py。?touch：电脑上测触屏那套
+const SLICE = !/[?&]nofp\b/.test(location.search), touchFP = matchMedia('(pointer: coarse)').matches || /[?&]touch\b/.test(location.search);
 const SL = { man: [-0.05, 3.4], woman: [0.6, 3.25], door: [[-0.05, 2.45], [-0.05, 1.5]], sofa: [0.19, -0.17], seen: new Set(), room: undefined, t: 0, w: null, inT: 0 }; // door：门外 → 门里（门轴 x -0.49、z 1.9）
 const FP_DRAG = 0.006, _slO = new THREE.Vector3(), _slD = new THREE.Vector3();
 const fpT = { id: null, x: 0, y: 0, x0: 0, y0: 0, t: 0, drag: false, at: 0 };
