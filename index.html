@@ -433,7 +433,12 @@ import { applyWeather, wsPos, WS, groundCover, cover, precipHole, setupRoofWeath
 import { LAMPS, toggles, DOORS, swapSoftProps, splitParts, setupToggles, setupFire, setupWaterFx, toggle, fire, rocker, toggleOf, updateToggles, updateFire, updateLantern, updateRocker, updateWaterFx } from './js/interact.js';
 import { people, SEATS, wakePerson, loadPeople, seatTaken, goHome, SPOTS, routeTasks, NAV, MOODS, fpRise, sitTasks, CLIMB, moodOf, climbAt, WALK_SPEED, ladderRoot, floorBelow, goTasks, nearNode, navPath, updatePeople } from './js/characters.js';
 // 模块（js/*.js）要用的主页面变量：模块里写 shared.名字，读写都直通这里（写过的才给 setter）
-share({ ground: () => ground, layers: () => layers, loader: () => loader, INFO: () => INFO, meshes: () => meshes, isShown: () => isShown, shadowDirty: [() => shadowDirty, (v) => { shadowDirty = v; }], x3: () => x3, _fpU: () => _fpU, chgTouch: () => chgTouch, game: () => game, HELD_LAYER: () => HELD_LAYER, LADDER: () => LADDER, ladderZ: () => ladderZ, ladderReady: () => ladderReady, gateOpen: () => gateOpen, _fpDn: () => _fpDn, angDiff: () => angDiff, planWander: () => planWander });
+share({
+  ground: () => ground, layers: () => layers, loader: () => loader, INFO: () => INFO, meshes: () => meshes, isShown: () => isShown,
+  shadowDirty: [() => shadowDirty, (v) => { shadowDirty = v; }], x3: () => x3, _fpU: () => _fpU, chgTouch: () => chgTouch, game: () => game,
+  HELD_LAYER: () => HELD_LAYER, LADDER: () => LADDER, ladderZ: () => ladderZ, ladderReady: () => ladderReady, gateOpen: () => gateOpen, _fpDn: () => _fpDn,
+  angDiff: () => angDiff, planWander: () => planWander
+});
 // ===== 公共底座：渲染器、场景、相机、视角控制、太阳光 → js/core.js =====
 let shadowDirty = true, shadowRoof = 0, shadowAt = 0; const shadowSun = new THREE.Vector3();
 // ===== 一天的时段：清晨 → 上午 → 中午 → 下午 → 黄昏 → 夜晚；太阳、天穹、屋里间接光、太阳面板 → js/time-of-day.js =====
