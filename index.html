@@ -3492,6 +3492,23 @@ const INTRO_ARC = Math.PI / 12; // 最后 15°（30° 时尾段慢速爬太久�
 const introDist = (s) => THREE.MathUtils.lerp(INTRO_FROM, 6, 1 - Math.pow(1 - s, 4.04)); // 指数让俯冲仍落在约 65m（v3 起点 440m 在河上，原来 220m 用 2.64）；轨迹形状：u → 离院子的路程（俯冲落在约 70m，S 弯之前）
 const DIVE = 0.39, BLEND = 0.6; // 俯冲落在离院子约 65m（S 弯开头），贴路段短一点 // u 的前 36% 俯冲；60% 起过渡到首页视角
 const smoothstep = (a, b, x) => { const t = THREE.MathUtils.clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
+// 滑动平均（三角权重，半窗 W 点，两端窗口逐渐收窄所以首尾点不动）
+function smoothPts(raw, W) {
+  const n = raw.length - 1;
+  return raw.map((_, i) => { const r = Math.min(W, i, n - i), acc = new THREE.Vector3(); let w = 0; for (let j = -r; j <= r; j++) { const k = r + 1 - Math.abs(j); acc.addScaledVector(raw[i + j], k); w += k; } return acc.divideScalar(w); });
+}
+// 空中航线：每 20m 取一点后平滑 180m（原来每 60m 一点直接穿过去，河的蛇形弯让航向 0.5 秒内转 55°、注视点角加速度上千°/s²，看着就是抖）；两端钉住，贴地时再混回沿路
+function airRoute(at, dEnd, B) {
+  const n = Math.ceil((INTRO_FROM - dEnd) / 20);
+  return new THREE.CatmullRomCurve3(smoothPts([...Array(n).keys()].map((i) => at(INTRO_FROM - i * 20)).concat([B]), 9));
+}
+// 开场字幕全部念完的时刻（秒，自 startIntro 起）：startOpening 0.8s 后第一句，每句 配音时长+0.7s 停留+0.9s 淡出；缺任何一句配音返回 0（镜头按自然时长）
+function openingVoiceEnd() {
+  if (!opening || !VOICE.ms) return 0;
+  let t = 800, end = 0;
+  for (const o of OPENING) { const ms = VOICE.ms[vkey(o[0])]; if (!ms) return 0; end = t + ms; t += ms + 1600; }
+  return end / 1000;
+}
 function startIntro() {
   if (mornOn()) { mornStart(); return; } // 第 2、3 天早上：不飞，直接在屋里醒来
   if (!pathCurve) { if (sliceOn()) sliceStart(); return; } // 没有开场路线（无头测试）：切片直接站到门廊
@@ -3503,7 +3520,7 @@ function startIntro() {
   const len = guide.getLength(), gy = ground.position.y;
   const at = (m) => guide.getPointAt(THREE.MathUtils.clamp(m / len, 0, 1));
   const omega = 2 * Math.PI / 60 * controls.autoRotateSpeed; // OrbitControls 自动旋转角速度（rad/s）
-  const dEnd = introDist(DIVE), A = at(INTRO_FROM), B = at(dEnd), air = new THREE.CatmullRomCurve3([...Array(Math.ceil((INTRO_FROM - dEnd) / 60)).keys()].map((i) => at(INTRO_FROM - i * 60)).concat([B])); // 空中沿一条每 60m 取一点的平滑线（顺着河、湖、路的大方向，不跟小弯摆）
+  const dEnd = introDist(DIVE), A = at(INTRO_FROM), B = at(dEnd), air = airRoute(at, dEnd, B); // 空中沿一条平滑线（顺着河、湖、路的大方向，不跟小弯摆）
   const v1 = slice ? 0.6 : Math.abs(omega) * Math.hypot(homePos.x - homeTgt.x, homePos.z - homeTgt.z); // 自动旋转时相机的线速度
   const N = 900, P = [], Lk = [], F = [], Bob = [], V = [], S = [0];
   for (let i = 0; i <= N; i++) {
@@ -3524,6 +3541,8 @@ function startIntro() {
     P.push(p); Lk.push(look); F.push(THREE.MathUtils.lerp(FOV0, FOV1, dive));
     Bob.push(smoothstep(DIVE, DIVE + 0.12, u)); // 贴路之后才有轻微起伏（空中不晃）
   }
+  // getPointAt 的弧长表只有 200 格，位置/切线在格边界有折点，注视点放大成单帧的角加速度尖峰；整条轨迹再轻轻平滑一遍（约 0.6% 路程，两端钉住）
+  { const sp = smoothPts(P, 8), sl = smoothPts(Lk, 8); for (let i = 0; i <= N; i++) { P[i] = sp[i]; Lk[i] = sl[i]; } }
   // 出路 → 旋转展示：原来两个位置直接 lerp，路线有折角、速度忽快忽慢（用户说卡）。
   // 改成三次贝塞尔：起点切线 = 沿路方向，终点切线 = 自动旋转方向，接到首页所在圆弧上再走最后 INTRO_ARC 到首页视角
   const sg = Math.sign(omega), rel = homePos.clone().sub(homeTgt);
@@ -3544,6 +3563,8 @@ function startIntro() {
     P.push(p); Lk.push(l0.clone().lerp(homeTgt, lk)); F.push(slice ? THREE.MathUtils.lerp(FOV1, 72, lk) : FOV1); Bob.push(1 - smoothstep(0, 0.3, f));
   });
   for (let i = 1; i < P.length; i++) S.push(S[i - 1] + P[i].distanceTo(P[i - 1]) / ((V[i] + V[i - 1]) / 2)); // S 存到达每个采样点的时间（秒）
+  const want = openingVoiceEnd(), kT = want ? want / S[S.length - 1] : 1; // 镜头到站的时刻 = 最后一句旁白念完的时刻（按 voice/manifest.json 的实际时长算）
+  if (kT !== 1) for (let i = 0; i < S.length; i++) S[i] *= kT;
   intro = { t0: performance.now(), slice, homePos, homeTgt, P, Lk, F, Bob, S, lamp: opening ? makeOpenLamp(P, Lk, S) : null };
   controls.enabled = false;
   updateIntro(intro.t0);
