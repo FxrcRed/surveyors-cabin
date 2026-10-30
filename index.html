@@ -3591,61 +3591,58 @@ const INTRO_ARC = Math.PI / 12; // 最后 15°（30° 时尾段慢速爬太久�
 const introDist = (s) => THREE.MathUtils.lerp(INTRO_FROM, 6, 1 - Math.pow(1 - s, 4.04)); // 指数让俯冲仍落在约 65m（v3 起点 440m 在河上，原来 220m 用 2.64）；轨迹形状：u → 离院子的路程（俯冲落在约 70m，S 弯之前）
 const DIVE = 0.39, BLEND = 0.6; // 俯冲落在离院子约 65m（S 弯开头），贴路段短一点 // u 的前 36% 俯冲；60% 起过渡到首页视角
 const smoothstep = (a, b, x) => { const t = THREE.MathUtils.clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
-// —— 第 1 天开场（2026-10-30 重做，用户：扭来扭去、两人坐船来）：镜头从湖面上空沿一条平滑曲线直线飞过码头、顺卵石路贴着树梢掠向小屋，
-// 停在两人身后；两人走向门廊，停下时镜头正好落进稽查的眼睛（和 sliceEye 同一点），再交给 sliceStart。曲线 12 秒（起止速度 0、中间约 40m/s），人走约 10 秒
-const DOCK_T = 12, DOCK_WALK_AT = 5;
-function pathSide(d, side) { const L = pathCurve.getLength(), u = THREE.MathUtils.clamp(d / L, 0, 1), p = pathCurve.getPointAt(u), t = pathCurve.getTangentAt(u); return { x: p.x - t.z * side, z: p.z + t.x * side }; } // 卵石路上离起点 d 米、偏中线 side 米的点 // DOCK_WALK_AT：镜头飞过码头之后把两人换到门前（雾里看不见）
+// —— 第 1 天开场（2026-10-30 重做，用户：两人坐船来、不要扭来扭去、别穿树、结尾别太快）：
+// 湖面上空 30m 高（树最高约 22m）飞过码头和船 → 沿卵石路上空 140m→70m 处降进林子（降到 2.6m 后贴路中线飞，路中线离树冠 ≥1.6m，不会穿树）
+// → 绕过 S 弯看到前面一前一后走着的两人 → 减速到和走路一样（1m/s）停在稽查身后 → 跟着他走、水平先到高度后到，落进他的眼睛（同 sliceEye），交给 sliceStart。
+// 两人从开场一开始就在林子里沿路走（不在码头上）；起点按镜头到 DOCK_E 的时间倒推，保证镜头追上时正好在他身后 DOCK_GAP 米。
+const DOCK_E = 14, DOCK_GAP = 4.5, DOCK_HI = 30, DOCK_LO = 2.6, DOCK_WALK = 0.9; // DOCK_WALK：实测沿路走的速度（一段段 walk 任务，比 WALK_SPEED 略慢）
+function pathSide(d, side) { const L = pathCurve.getLength(), u = THREE.MathUtils.clamp(d / L, 0, 1), p = pathCurve.getPointAt(u), t = pathCurve.getTangentAt(u); return { x: p.x - t.z * side, z: p.z + t.x * side }; } // 卵石路上离起点 d 米、偏中线 side 米的点
 function startDockIntro() {
   const m = people.get('person_man'), w = people.get('person_woman'), gy = ground.position.y, [dx, dz] = WATER.dockDir, [kx, kz] = WATER.dock;
-  const len = pathCurve.getLength(), pts = [];
-  for (const [k, h] of [[90, 22], [45, 13], [12, 7.5]]) pts.push(new THREE.Vector3(kx + dx * k, gy + h, kz + dz * k)); // 湖面上空 → 码头上空
-  const st = pathCurve.getPointAt(Math.min(1, 14 / len)), dir = new THREE.Vector2(SL.man[0] - st.x, SL.man[1] - st.z).normalize(); // 门前起步点 → 门廊
-  const end = new THREE.Vector3(st.x - dir.x * 6, gy + 4.6, st.z - dir.y * 6); // 镜头停在两人身后 6m、高 4.6m
-  for (let u = 1 - 70 / len; u > 14 / len + 30 / len; u -= 70 / len) { const p = pathCurve.getPointAt(u); pts.push(new THREE.Vector3(p.x, gy + THREE.MathUtils.lerp(4.6, 7.5, (u - 14 / len) / (1 - 14 / len)), p.z)); }
-  pts.push(end);
-  const spline = new THREE.CatmullRomCurve3(pts, false, 'centripetal'), yaw = Math.atan2(dir.x, dir.y), nrm = new THREE.Vector2(-dir.y, dir.x);
-  for (const q of [m, w]) { q.roam = q.next = 1e9; }
-  const sx = kx + dx * 5, sz = kz + dz * 5; // 两人先站在码头上，朝岸走几步
-  placeMan(m, sx, sz, Math.atan2(-dx, -dz)); placeMan(w, sx + dx * 0.9 - dz * 0.6, sz + dz * 0.9 + dx * 0.6, Math.atan2(-dx, -dz));
-  m.root.position.y = w.root.position.y = gy + 0.55; // 站在码头板面上
-  m.tasks = [['walk', kx + dx * 1.5, kz + dz * 1.5]]; w.tasks = [['walk', kx + dx * 1.8 - dz * 0.6, kz + dz * 1.8 + dx * 0.6]];
-  const walkD = 14 - 4 + Math.hypot(SL.man[0] - st.x, SL.man[1] - st.z) * 0.3; // 沿路走的长度（粗估，到门廊最后一段很短）
-  intro = { dock: true, slice: true, t0: performance.now(), spline, st, dir, yaw, nrm, m, w, walkD, tA: DOCK_T + walkD + 0.3, moved: false, walking: false, off0: null, lamp: null, Ltot: spline.getLength() };
-  camera.fov = 62; camera.updateProjectionMatrix(); controls.enabled = false;
+  const L = pathCurve.getLength(), hOf = (d) => { const k = THREE.MathUtils.clamp((140 - d) / 70, 0, 1); return DOCK_LO + (DOCK_HI - DOCK_LO) * (1 - k * k * k * (k * (k * 6 - 15) + 10)); }; // 离小屋 140m 起往下降，70m 处到底
+  const pts = [], dsv = [];
+  for (const k of [110, 55]) pts.push(new THREE.Vector3(kx + dx * k, gy + DOCK_HI, kz + dz * k)); // 湖面上空，朝码头
+  for (let d = L - 5; d > DOCK_E; d -= d > 150 ? 40 : 5) { const p = pathCurve.getPointAt(d / L); pts.push(new THREE.Vector3(p.x, gy + hOf(d), p.z)); } // 高处 40m 一点（不跟小弯），低处 5m 一点（贴着路中线）
+  const pe = pathCurve.getPointAt(DOCK_E / L); pts.push(new THREE.Vector3(pe.x, gy + DOCK_LO, pe.z));
+  const guide = new THREE.CatmullRomCurve3(pts, false, 'centripetal'), Lg = guide.getLength();
+  // 速度表：起步 6m/s 加速到高空 28m/s，降下来时按高度减到 7m/s，最后 18m 减到走路速度（接跟随段不顿）
+  const N = 1200, S = [0], P = [];
+  const vAt = (f, y) => { const s = f * Lg, up = Math.min(1, s / 50), h = (y - gy - DOCK_LO) / (DOCK_HI - DOCK_LO), end = THREE.MathUtils.clamp((Lg - s) / 18, 0, 1);
+    const cruise = 7 + 21 * Math.pow(Math.max(0, h), 0.8); return Math.max(DOCK_WALK, (6 + (cruise - 6) * up) * (end * end * (3 - 2 * end)) + DOCK_WALK * (1 - end)); };
+  for (let i = 0; i <= N; i++) { const p = guide.getPointAt(i / N); P.push(p); if (i) S.push(S[i - 1] + p.distanceTo(P[i - 1]) / ((vAt(i / N, p.y) + vAt((i - 1) / N, P[i - 1].y)) / 2)); }
+  const TE = S[N], D0 = DOCK_E - DOCK_GAP + TE * DOCK_WALK;
+  for (const q of [m, w]) q.roam = q.next = 1e9;
+  const along = (from, side) => { const out = []; for (let d = from - 2.5; d > 4; d -= 2.5) { const p = pathSide(d, side); out.push(['walk', p.x, p.z]); } return out; }; // 沿卵石路一段段走（路是弯的，直线走会走到草地上）
+  const pm = pathSide(D0, -0.25), pw = pathSide(D0 + 1.2, 0.5), nx = pathSide(D0 - 2.5, 0), yaw = Math.atan2(nx.x - pm.x, nx.z - pm.z); // 稽查中线偏左，书记员并排偏右、落后一步多
+  placeMan(m, pm.x, pm.z, yaw); placeMan(w, pw.x, pw.z, yaw); m.root.position.y = floorAt(pm.x, pm.z); w.root.position.y = floorAt(pw.x, pw.z);
+  m.tasks = [...along(D0, -0.25), ['walk', ...SL.man], ['face', SL.man[0], SL.man[1] - 5]]; w.tasks = [...along(D0 + 1.2, 0.5), ['walk', ...SL.woman], ['face', SL.woman[0], SL.woman[1] - 5]];
+  intro = { dock: true, slice: true, t0: performance.now(), guide, P, S, TE, m, w, off0: null, d0: 0, lamp: null };
+  camera.fov = 60; camera.updateProjectionMatrix(); controls.enabled = false;
   updateDockIntro(intro.t0);
 }
 function updateDockIntro(now) {
-  const I = intro, t = (now - I.t0) / 1000, gy = ground.position.y, { m, w } = I;
-  if (t >= DOCK_WALK_AT && !I.moved) { // 换到门前，面朝门廊，站着等
-    I.moved = true; const { st, dir, yaw, nrm } = I;
-    const pm = pathSide(14, -0.25), pw = pathSide(15.2, 0.5); // 稽查走路中线偏左，书记员并排偏右、落后一步多
-    placeMan(m, pm.x, pm.z, yaw); placeMan(w, pw.x, pw.z, yaw);
-    m.root.position.y = floorAt(pm.x, pm.z); w.root.position.y = floorAt(pw.x, pw.z);
-  }
-  if (t >= DOCK_T && !I.walking) {
-    I.walking = true;
-    const along = (from, side) => { const out = []; for (let d = from - 2.5; d > 4; d -= 2.5) { const p = pathSide(d, side); out.push(['walk', p.x, p.z]); } return out; }; // 沿卵石路一段段走（路是弯的，直线走会走到草地上）
-    m.tasks = [...along(14, -0.25), ['walk', ...SL.man], ['face', SL.man[0], SL.man[1] - 5]]; w.tasks = [...along(15.2, 0.5), ['walk', ...SL.woman], ['face', SL.woman[0], SL.woman[1] - 5]];
-  }
-  if (t < DOCK_T) { // 空中：一条曲线，起止速度 0
-    const x = t / DOCK_T, e = x * x * x * (x * (x * 6 - 15) + 10), f = Math.min(1, e), p = I.spline.getPointAt(f), ahead = I.spline.getPointAt(Math.min(1, f + 30 / I.Ltot));
-    const look = ahead.clone(); look.y = p.y - 30 * THREE.MathUtils.lerp(0.4, 0.1, smoothstep(0, 0.5, f)); if (f > 0.97) look.copy(p).add(new THREE.Vector3(I.dir.x, -0.12, I.dir.y));
-    camera.position.copy(p); camera.lookAt(look); camera.fov = THREE.MathUtils.lerp(62, 58, e); camera.updateProjectionMatrix();
-    if (f > 0.97) I.pend = p.clone();
+  const I = intro; I.t = (I.t || 0) + Math.min(0.1, Math.max(0, (now - (I.last || now)) / 1000)); I.last = now; // 按帧累加（每帧最多 0.1s，同人物走路），页面卡住或在后台时镜头和人一起停，不会错位
+  const t = I.t, gy = ground.position.y, { m, P, S } = I;
+  if (t < I.TE) { // 沿引导线飞：时间表里二分查位置；视线看前方（高处远、低处近），低处几乎平视
+    let lo = 0, hi = S.length - 1; while (hi - lo > 1) { const k = (lo + hi) >> 1; if (S[k] <= t) lo = k; else hi = k; }
+    const f = THREE.MathUtils.clamp((t - S[lo]) / (S[hi] - S[lo] || 1), 0, 1), p = P[lo].clone().lerp(P[hi], f), u = (lo + f) / (P.length - 1);
+    const h = (p.y - gy - DOCK_LO) / (DOCK_HI - DOCK_LO), ahead = THREE.MathUtils.lerp(14, 60, h), Lg = I.guide.getLength();
+    const look = I.guide.getPointAt(Math.min(1, u + ahead / Lg)); look.y = p.y - ahead * THREE.MathUtils.lerp(0.04, 0.32, h);
+    if (u + ahead / Lg > 1) { const head = m.root.position.clone().add(new THREE.Vector3(0, 1.3, 0)); look.lerp(head, THREE.MathUtils.clamp((u + ahead / Lg - 1) * Lg / ahead, 0, 1)); } // 快到时视线落到他身上
+    camera.position.copy(p); camera.lookAt(look); camera.fov = THREE.MathUtils.lerp(58, 62, h); camera.updateProjectionMatrix();
     return;
   }
-  // 跟在稽查身后，随他走近慢慢降到他的眼睛：offset 从「身后上方」平滑变到眼睛偏移，和 sliceEye 一致
-  const mp = m.root.position, eyeOff = new THREE.Vector3(0, 1.62 * 0.94, -0.12 * 0.94);
-  if (!I.off0) I.off0 = I.spline.getPointAt(1).sub(mp);
-  const wk = THREE.MathUtils.clamp((t - DOCK_T) / (I.tA - DOCK_T), 0, 1), e = wk * wk * (3 - 2 * wk);
-  // 水平先到、高度后到（ev = e³）：镜头从他头顶斜上方压过去，视线先转向前方，头出了画面下沿才藏头（同 startFP 的 FP.HIDE），看不到模型消失那一下
-  const ev = e * e * e, off = new THREE.Vector3(THREE.MathUtils.lerp(I.off0.x, eyeOff.x, e), THREE.MathUtils.lerp(I.off0.y, eyeOff.y, ev), THREE.MathUtils.lerp(I.off0.z, eyeOff.z, e));
+  // 跟在稽查身后：按他离门廊还剩多远算进度，水平先到、高度后到（ev = e³），头出了画面下沿才藏头（同 startFP 的 FP.HIDE）
+  const mp = m.root.position, eyeOff = new THREE.Vector3(0, 1.62 * 0.94, -0.12 * 0.94), rem = Math.hypot(mp.x - SL.man[0], mp.z - SL.man[1]);
+  if (!I.off0) { I.off0 = I.P[I.P.length - 1].clone().sub(mp); I.d0 = Math.max(1, rem + (DOCK_E - DOCK_GAP) * 0); I.d0 = Math.max(1, I.d0); I.tf = t; }
+  const wk = THREE.MathUtils.clamp(1 - rem / I.d0, 0, 1), e = wk * wk * (3 - 2 * wk), ev = e * e * e;
+  const off = new THREE.Vector3(THREE.MathUtils.lerp(I.off0.x, eyeOff.x, e), THREE.MathUtils.lerp(I.off0.y, eyeOff.y, ev), THREE.MathUtils.lerp(I.off0.z, eyeOff.z, e));
   camera.position.copy(mp).add(off);
-  const head = mp.clone().add(new THREE.Vector3(0, 1.4, 0)), fin = camera.position.clone().add(new THREE.Vector3(0, -0.1, -1));
+  const head = mp.clone().add(new THREE.Vector3(0, 1.3, 0)), fin = camera.position.clone().add(new THREE.Vector3(0, -0.1, -1));
   camera.lookAt(head.lerp(fin, Math.pow(e, 0.6))); camera.fov = THREE.MathUtils.lerp(58, 72, e); camera.updateProjectionMatrix(); camera.updateMatrixWorld();
   if (!I.headHid) { const n = mp.clone().add(new THREE.Vector3(0, 1.55, 0)).project(camera);
     if (e > 0.97 || (e > 0.5 && (n.z > 1 || n.y < -1.05 || Math.abs(n.x) > 1.05))) { I.headHid = true; m.root.traverse((o) => { if (FP.HIDE.test(o.name)) o.visible = false; }); } }
-  if (t >= I.tA + 0.4) endIntro(false);
+  if ((rem < 0.08 && m.tasks.length <= 1) || t - I.tf > 40) endIntro(false);
 }
 function startIntro() {
   if (mornOn()) { mornStart(); return; } // 第 2、3 天早上：不飞，直接在屋里醒来
