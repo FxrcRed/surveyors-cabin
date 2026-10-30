@@ -252,6 +252,7 @@
 <body>
 <div id="app"></div>
 <div id="loader"><div><span class="en">The way through the woods is being prepared…</span><span class="zh">林间的路正在铺开……</span></div><div id="bar"><div></div></div><div id="pct">0%</div></div>
+<script>/* 试玩：?day=2 / ?day=3 写一份「前一夜记录读完」的存档（同无头 day2.py / day3.py），直接从那天早上开始 */ try { const d = +(location.search.match(/[?&]day=([23])\b/) || [])[1]; if (d) { const f = ['opening', 'fire', 'letter', 'map', 'drawer', 'coat', 'boots', 'lantern', 'log', 'took', 'journal', 'notes1'].concat(d === 3 ? ['d2block', 'd2stake', 'd2blaze', 'd2cairn', 'd2light', 'log2', 'notes2'] : []); localStorage.setItem('cabin.game.v1', JSON.stringify({ day: d, found: f })); sessionStorage.setItem('cabin.nextDay', '1'); } } catch (e) { /* 存不了就照常从存档开始 */ }</script>
 <script>try { const g = /[?&]reset/.test(location.search) ? {} : JSON.parse(localStorage.getItem('cabin.game.v1') || '{}'), t = g.found && g.found.includes('ended') ? null : g.day >= 3 ? ['The third morning. Still the fog has not lifted…', '第三天早上。雾还是没有散……'] : g.day === 2 ? ['The second morning. The fog came down in the night…', '第二天早上。夜里起的雾还没有散……'] : null; // 加载页按存档的天数换字
   if (t) document.querySelector('#loader > div').innerHTML = `<span class="en">${t[0]}</span><span class="zh">${t[1]}</span>`; } catch (e) { /* 读不到存档就用第 1 天那句 */ }</script>
 <div id="title"><h1><span class="en">The Surveyor's Cabin</span><span class="zh">无名测绘员的遗稿</span></h1></div>
