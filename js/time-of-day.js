@@ -90,7 +90,7 @@ function applySky() {
   dirOf(_md, moonElev, moonAz);
   const day = h >= 5.6 && h < 18.6;
   sun.intensity = L('sunI') * sky.strength * (day ? 1 : THREE.MathUtils.smoothstep(moonElev, -2, 10)); // 夜里 = 月光，月亮落下就没了
-  indoorU.uIndoor.value = 0.015 + 0.985 * THREE.MathUtils.smoothstep(sunElev, -5, 12); // 屋里间接光：天黑后几乎没有（见 indoorShade）
+  indoorU.uIndoor.value = (0.015 + 0.985 * THREE.MathUtils.smoothstep(sunElev, -5, 12)) * (sky.indoorK ?? 1); // 屋里间接光：天黑后几乎没有（见 indoorShade）
   const cp = camera.position; indoorU.uCamIn.value = Math.max(Math.abs(cp.x), Math.abs(cp.z)) < 1.74 && cp.y < 4.1 - 0.72 * Math.abs(cp.x) ? 1 : 0; // 相机在屋里：瓦顶以下全算屋内
   skyU.uSunDir.value.copy(_sd); skyU.uMoonDir.value.copy(_md);
   skyU.uSunCol.value.copy(sun.color).multiplyScalar(Math.min(1, sky.strength));

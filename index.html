@@ -93,7 +93,7 @@
     padding: 4px 14px; border-radius: 8px; background: rgba(43,38,32,.42); /* 白字压雪地读不出：垫一层半透明深色底（2026-10-30） */
     font-size: var(--fs-m); line-height: 1.7; color: #f4efe6; text-shadow: 0 1px 3px rgba(0,0,0,.85), 0 0 12px rgba(0,0,0,.6); opacity: 0; transition: opacity .35s; }
   #roomNote.on, #quest.on, #subs.on, #note.on { opacity: 1; transition: opacity .9s .35s; }
-  body:has(#subs.on) :is(#note, #roomNote, #quest, #prog), body:has(#note.on, #roomNote.on) #quest, body:has(#fpHud:not([hidden]):not(.live)) :is(#quest, #note, #roomNote, #prog) { opacity: 0; transition: opacity .35s; }
+  body:has(#subs.on) :is(#note, #roomNote, #quest, #prog), body:has(#note.on, #roomNote.on) #quest, body:has(#fpHud:not([hidden]):not(.live)) :is(#quest, #prog) { opacity: 0; transition: opacity .35s; }
   #roomNote .zh, #quest .zh { display: block; margin-top: 2px; font-size: var(--fs-s); }
   #quest.end { font-size: var(--fs-l); letter-spacing: 2px; }
   #quest.end .zh { font-size: var(--fs-m); }
@@ -178,9 +178,9 @@
   #card .row { display: flex; gap: 8px; }
   #fpHud { position: fixed; inset: 0; z-index: 5; pointer-events: none; }
   #fpHud .dot { position: absolute; left: 50%; top: 50%; width: 6px; height: 6px; margin: -3px 0 0 -3px; border-radius: 50%; background: rgba(244,239,230,.85); box-shadow: 0 0 0 1px rgba(43,38,32,.5); }
-  #fpHud .help { position: absolute; left: 50%; bottom: 150px; transform: translateX(-50%); padding: 6px 12px; border-radius: 6px; background: rgba(43,38,32,.6); color: #f4efe6; font-size: var(--fs-xs); text-align: center; white-space: nowrap; transition: opacity .6s; }
+  #fpHud .help { position: absolute; left: 50%; bottom: 84px; transform: translateX(-50%); padding: 6px 12px; border-radius: 6px; background: rgba(43,38,32,.6); color: #f4efe6; font-size: var(--fs-xs); text-align: center; white-space: nowrap; transition: opacity .6s; }
   #fpHud .help .zh { display: block; margin-top: 2px; font-size: var(--fs-xs); opacity: .9; }
-  #fpHud.live .help { opacity: 0; }
+  #fpHud.live .help, #fpHud.seen .help { opacity: 0; } /* 只在开局显示一次：碰过画面（live）后加 seen，再退出/换天都不再出；位置在旁白（bottom 150px）下面，不叠 */
   body:has(#enter.wait, #subs.on) #fpHud .help { opacity: 0; } /* 开场字幕和操作说明同在底部 150px：整段开场播完（#enter 去掉 wait）再出，句间空档也不闪（手机上叠成一行，2026-10-30） */
   #fpHud .hint { position: absolute; left: 50%; top: calc(50% + 48px); transform: translateX(-50%); font-size: var(--fs-xs); color: #f4efe6; text-shadow: 0 1px 2px rgba(0,0,0,.7); white-space: nowrap; }
   #fpHud .hint:not(:empty) { padding: 2px 8px; border-radius: 6px; background: rgba(43,38,32,.42); }
@@ -244,7 +244,7 @@
   #wxPanel[hidden] { display: none; }
   #wxPanel button { padding: 5px 2px; font-size: var(--fs-xs); }
   #wxPanel button.on { background: rgba(232,200,154,.3); border-color: #e8c89a; }
-  @media (max-width: 600px) { #subs, #note, #roomNote, #quest:not(.end) { bottom: 140px; font-size: var(--fs-s); } #quest.end, #fpHud .help { bottom: 140px; } #fpHud .help { width: calc(100vw - 32px); box-sizing: border-box; white-space: normal; } #prog { bottom: 116px; } #opening .box { font-size: var(--fs-s); } }
+  @media (max-width: 600px) { #subs, #note, #roomNote, #quest:not(.end) { bottom: 140px; font-size: var(--fs-s); } #quest.end { bottom: 140px; } #fpHud .help { bottom: 80px; } #fpHud .help { width: calc(100vw - 32px); box-sizing: border-box; white-space: normal; } #prog { bottom: 116px; } #opening .box { font-size: var(--fs-s); } }
   @media (max-width: 600px) { body:has(#card:not([hidden])) :is(#quest, #prog) { opacity: 0; } }
   @media (max-width: 600px) { #card { left: 16px; top: 50%; transform: translateY(-50%); width: calc(100vw - 32px); max-height: calc(100vh - 160px); } #rooms { right: 8px; gap: 2px; } #rooms button { font-size: var(--fs-s); padding: 2px 6px; } #rooms button .zh { font-size: var(--fs-xs); } #rooms.bottom { gap: 0 4px; } #skyPresets { grid-template-columns: repeat(3, 1fr); } #skyL .btns { flex-direction: column; align-items: flex-start; gap: 0; } #skyName { display: none; } }
 </style>
@@ -1152,7 +1152,7 @@ function goRoom(r) {
     else { fly.look = lookPlan(fly.fromPos, fly.fromTgt, toPos, fly.toTgt); fly.dur = 0.9 + Math.abs(fly.look.dy) * 0.7; } // 已经站在这间：原地转回视角
   }
   for (const b of roomsBox.children) b.classList.toggle('on', b.dataset.room === r.name);
-  showRoomNote(ROOM_NOTES[r.name]);
+  showRoomNote(ROOM_NOTES[r.name], r.name);
 }
 // —— 配音（2026-10-28，edge-tts 免费语音，生成脚本 tools/voice/make_voice.py）：voice/manifest.json 记「编号 → 毫秒」，编号 = 英文原句的 FNV-1a ——
 // 配音只有英文（用户定），中文界面也播英文、字幕停到念完；没生成的句子照原来计时。src = 'sub' / 'room' / 'note'，收哪块字幕只停哪块的声音
@@ -1173,23 +1173,41 @@ function unlockVoice() { // 浏览器在第一次点击 / 按键前不让出声�
   a.currentTime = 0; a.play().catch(() => {}); VOICE.until = performance.now() + VOICE.dur; VOICE.unlockAt = performance.now();
   const ms = VOICE.dur + 700, hide = (id) => () => $(id).classList.remove('on');
   if (VOICE.src === 'sub' && opening && !opening.card) { clearTimeout(opening.timer); opening.timer = setTimeout(nextSub, ms); }
-  else if (VOICE.src === 'room') { clearTimeout(noteTimer); noteTimer = setTimeout(hide('roomNote'), ms); }
+  else if (VOICE.src === 'room') { clearTimeout(noteTimer); noteEnd = performance.now() + ms; noteTimer = setTimeout(() => { hide('roomNote')(); noteCur = null; pumpNote(); }, ms); }
   else if (VOICE.src === 'note') { clearTimeout(noteTimer2); noteTimer2 = setTimeout(hide('note'), ms); }
 }
 const justUnlocked = () => performance.now() - (VOICE.unlockAt ?? -1e9) < 100;
 for (const ev of ['pointerdown', 'keydown']) addEventListener(ev, unlockVoice, true);
 // 进房间：提示区（画面中下方）淡入一句开场白，7 秒后（有配音就念完）淡出；书记员的话、「他什么都没带」也走这里
-let noteTimer = 0, noteQ = []; // noteQ：排在剧情台词后面的几句（各自的定时器 id），清提示时一并清掉，不再过一会儿冒出旧台词
-function showRoomNote(text) {
-  const el = $('roomNote'); clearTimeout(noteTimer);
-  if (!text) { el.classList.remove('on'); stopVoice('room'); noteQ.forEach(clearTimeout); noteQ = []; return; }
-  if (!$('card').hidden) { noteTimer = setTimeout(() => showRoomNote(text), 500); return; } // 线索卡片开着（如「他什么都没带」跟卡片同时来）：排队，关了再出
-  const now = performance.now(), intro = Object.values(ROOM_NOTES).includes(text);
-  if (VOICE.keep && VOICE.a && now < VOICE.until) { const id = setTimeout(() => { noteQ = noteQ.filter((x) => x !== id); showRoomNote(text); }, VOICE.until - now + 300); noteQ.push(id); return; } // 剧情台词还在念：排在它后面，不截断
+// 2026-10-30 改成逐句排队：同一时刻最多一句，后来的排在后面不顶掉前面；进房间那句（intro）带房间名，轮到时人已不在那间就跳过，
+// 正在念的 intro 若人已走开，新句一来就收掉。剧情台词/提示不过期。noteEnd = 这一句播到几时（没配音也算 7 秒）
+let noteTimer = 0, pumpT = 0, noteQ = [], noteEnd = 0, noteCur = null;
+const roomNoteStale = (it) => !!it && !!it.room && (!inside || inside.name !== it.room);
+function endRoomNote() { clearTimeout(noteTimer); $('roomNote').classList.remove('on'); stopVoice('room'); noteEnd = 0; noteCur = null; }
+function showRoomNote(text, room) {
+  if (!text) { clearTimeout(pumpT); noteQ = []; endRoomNote(); return; }
+  noteQ.push({ text, room: room || null, t: performance.now() });
+  if (roomNoteStale(noteCur)) endRoomNote(); // 正在念的那句人已经走开了：不念完，让位
+  pumpNote();
+}
+function pumpNote() {
+  clearTimeout(pumpT);
+  const now = performance.now();
+  if (!$('card').hidden || $('subs').classList.contains('on') || (opening && !opening.card)) { pumpT = setTimeout(pumpNote, 500); return; } // 线索卡片开着、开场字幕在放（字幕优先级最高，会盖住它）（如「他什么都没带」跟卡片同时来）：排队，关了再出
+  const busy = Math.max(noteEnd, VOICE.a ? VOICE.until : 0); // 别的声音（物件说明、开场字幕）在念也等
+  if (now < busy) { pumpT = setTimeout(pumpNote, busy - now + 300); return; }
+  let it;
+  while ((it = noteQ.shift())) { if (!roomNoteStale(it) && !(it.room && now - it.t > 15000)) break; it = null; }
+  if (!it) return;
+  if (it.room && now - it.t < 1200) { noteQ.unshift(it); pumpT = setTimeout(pumpNote, 1250 - (now - it.t)); return; } // 在这间屋站满 1.2 秒才念：路过的房间不闪一下
   showNote(null); // 提示区同一时间只放一条：顶掉物件说明
+  const el = $('roomNote'), text = it.text;
   el.innerHTML = lbl(text[0], text[1]);
   el.classList.add('on');
-  noteTimer = setTimeout(() => el.classList.remove('on'), say(text[0], 'room', !intro) || 7000);
+  noteCur = it; (window.__noteLog ||= []).push(text[0]); // __noteLog：无头测试数同时出现的旁白
+  const ms = say(text[0], 'room', !it.room) || 7000;
+  noteEnd = performance.now() + ms; clearTimeout(noteTimer); noteTimer = setTimeout(() => { el.classList.remove('on'); noteCur = null; pumpNote(); }, ms);
+  if (noteQ.length) pumpT = setTimeout(pumpNote, ms + 300);
 }
 // 点字幕跳过：开场字幕直接下一句，提示和物件说明点了就收
 $('subs').onclick = (e) => { e.stopPropagation(); if (opening && !opening.card && !justUnlocked()) { clearTimeout(opening.timer); stopVoice('sub'); nextSub(); } };
@@ -1778,7 +1796,7 @@ function startNight(late) { // 线索找齐：书记员说一句 → 天色转�
   game.night = game.dusk = true;
   const t0 = late ? 6000 : 1500;
   setTimeout(() => showRoomNote(CLERK_SAYS), t0);
-  setTimeout(() => { sky.play = false; sky.goal = 21; sky.goalRate = 1; clerkToDesk(); }, t0 + 3500);
+  setTimeout(() => { clerkToDesk(); }, t0 + 3500); // 2026-10-30：不再把天色转暗，灯在进屋时就一盏盏开了
   setTimeout(() => { game.dusk = false; const w = toggles.get('wall_lamp'); if (w) w.on = true; const pg = layers.get('desk_page'); if (pg) pg.visible = false; showQuest(); unlockJournal(); }, t0 + 10500); // 她坐下写：下午那页纸不见了
 }
 // —— 房间变化（v2，第 1 天）：玩家亲手关 / 开过的灯、炉门、抽屉，等他离开那里（看不见、或走远）4 秒后悄悄变回去；
@@ -1922,7 +1940,7 @@ function gameInit() { // 模型和开关都建好后调（loadPeople 之前）�
   if (!game.found.has('letter')) makeLetter();
   if (game.day === 1 && !game.night) makePage(); // 天黑后（她坐下写了）那页纸就不在了
   notes1Text();
-  sky.goal = null; sky.play = false; sky.hour = game.night ? 21 : game.day >= 3 ? 9.5 : game.day >= 2 ? (DAY2_NEED.every((k) => game.found.has(k)) ? 17.5 : 9.5) : 15.5;
+  sky.goal = null; sky.play = false; sky.indoorK = game.day === 1 ? 0.3 : 1; /* 第 1 天屋里不靠天光：灯没开前是暗的 */ sky.hour = game.night && game.day > 1 ? 21 : game.day >= 3 ? 9.5 : game.day >= 2 ? (DAY2_NEED.every((k) => game.found.has(k)) ? 17.5 : 9.5) : 15.5;
   if (game.day === 2 && game.found.has('notes2')) endDay2(); // 读完第 2 夜的记录还没点「第三天早上」就刷新了
   if (game.day === 1 && game.found.has('notes1')) endDay(); // 读完第 1 夜的记录还没点「第二天早上」就刷新了 // 下午到，找齐线索时天黑；时间不自己走，免得找着找着天就黑了
   if (game.day >= 2) { setWeather('Snow', true); clearTimeout(wxTimer); cover.uSnow.value = 1; game.entered = true; } // 第 2、3 天：地面积雪 + 小雪，不自动换天气（2026-10-29 起不再起雾；玩家走过留脚印）
@@ -2977,7 +2995,7 @@ function stopFP() {
 document.addEventListener('pointerlockchange', () => {
   if (!fp) return;
   fp.paused = document.pointerLockElement !== canvas;
-  fpHud.classList.toggle('live', !fp.paused);
+  fpHud.classList.toggle('live', !fp.paused); if (!fp.paused) fpHud.classList.add('seen');
   if (fp.paused) fp.keys.clear();
 });
 canvas.addEventListener('mousemove', (e) => {
@@ -3205,6 +3223,7 @@ function sliceStart() {
   if (!m) { setTimeout(sliceStart, 200); return; } // 人物还没载完
   placeMan(m, ...SL.man, Math.PI); m.root.position.y = floorAt(...SL.man); m.roam = m.next = 1e9;
   if (w) { placeMan(w, ...SL.woman, Math.PI - 0.5); w.root.position.y = floorAt(...SL.woman); w.roam = w.next = 1e9; SL.w = 'porch'; }
+  if (game.entered) for (const n of HOUSE_LAMPS) { const l = toggles.get(n); if (l) { l.on = true; l.k = 1; for (const q of l.parts) q(1); } } // 刷新页面：进过屋的灯直接亮着
   const dw = toggles.get('door_wood'); if (dw) dw.on = true; // 门原本虚掩（on = false 是开）：关上，让玩家自己推开
   spin = false; fly = null; startFP('person_man'); if (!fp) return;
   fp.yaw = Math.PI; fp.pitch = -0.1; inside = null; SL.room = null; SL.fp = fp;
@@ -3277,14 +3296,19 @@ function roomAt(P) { // 稽查站在哪间（切片按位置触发房间说明�
   if (P.z > 0.75) return P.x < -0.5 ? 'Water Closet' : P.x > 0.77 ? 'Hall' : 'Entry';
   return P.x > 0.5 ? 'Kitchen & Dining' : 'Parlour';
 }
+const HOUSE_LAMPS = ['ceiling_light_entry', 'ceiling_light_living', 'hall_pendant_south', 'hall_pendant_north']; // 进屋时两人一盏盏开（壁灯留给夜里那一幕；只改 intensity，不切 visible）
+function lightHouse() { HOUSE_LAMPS.forEach((n, i) => setTimeout(() => { const l = toggles.get(n); if (l) l.on = true; }, 1500 + i * 2200)); }
 function sliceTick(dt) {
   if (!SLICE || game.day !== 1 || (SL.t -= dt) > 0) return; SL.t = 0.3;
   const rn = roomAt(fp.p.root.position);
+  const dw0 = toggles.get('door_wood'), nr0 = toggles.get('entry_noren'); // 门被推开（on = false 是开）：先把门口帘子拉起来，再进屋
+  if (dw0 && nr0 && !dw0.on && !SL.norenUp) { SL.norenUp = true; nr0.on = true; }
   if (rn !== SL.room) { // 原来 goRoom 里做的那几件，改成走进去时做
     SL.room = rn; inside = rn ? ROOMS.find((r) => r.name === rn) : null;
+    if (rn && !game.entered) lightHouse();
     if (rn) game.entered = true;
     if (STOVE_ROOMS.includes(rn)) game.stoveSeen = true;
-    if (rn && !SL.seen.has(rn)) { SL.seen.add(rn); showRoomNote(ROOM_NOTES[rn]); } // 每间只说一次（走来走去不重复）
+    if (rn && !SL.seen.has(rn)) { SL.seen.add(rn); showRoomNote(ROOM_NOTES[rn], rn); } // 每间只说一次（走来走去不重复）
     showQuest();
   }
   const w = people.get('person_woman');
@@ -3299,7 +3323,7 @@ canvas.addEventListener('pointerdown', (e) => {
   e.preventDefault(); fpT.at = performance.now(); // 挡掉浏览器补的 mousedown
   if (fpT.id !== null) return; // 第二根手指不管
   Object.assign(fpT, { id: e.pointerId, x: e.clientX, y: e.clientY, x0: e.clientX, y0: e.clientY, t: performance.now(), drag: false });
-  fpHud.classList.add('live'); // 碰过屏幕就收起说明
+  fpHud.classList.add('live', 'seen'); // 碰过屏幕就收起说明
 });
 canvas.addEventListener('pointermove', (e) => {
   if (!fp || e.pointerId !== fpT.id) return;
