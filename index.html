@@ -617,6 +617,27 @@ float ln(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
   rp.forEach((c) => WATER.river.push([c.x, c.z]));
   const rv = new THREE.Mesh(ribbon(river, rp, (i) => { const w = 4 + 1.2 * Math.sin(i * 0.21); return [[w, 1], [-w, 1]]; }, () => [0, 0], P.y + 0.008), water);
   rv.name = 'river'; scene.add(rv);
+  // 码头 + 船（2026-10-30，用户：两人坐船来）：路尽头 (124,244) 朝湖心走，找到岸线，码头从岸上 3m 伸进水 11m；船泊在码头末端右侧。全用方块和一个挤出的船壳，不下载模型
+  {
+    const p0 = new THREE.Vector2(x0 + 124, z0 + 244), d = new THREE.Vector2(lx - p0.x, lz - p0.y).normalize(), nrm = new THREE.Vector2(-d.y, d.x);
+    const inLake = (x, z) => { const u = (x - lx) / 1.35, v = -(z - lz) / 0.85, a = Math.atan2(v, u); return Math.hypot(u, v) < lr * (1 + 0.12 * Math.sin(a * 3 + 1) + 0.07 * Math.sin(a * 5)); };
+    let ts = 0; while (ts < 80 && !inLake(p0.x + d.x * ts, p0.y + d.y * ts)) ts += 0.25; // 岸线离路尽头的距离
+    const wood = new THREE.MeshStandardMaterial({ color: '#6a4a2c', roughness: 0.9, flatShading: true }), dark = new THREE.MeshStandardMaterial({ color: '#4a3320', roughness: 0.9, flatShading: true });
+    const wy = P.y + 0.01, dock = new THREE.Group(); dock.name = 'dock';
+    const box = (g, m, w, h, l, x, y, z) => { const o = new THREE.Mesh(new THREE.BoxGeometry(w, h, l), m); o.position.set(x, y, z); o.castShadow = o.receiveShadow = true; g.add(o); return o; };
+    const L = 11, W = 1.7; // 局部 +x 沿码头往湖里，+z 是右手边
+    for (let i = 0; i < 22; i++) box(dock, i % 3 ? wood : dark, 0.5, 0.08, W, 0.25 + i * 0.5 - 3, wy + 0.5, 0); // 横铺的木板
+    for (const s of [-1, 1]) { box(dock, dark, L + 3, 0.12, 0.14, (L - 3) / 2, wy + 0.42, s * (W / 2 - 0.1));
+      for (let i = 0; i < 5; i++) box(dock, dark, 0.2, 2.2, 0.2, -2.8 + i * 3.2, wy - 0.55, s * (W / 2 - 0.1)); } // 两侧纵梁 + 桩（桩插进水里）
+    dock.position.set(p0.x + d.x * (ts - 0.0), 0, p0.y + d.y * (ts - 0.0)); dock.rotation.y = -Math.atan2(d.y, d.x); scene.add(dock);
+    const hs = new THREE.Shape(); hs.moveTo(-2.1, 0); hs.quadraticCurveTo(-0.6, 0.85, 1.6, 0.0); hs.quadraticCurveTo(-0.6, -0.85, -2.1, 0); // 船体俯视：船头在 +x
+    const hullG = new THREE.ExtrudeGeometry(hs, { depth: 0.42, bevelEnabled: false }).rotateX(-Math.PI / 2);
+    const boat = new THREE.Group(); boat.name = 'boat';
+    const hull = new THREE.Mesh(hullG, new THREE.MeshStandardMaterial({ color: '#5d4630', roughness: 0.85, flatShading: true })); hull.castShadow = true; boat.add(hull);
+    for (const bx of [-0.9, 0.3]) box(boat, wood, 0.28, 0.06, 1.0, bx, 0.34, 0);
+    boat.position.set(dock.position.x + d.x * 7 + nrm.x * 2.0, wy - 0.18, dock.position.z + d.y * 7 + nrm.y * 2.0); boat.rotation.y = -Math.atan2(d.y, d.x) + 0.04; scene.add(boat);
+    WATER.dock = [dock.position.x, dock.position.z]; OUTDOOR.push(dock, boat);
+  }
   OUTDOOR.push(path, leaves, lake, rv);
   // ✕ 那间屋周边（只在 ✕ 状态出现，不随世界平移：屋子就在原点）：① 院子地坪的材质往外铺一圈圆，顶点透明度 1→0，落地处不是生硬的边；
   // ② 门前一段卵石路向外淡出，石块一块块稀掉、不通向任何地方
