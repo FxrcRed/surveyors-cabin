@@ -2368,7 +2368,7 @@ function mapBase() { // 不带记号的底图：做旧的纸、等高线、山�
   const W = MAP.W, k = W / MAP.w, H = Math.round(MAP.h * k), c = mapBase.c = agedPaper(W, H, '#d3be90', 11), g = c.getContext('2d'), R = rng(11);
   const wob = (v, a = 1.6) => v + (R() - 0.5) * a;
   const hand = (pts, close) => { g.beginPath(); pts.forEach(([a, b], i) => g[i ? 'lineTo' : 'moveTo'](wob(a), wob(b))); if (close) g.closePath(); };
-  const INK = 'rgba(58,38,18,', GREEN = '#456a36', OCHRE = '#a87420';
+  const RED = 'rgba(138,30,18,.9)', INK = 'rgba(58,38,18,', GREEN = '#456a36', OCHRE = '#a87420';
   // 水渍圈
   for (const [px, py, r] of [[W * 0.2, H * 0.78, 90], [W * 0.82, H * 0.62, 70]]) { g.strokeStyle = 'rgba(110,74,34,.14)'; g.lineWidth = 5; g.beginPath(); g.arc(px, py, r, 0, 7); g.stroke(); g.fillStyle = 'rgba(110,74,34,.05)'; g.fill(); }
   // 等高线：一个随便的起伏函数，marching squares 描十几条，每三条一条粗的
@@ -2423,9 +2423,9 @@ function mapBase() { // 不带记号的底图：做旧的纸、等高线、山�
   if (trailCurve) { const P = trailCurve.getSpacedPoints(80).map((p) => mapP(p.x, p.z)); route(P, 'rgba(90,140,70,.35)', 7, []); route(P, GREEN, 3, [2, 6]); }
   // 注记：湖、路、踪迹（斜体，沿线摆）
   const label = (t, x, z, ang = 0, size = 22, col = INK + '.78)') => { const [a, b] = mapP(x, z); g.save(); g.translate(a, b); g.rotate(ang); g.fillStyle = col; g.font = `italic ${size}px "IM Fell English", Georgia, serif`; g.textAlign = 'center'; g.fillText(t, 0, 0); g.restore(); };
-  if (WATER.lake) label('The Lake', lx, lz + lr * 0.05, -0.03, 24, 'rgba(30,48,58,.8)');
-  if (pathCurve) { const p = pathCurve.getPointAt(0.42), q = pathCurve.getPointAt(0.46); label('Cobble Road', p.x, p.z - 6, Math.atan2(q.z - p.z, q.x - p.x), 19, 'rgba(110,70,14,.85)'); }
-  if (trailCurve) { const p = trailCurve.getPointAt(0.5), q = trailCurve.getPointAt(0.54); label('Forest Trail', p.x, p.z - 7, Math.atan2(q.z - p.z, q.x - p.x), 18, 'rgba(40,70,30,.85)'); }
+  if (WATER.lake) label('The Lake', lx, lz + lr * 0.05, -0.03, 24, RED);
+  if (pathCurve) { const p = pathCurve.getPointAt(0.42), q = pathCurve.getPointAt(0.46); label('Cobble Road', p.x, p.z - 6, Math.atan2(q.z - p.z, q.x - p.x), 19, RED); }
+  if (trailCurve) { const p = trailCurve.getPointAt(0.5), q = trailCurve.getPointAt(0.54); label('Forest Trail', p.x, p.z - 7, Math.atan2(q.z - p.z, q.x - p.x), 18, RED); }
   // 罗盘：右上角，N 朝上；三层环、八芒星
   const cx = W - 84, cy = 86; g.strokeStyle = g.fillStyle = INK + '.8)'; g.lineWidth = 1.5;
   for (const r of [46, 40, 28]) { g.beginPath(); g.arc(cx, cy, r, 0, 7); g.stroke(); }
@@ -2448,7 +2448,7 @@ function mapPaint(c, xHouse) { // 底图 + 记号：家里那张红圈在小屋�
   const b = mapBase(); c.width = b.width; c.height = b.height; const g = c.getContext('2d'); g.drawImage(b, 0, 0);
   const [hx, hz] = mapP(0, 0), [xx, xz] = xHouse ? [hx, hz] : mapP(...mapXat());
   g.lineCap = 'round'; g.strokeStyle = '#9c2a18';
-  if (!xHouse) { g.lineWidth = 4.5; g.beginPath(); g.ellipse(hx, hz, 19, 15, -0.3, 0.3, Math.PI * 2.15); g.stroke(); g.fillStyle = 'rgba(60,34,16,.85)'; g.font = 'italic 19px "IM Fell English", Georgia, serif'; g.textAlign = 'center'; g.fillText('The Cabin', hx + 4, hz + 38); }
+  if (!xHouse) { g.lineWidth = 4.5; g.beginPath(); g.ellipse(hx, hz, 19, 15, -0.3, 0.3, Math.PI * 2.15); g.stroke(); g.fillStyle = 'rgba(138,30,18,.9)'; g.font = 'italic 19px "IM Fell English", Georgia, serif'; g.textAlign = 'center'; g.fillText('The Cabin', hx + 4, hz + 38); }
   g.lineWidth = 5.5; g.beginPath(); g.moveTo(xx - 15, xz - 14); g.lineTo(xx + 14, xz + 15); g.moveTo(xx + 15, xz - 15); g.lineTo(xx - 14, xz + 14); g.stroke(); // 红墨水两笔 ✕，笔画略不对称
   g.fillStyle = 'rgba(128,28,16,.92)'; g.font = 'italic 24px "IM Fell English", Georgia, serif'; g.textAlign = 'left'; g.save(); g.translate(xx + 22, xz - 10); g.rotate(-0.06); g.fillText('Do Not Enter', 0, 0); g.restore();
   return c;
