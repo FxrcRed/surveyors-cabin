@@ -511,12 +511,12 @@ const toggleOf = (name) => toggles.get(name === 'stove_firebox' ? 'stove_fire' :
 // 有人坐在马桶上时折叠门不动（像从里面闩上了）：坐着的人脚伸到 x −0.82~−0.93，门折到一半（k 0.4–0.5）会扫到脚；改成往玄关那边折也不行：打开时两块板贴在隔墙上，会撞衣帽架挂杆（y 1.65–1.75）
 const wcBusy = () => [...shared.people.values()].some((q) => q.seat === 'entry_toilet' && q.mode === 'sit');
 const shutBusy = (name) => Object.entries(shared.SEATS).some(([n, S]) => S.shut?.includes(name) && [...shared.people.values()].some((q) => q.seat === n || q.claim === n)); // 有人坐着 / 正要坐的座位旁，抽屉点了不动
-function toggle(name) { const t = toggleOf(name); if (t.click) return t.click(); if (/^toilet_door_/.test(name) && wcBusy()) return; if (!t.on && shutBusy(name)) return; t.on = !t.on; shared.chgTouch(name); } // click：不是开/关，点一下触发一次动作（摇椅）
+function toggle(name) { const t = toggleOf(name); if (t.click) return t.click(); if (/^toilet_door_/.test(name) && wcBusy()) return; if (!t.on && shutBusy(name)) return; t.ajar = 0; t.on = !t.on; shared.chgTouch(name); } // click：不是开/关，点一下触发一次动作（摇椅）
 let toggleT = 0;
 function updateToggles() {
   const now = performance.now(), dt = Math.min(0.1, (now - (toggleT || now)) / 1000); toggleT = now;
   for (const t of toggles.values()) {
-    const goal = t.on ? 1 : 0;
+    const goal = t.on ? t.ajar || 1 : 0; // ajar：关着但没关严（第 1 天大门虚掩，0.75 缓动后 ≈ 留 14° 的缝）
     if (t.k === goal) continue;
     shared.shadowDirty = true;
     t.k = goal > t.k ? Math.min(goal, t.k + dt / 0.9) : Math.max(goal, t.k - dt / 0.9); // 门 0.9 秒转完

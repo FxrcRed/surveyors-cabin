@@ -883,9 +883,11 @@ const THICKETS = []; // 密灌丛 [x, z, 半径]：灌木密到走不进去，�
 const minDist = (list, x, z) => { let d = 1e9; for (const q of list) d = Math.min(d, Math.hypot(q[0] - x, q[1] - z)); return d; };
 function setupTerrain(center) {
   const R = WATER.lake ? WATER.lake[2] * 1.3 : 0;
-  terrain.flat = (x, z) => Math.min(sstep(10, 24, Math.hypot(x, z)), sstep(10, 24, Math.hypot(x - XSHIFT.x, z - XSHIFT.y)),
-    sstep(2.2, 8, nearD(pathClear, x, z)), sstep(1.5, 6, nearD(trailClear, x, z)), sstep(3.5, 8, nearD(WATER.river, x, z)),
-    sstep(R, R + 12, lakeD(x, z)));
+  // 远处地面网格稀（120m 外 10m 一圈、一圈约 96 段），三角面会跨过 2.2m 宽的平带把路盖住（10-30 实测 120–180m 处高出路面 0.77m）：平带按网格间距加宽
+  const gsp = (x, z) => { const R = Math.hypot(x, z); return Math.max(R < 45 ? 3 : R < 110 ? 5 : 10, 2 * Math.PI * R / 96); };
+  terrain.flat = (x, z) => { const sp = gsp(x, z); return Math.min(sstep(10, 24, Math.hypot(x, z)), sstep(10, 24, Math.hypot(x - XSHIFT.x, z - XSHIFT.y)),
+    sstep(Math.max(2.2, sp), Math.max(8, sp + 6), nearD(pathClear, x, z)), sstep(1.5, 6, nearD(trailClear, x, z)), sstep(Math.max(3.5, sp), Math.max(8, sp + 6), nearD(WATER.river, x, z)),
+    sstep(R, R + 12, lakeD(x, z))); };
   // 洼地、密灌丛的位置：固定种子；离路、踪迹、河湖、视线通道、两间屋都要远
   const rand = rng(31), ok = (x, z, r) => minDist(pathClear, x, z) > r + 6 && minDist(trailClear, x, z) > r + 5 && minDist(WATER.river, x, z) > r + 8
     && lakeD(x, z) >= WATER.lake[2] * 1.3 + r + 8
@@ -3326,7 +3328,7 @@ function sliceStart() {
   if (!m) { setTimeout(sliceStart, 200); return; } // 人物还没载完
   placeMan(m, ...SL.man, Math.PI); m.root.position.y = floorAt(...SL.man); m.roam = m.next = 1e9;
   if (w) { placeMan(w, ...SL.woman, Math.PI - 0.5); w.root.position.y = floorAt(...SL.woman); w.roam = w.next = 1e9; SL.w = 'porch'; }
-  const dw = toggles.get('door_wood'); if (dw) dw.on = true; // 门原本虚掩（on = false 是开）：关上，让玩家自己推开
+  const dw = toggles.get('door_wood'); if (dw) { dw.on = true; if (dw.k > 0.5) dw.ajar = 0.75; } // 虚掩（on = false 是开）：留条缝，让玩家自己推开
   spin = false; fly = null; startFP('person_man'); if (!fp) return;
   fp.yaw = Math.PI; fp.pitch = -0.1; inside = null; SL.room = null; SL.fp = fp;
 }
@@ -3591,7 +3593,8 @@ const DIVE = 0.39, BLEND = 0.6; // 俯冲落在离院子约 65m（S 弯开头）
 const smoothstep = (a, b, x) => { const t = THREE.MathUtils.clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
 // —— 第 1 天开场（2026-10-30 重做，用户：扭来扭去、两人坐船来）：镜头从湖面上空沿一条平滑曲线直线飞过码头、顺卵石路贴着树梢掠向小屋，
 // 停在两人身后；两人走向门廊，停下时镜头正好落进稽查的眼睛（和 sliceEye 同一点），再交给 sliceStart。曲线 12 秒（起止速度 0、中间约 40m/s），人走约 10 秒
-const DOCK_T = 12, DOCK_WALK_AT = 5; // DOCK_WALK_AT：镜头飞过码头之后把两人换到门前（雾里看不见）
+const DOCK_T = 12, DOCK_WALK_AT = 5;
+function pathSide(d, side) { const L = pathCurve.getLength(), u = THREE.MathUtils.clamp(d / L, 0, 1), p = pathCurve.getPointAt(u), t = pathCurve.getTangentAt(u); return { x: p.x - t.z * side, z: p.z + t.x * side }; } // 卵石路上离起点 d 米、偏中线 side 米的点 // DOCK_WALK_AT：镜头飞过码头之后把两人换到门前（雾里看不见）
 function startDockIntro() {
   const m = people.get('person_man'), w = people.get('person_woman'), gy = ground.position.y, [dx, dz] = WATER.dockDir, [kx, kz] = WATER.dock;
   const len = pathCurve.getLength(), pts = [];
@@ -3606,7 +3609,7 @@ function startDockIntro() {
   placeMan(m, sx, sz, Math.atan2(-dx, -dz)); placeMan(w, sx + dx * 0.9 - dz * 0.6, sz + dz * 0.9 + dx * 0.6, Math.atan2(-dx, -dz));
   m.root.position.y = w.root.position.y = gy + 0.55; // 站在码头板面上
   m.tasks = [['walk', kx + dx * 1.5, kz + dz * 1.5]]; w.tasks = [['walk', kx + dx * 1.8 - dz * 0.6, kz + dz * 1.8 + dx * 0.6]];
-  const walkD = Math.hypot(SL.man[0] - st.x, SL.man[1] - st.z);
+  const walkD = 14 - 4 + Math.hypot(SL.man[0] - st.x, SL.man[1] - st.z) * 0.3; // 沿路走的长度（粗估，到门廊最后一段很短）
   intro = { dock: true, slice: true, t0: performance.now(), spline, st, dir, yaw, nrm, m, w, walkD, tA: DOCK_T + walkD + 0.3, moved: false, walking: false, off0: null, lamp: null, Ltot: spline.getLength() };
   camera.fov = 62; camera.updateProjectionMatrix(); controls.enabled = false;
   updateDockIntro(intro.t0);
@@ -3615,12 +3618,14 @@ function updateDockIntro(now) {
   const I = intro, t = (now - I.t0) / 1000, gy = ground.position.y, { m, w } = I;
   if (t >= DOCK_WALK_AT && !I.moved) { // 换到门前，面朝门廊，站着等
     I.moved = true; const { st, dir, yaw, nrm } = I;
-    placeMan(m, st.x, st.z, yaw); placeMan(w, st.x - dir.x * 0.9 + nrm.x * 0.7, st.z - dir.y * 0.9 + nrm.y * 0.7, yaw);
-    m.root.position.y = floorAt(st.x, st.z); w.root.position.y = floorAt(w.root.position.x, w.root.position.z);
+    const pm = pathSide(14, -0.25), pw = pathSide(15.2, 0.5); // 稽查走路中线偏左，书记员并排偏右、落后一步多
+    placeMan(m, pm.x, pm.z, yaw); placeMan(w, pw.x, pw.z, yaw);
+    m.root.position.y = floorAt(pm.x, pm.z); w.root.position.y = floorAt(pw.x, pw.z);
   }
   if (t >= DOCK_T && !I.walking) {
     I.walking = true;
-    m.tasks = [['walk', ...SL.man], ['face', SL.man[0], SL.man[1] - 5]]; w.tasks = [['walk', ...SL.woman], ['face', SL.woman[0], SL.woman[1] - 5]];
+    const along = (from, side) => { const out = []; for (let d = from - 2.5; d > 4; d -= 2.5) { const p = pathSide(d, side); out.push(['walk', p.x, p.z]); } return out; }; // 沿卵石路一段段走（路是弯的，直线走会走到草地上）
+    m.tasks = [...along(14, -0.25), ['walk', ...SL.man], ['face', SL.man[0], SL.man[1] - 5]]; w.tasks = [...along(15.2, 0.5), ['walk', ...SL.woman], ['face', SL.woman[0], SL.woman[1] - 5]];
   }
   if (t < DOCK_T) { // 空中：一条曲线，起止速度 0
     const x = t / DOCK_T, e = x * x * x * (x * (x * 6 - 15) + 10), f = Math.min(1, e), p = I.spline.getPointAt(f), ahead = I.spline.getPointAt(Math.min(1, f + 30 / I.Ltot));
@@ -3633,16 +3638,20 @@ function updateDockIntro(now) {
   const mp = m.root.position, eyeOff = new THREE.Vector3(0, 1.62 * 0.94, -0.12 * 0.94);
   if (!I.off0) I.off0 = I.spline.getPointAt(1).sub(mp);
   const wk = THREE.MathUtils.clamp((t - DOCK_T) / (I.tA - DOCK_T), 0, 1), e = wk * wk * (3 - 2 * wk);
-  const off = I.off0.clone().lerp(eyeOff, e); camera.position.copy(mp).add(off);
+  // 水平先到、高度后到（ev = e³）：镜头从他头顶斜上方压过去，视线先转向前方，头出了画面下沿才藏头（同 startFP 的 FP.HIDE），看不到模型消失那一下
+  const ev = e * e * e, off = new THREE.Vector3(THREE.MathUtils.lerp(I.off0.x, eyeOff.x, e), THREE.MathUtils.lerp(I.off0.y, eyeOff.y, ev), THREE.MathUtils.lerp(I.off0.z, eyeOff.z, e));
+  camera.position.copy(mp).add(off);
   const head = mp.clone().add(new THREE.Vector3(0, 1.4, 0)), fin = camera.position.clone().add(new THREE.Vector3(0, -0.1, -1));
-  camera.lookAt(head.lerp(fin, e)); camera.fov = THREE.MathUtils.lerp(58, 72, e); camera.updateProjectionMatrix();
+  camera.lookAt(head.lerp(fin, Math.pow(e, 0.6))); camera.fov = THREE.MathUtils.lerp(58, 72, e); camera.updateProjectionMatrix(); camera.updateMatrixWorld();
+  if (!I.headHid) { const n = mp.clone().add(new THREE.Vector3(0, 1.55, 0)).project(camera);
+    if (e > 0.97 || (e > 0.5 && (n.z > 1 || n.y < -1.05 || Math.abs(n.x) > 1.05))) { I.headHid = true; m.root.traverse((o) => { if (FP.HIDE.test(o.name)) o.visible = false; }); } }
   if (t >= I.tA + 0.4) endIntro(false);
 }
 function startIntro() {
   if (mornOn()) { mornStart(); return; } // 第 2、3 天早上：不飞，直接在屋里醒来
   if (!pathCurve) { if (sliceOn()) sliceStart(); return; } // 没有开场路线（无头测试）：切片直接站到门廊
   // resetView 刚摆好的就是最终画面
-  if (sliceOn()) { const dw = toggles.get('door_wood'); if (dw) { dw.on = true; dw.k = 1; for (const f of dw.parts) f(1); } } // 第 1 天开场飞行时门就是关的（用户 10-30：一开始就该关着），不等落地后才关
+  if (sliceOn()) { const dw = toggles.get('door_wood'); if (dw) { dw.on = true; dw.ajar = dw.k = 0.75; const e = 0.75 * 0.75 * (3 - 2 * 0.75); for (const f of dw.parts) f(e); } } // 第 1 天开场飞行时门就虚掩着（留 15° 的缝，同台词「大门虚掩」），不等落地后才关
   if (sliceOn() && WATER.dock && people.get('person_man') && people.get('person_woman')) { startDockIntro(); return; }
   const slice = sliceOn(), homePos = slice ? sliceEye() : camera.position.clone(), homeTgt = slice ? homePos.clone().add(new THREE.Vector3(0, -0.1, -1)) : controls.target.clone(); // 切片：落在门廊稽查的眼睛，朝门
   // v3：沿河（湖东边那段，自东往西）→ 湖 → 黄线卵石路进来；离院子的路程 m 在卵石路上和原来一样
