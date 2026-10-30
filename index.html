@@ -3472,6 +3472,7 @@ function startIntro() {
   if (mornOn()) { mornStart(); return; } // 第 2、3 天早上：不飞，直接在屋里醒来
   if (!pathCurve) { if (sliceOn()) sliceStart(); return; } // 没有开场路线（无头测试）：切片直接站到门廊
   // resetView 刚摆好的就是最终画面
+  if (sliceOn()) { const dw = toggles.get('door_wood'); if (dw) { dw.on = true; dw.k = 1; for (const f of dw.parts) f(1); } } // 第 1 天开场飞行时门就是关的（用户 10-30：一开始就该关着），不等落地后才关
   const slice = sliceOn(), homePos = slice ? sliceEye() : camera.position.clone(), homeTgt = slice ? homePos.clone().add(new THREE.Vector3(0, -0.1, -1)) : controls.target.clone(); // 切片：落在门廊稽查的眼睛，朝门
   // v3：沿河（湖东边那段，自东往西）→ 湖 → 黄线卵石路进来；离院子的路程 m 在卵石路上和原来一样
   const [lx, lz] = WATER.lake, east = WATER.river.filter(([x]) => x > lx + 40 && x < lx + 260).map(([x, z]) => new THREE.Vector3(x, 0, z));
