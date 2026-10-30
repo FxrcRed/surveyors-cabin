@@ -428,6 +428,7 @@ import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { scene, sun, hemi, renderer, camera, controls, $, lang, esc, lbl } from './js/core.js';
 import { shared, share } from './js/state.js';
+import { terrain, terrainH, terrainSlope, sstep, makeGroundGeometry, applyTerrain } from './js/terrain.js';
 import { WX_ZH, sky, skyEl, skyU, indoorU, indoorShade, PANELS, wallU, updateSky } from './js/time-of-day.js';
 import { applyWeather, wsPos, WS, groundCover, cover, precipHole, setupRoofWeather, wx, roofWx, setWeather, wxTimer, slideSnow, updatePrecip, updateRoofWeather } from './js/weather.js';
 import { LAMPS, toggles, DOORS, swapSoftProps, splitParts, setupToggles, setupFire, setupWaterFx, toggle, fire, rocker, toggleOf, updateToggles, updateFire, updateLantern, updateRocker, updateWaterFx } from './js/interact.js';
@@ -446,7 +447,7 @@ let shadowDirty = true, shadowRoof = 0, shadowAt = 0; const shadowSun = new THRE
 // 无限地面：半径 400m 的圆盘 + 同天空色的雾，远处淡进天空，看不到边。
 // 模型加载后（matchGround）：小屋周围一圈用院子地坪的落叶贴图、和院子无缝衔接，往外渐变成程序生成的草地（避免一张贴图重复到天边）。
 scene.fog = new THREE.Fog(0xcfd8dc, 30, 160);
-const ground = new THREE.Mesh(new THREE.CircleGeometry(700, 64).rotateX(-Math.PI / 2),
+const ground = new THREE.Mesh(makeGroundGeometry(THREE, matchMedia('(pointer: coarse)').matches ? 64 : 96), // 极坐标网格，plantForest 里按 terrainH 抬起伏（js/terrain.js）
   new THREE.MeshStandardMaterial({ color: 0x6b5a3e, roughness: 1 }));
 ground.receiveShadow = true;
 scene.add(ground);
@@ -674,7 +675,8 @@ const lite = matchMedia('(pointer: coarse)').matches; // 手机少种一些
 
 const treeCache = {};
 const loadTree = (url) => (treeCache[url] ||= loadTree0(url)); // 标记树和森林共用一份
-async function loadTree0(url) { // → [{ geometry, material }]，底部中心在原点、高 1
+const loadPlant = (url) => (treeCache['p:' + url] ||= loadTree0(url, true)); // 灌木、草：整个模型当树冠，颜色全由实例色给
+async function loadTree0(url, all) { // → [{ geometry, material }]，底部中心在原点、高 1
   const gltf = await loader.parseAsync(await (await fetch(url)).arrayBuffer(), '');
   gltf.scene.updateMatrixWorld(true);
   const parts = [], b = new THREE.Box3();
@@ -682,7 +684,7 @@ async function loadTree0(url) { // → [{ geometry, material }]，底部中心�
     if (!o.isMesh) return;
     const geometry = o.geometry.clone().applyMatrix4(o.matrixWorld);
     geometry.computeBoundingBox(); b.union(geometry.boundingBox);
-    const trunk = /wood|white|black|atlas/i.test(o.material.name); // 树冠白色，颜色全由每棵树的实例颜色（色卡）给
+    const trunk = !all && /wood|white|black|atlas/i.test(o.material.name); // 树冠白色，颜色全由每棵树的实例颜色（色卡）给
     parts.push({ geometry, material: trunk ? new THREE.MeshLambertMaterial({ color: TRUNK }) : crownMaterial(), trunk });
   });
   const c = b.getCenter(new THREE.Vector3()), k = 1 / (b.max.y - b.min.y);
@@ -766,6 +768,7 @@ function ringPoints(rand, n, r0, r1, gap, center, taken) {
     if (nearAny(trailClear, x, z, 2.6) || nearAny(WATER.river, x, z, 7)) continue; // 林间踪迹只留一人宽；河两岸
     if (WATER.lake && Math.hypot(x - WATER.lake[0], z - WATER.lake[1]) < WATER.lake[2] * 1.6) continue;
     if (Math.hypot(x - XSHIFT.x, z - XSHIFT.y) < 12) continue; // ✕ 那间屋的空地（跟自家院子一样大）
+    if (terrain.pits.some(([px, pz, pr]) => Math.hypot(x - px, z - pz) < pr * 1.6)) continue; // 洼地里不种树
     pts.push([x, z]); takeAt(taken, x, z);
   }
   return pts;
@@ -818,7 +821,7 @@ function plant(parts, pts, rand, hMin, hMax, y) {
     // 路、踪迹、视线通道、旁边的树冠：只收窄不降高，收到一半还不够就不种（开场贴路 2.4m 高飞过、第一人称走在踪迹上，都不钻树冠）
     if (w) { const k = crownRoom(x, z, mutual) / (R * w); if (k < 0.5) h = w = 0; else if (k < 1) w *= k; }
     if (w && mutual) crownAdd(x, z, R * w);
-    m.compose(p.set(x, y, z), q.setFromAxisAngle(up, rand() * Math.PI * 2), s.set(w, h, w));
+    m.compose(p.set(x, y + terrainH(x, z) - 0.2, z), q.setFromAxisAngle(up, rand() * Math.PI * 2), s.set(w, h, w)); // 坡上脚下沉 20cm，地面是折线网格
     if (h > 2 && room < 115) TREE_XZ.push(x, z); // 第一人称在屋外撞树干用（fpTrees）
     ims.forEach((im) => im.setMatrixAt(i, m));
     // 每棵树按色卡比例随机取一种树冠色，再加 ±8% 明暗
@@ -849,10 +852,102 @@ function clearOrbitView() {
   });
 }
 
+// ===== 地形与灌木草（2026-10-30）：terrainH（js/terrain.js）抬起伏；小屋/路/踪迹/河/湖/✕屋周围压平，其余林地起伏 ±1.5m，几处陡坡洼地和密灌丛走不进去 =====
+// 素材：plants/bush1.glb（poly.pizza/m/ooG6CkLyE8）、bush3.glb（/m/92EytlU1El）、grass.glb（/m/iw6l7gqcdQ），Quaternius，CC0；颜色全由实例色给
+const BUSH_URLS = ['plants/bush1.glb', 'plants/bush3.glb'], GRASS_URL = 'plants/grass.glb';
+const BUSHES = [[0x2c3a2a, 0.3], [0x3a4a33, 0.3], [0x4b5740, 0.2], [0x5e5f3c, 0.12], [0x7a6a40, 0.08]]; // 和树冠色卡同一路，略亮一点（矮，贴地要读得出来）
+const SHRUB_XZ = []; // 挡路的灌木 x, z, 半径 交替（第一人称 fpShrubs 往外推）
+const THICKETS = []; // 密灌丛 [x, z, 半径]：灌木密到走不进去，树照常种
+const minDist = (list, x, z) => { let d = 1e9; for (const q of list) d = Math.min(d, Math.hypot(q[0] - x, q[1] - z)); return d; };
+function setupTerrain(center) {
+  const R = WATER.lake ? WATER.lake[2] * 1.3 : 0;
+  terrain.flat = (x, z) => Math.min(sstep(10, 24, Math.hypot(x, z)), sstep(10, 24, Math.hypot(x - XSHIFT.x, z - XSHIFT.y)),
+    sstep(2.2, 8, nearD(pathClear, x, z)), sstep(1.5, 6, nearD(trailClear, x, z)), sstep(3.5, 8, nearD(WATER.river, x, z)),
+    WATER.lake ? sstep(R, R + 12, Math.hypot(x - WATER.lake[0], z - WATER.lake[1])) : 1);
+  // 洼地、密灌丛的位置：固定种子；离路、踪迹、河湖、视线通道、两间屋都要远
+  const rand = rng(31), ok = (x, z, r) => minDist(pathClear, x, z) > r + 6 && minDist(trailClear, x, z) > r + 5 && minDist(WATER.river, x, z) > r + 8
+    && !(WATER.lake && Math.hypot(x - WATER.lake[0], z - WATER.lake[1]) < WATER.lake[2] * 1.3 + r + 8)
+    && Math.hypot(x, z) > r + 22 && Math.hypot(x - XSHIFT.x, z - XSHIFT.y) > r + 22 && SIGHT.every((sg) => segD(x, z, sg) > r + 3)
+    && ![...terrain.pits, ...THICKETS].some(([px, pz, pr]) => Math.hypot(x - px, z - pz) < pr + r + 8);
+  const put = (n, rMin, rMax, d0, d1, f) => { for (let t = 0; t < 400 && n > 0; t++) { const a = rand() * 6.283, d = d0 + (d1 - d0) * rand(), r = rMin + (rMax - rMin) * rand(), x = center.x + Math.cos(a) * d, z = center.z + Math.sin(a) * d; if (ok(x, z, r)) { f(x, z, r); n--; } } };
+  put(4, 3.5, 5, 25, 90, (x, z, r) => terrain.pits.push([x, z, r, 4.5]));
+  put(6, 6, 10, 22, 80, (x, z, r) => THICKETS.push([x, z, r]));
+  applyTerrain(ground.geometry);
+}
+function fpShrubs(o) { // 灌木也是 InstancedMesh：和 fpTrees 一样按位置往外推
+  if (Math.abs(o.x) < 4 && Math.abs(o.z) < 4) return;
+  for (let i = 0; i < SHRUB_XZ.length; i += 3) {
+    const dx = o.x - SHRUB_XZ[i], dz = o.z - SHRUB_XZ[i + 1], d = Math.hypot(dx, dz), R = SHRUB_XZ[i + 2] + 0.25;
+    if (d < R && d > 1e-6) { o.x += dx / d * (R - d); o.z += dz / d * (R - d); }
+  }
+}
+const STEEP = 0.5; // 坡度（m/m）超过这个走不上去（洼地的壁）
+function plantUnder(parts, pts, rand, hMin, hMax, sink, block) { // 灌木/草：保持模型原有长宽比（只有 ±12% 的胖瘦），不拉高
+  const tint = new THREE.Color(), m = new THREE.Matrix4(), q = new THREE.Quaternion(), s = new THREE.Vector3(), p = new THREE.Vector3(), up = new THREE.Vector3(0, 1, 0);
+  const ims = parts.map(({ geometry, material }) => new THREE.InstancedMesh(geometry, material, pts.length)), asp = (parts.radius || 0.5) * 2; // 宽 / 高
+  pts.forEach(([x, z], i) => {
+    const h = hMin + (hMax - hMin) * rand(), w = h * (0.88 + 0.24 * rand());
+    m.compose(p.set(x, terrainH(x, z) - sink, z), q.setFromAxisAngle(up, rand() * Math.PI * 2), s.set(w, h, w));
+    if (block && w * asp * 0.5 > 0.4) SHRUB_XZ.push(x, z, w * asp * 0.4);
+    ims.forEach((im) => im.setMatrixAt(i, m));
+    let u = rand(), c = BUSHES.find(([, k]) => (u -= k) < 0) || BUSHES[0];
+    tint.set(c[0]).multiplyScalar(0.9 + 0.2 * rand()); ims.forEach((im) => im.setColorAt(i, tint));
+  });
+  ims.forEach((im) => { im.computeBoundingSphere(); im.name = 'forest'; scene.add(im); OUTDOOR.push(im); });
+}
+function underOk(x, z, pathD) { // 灌木/草不压路、踪迹、看灯的视线、河湖、两间屋的空地、洼地
+  return !nearAny(pathClear, x, z, pathD) && !nearAny(trailClear, x, z, 2.2) && !nearAny(WATER.river, x, z, 4)
+    && !(WATER.lake && Math.hypot(x - WATER.lake[0], z - WATER.lake[1]) < WATER.lake[2] * 1.3) && Math.hypot(x, z) > 9 && Math.hypot(x - XSHIFT.x, z - XSHIFT.y) > 9
+    && SIGHT.every((sg) => segD(x, z, sg) > 1.2) && !terrain.pits.some(([px, pz, pr]) => Math.hypot(x - px, z - pz) < pr * 1.3);
+}
+function roadsidePoints(rand, n, d0, d1, gap, taken) { // 沿路两边（前 130m）离路中心 d0–d1 米
+  const pts = [], P = pathClear;
+  for (let t = 0; pts.length < n && t < n * 30 && P.length > 2; t++) {
+    const i = 1 + Math.floor(rand() * Math.min(P.length - 2, 130));
+    const tx = P[i + 1][0] - P[i - 1][0], tz = P[i + 1][1] - P[i - 1][1], l = Math.hypot(tx, tz) || 1, d = (rand() < 0.5 ? -1 : 1) * (d0 + (d1 - d0) * rand()), al = (rand() - 0.5) * 3;
+    const x = P[i][0] + (tz / l) * d + (tx / l) * al, z = P[i][1] - (tx / l) * d + (tz / l) * al;
+    if (underOk(x, z, d0 - 0.2) && !nearAny(taken, x, z, gap)) { pts.push([x, z]); takeAt(taken, x, z); }
+  }
+  return pts;
+}
+function blobPoints(rand, n, [bx, bz, br], gap, taken) { // 密灌丛里撒点（圆内）
+  const pts = [];
+  for (let t = 0; pts.length < n && t < n * 30; t++) {
+    const a = rand() * 6.283, d = br * Math.sqrt(rand()), x = bx + Math.cos(a) * d, z = bz + Math.sin(a) * d;
+    if (!nearAny(taken, x, z, gap)) { pts.push([x, z]); takeAt(taken, x, z); }
+  }
+  return pts;
+}
+function scatterPoints(rand, n, r0, r1, gap, center, taken) {
+  const pts = [];
+  for (let t = 0; pts.length < n && t < n * 30; t++) {
+    const r = r0 + (r1 - r0) * Math.sqrt(rand()), a = rand() * 6.283, x = center.x + Math.cos(a) * r, z = center.z + Math.sin(a) * r;
+    if (underOk(x, z, 2.6) && !nearAny(taken, x, z, gap)) { pts.push([x, z]); takeAt(taken, x, z); }
+  }
+  return pts;
+}
+async function plantUnderstory(center) {
+  const [b1, b3, grass] = await Promise.all([...BUSH_URLS, GRASS_URL].map(loadPlant));
+  const rand = rng(53), f = lite ? 0.6 : 1, taken = [], gtaken = [];
+  await maybeYield(); // 路两边：灌木 3–6m 成排但留缝，草紧贴 2.4–5m
+  plantUnder(b1, roadsidePoints(rand, 130 * f, 3, 6, 1.7, taken), rand, 0.9, 1.7, 0.25, true);
+  plantUnder(b3, roadsidePoints(rand, 100 * f, 3, 6.5, 1.7, taken), rand, 0.8, 1.5, 0.25, true);
+  plantUnder(grass, roadsidePoints(rand, 330 * f, 2.4, 5, 1.0, gtaken), rand, 0.35, 0.7, 0.03, false);
+  await maybeYield(); // 密灌丛：灌木间距 1.0m、个头大，挤成一堵墙；脚下铺草
+  const bt = [], gt = [];
+  for (const th of THICKETS) { bt.push(...blobPoints(rand, Math.round(th[2] * th[2] * 0.42 * f), th, 1.0, taken)); gt.push(...blobPoints(rand, Math.round(th[2] * 3 * f), th, 0.9, gtaken)); }
+  plantUnder(b1, bt.filter((_, i) => i % 2), rand, 1.2, 2.0, 0.25, true); plantUnder(b3, bt.filter((_, i) => !(i % 2)), rand, 1.1, 1.9, 0.25, true);
+  plantUnder(grass, gt, rand, 0.4, 0.75, 0.03, false);
+  await maybeYield(); // 林下散点：8–70m
+  plantUnder(b1, scatterPoints(rand, 90 * f, 8, 70, 3.2, center, taken), rand, 0.8, 1.6, 0.25, true);
+  plantUnder(b3, scatterPoints(rand, 80 * f, 8, 70, 3.2, center, taken), rand, 0.7, 1.4, 0.25, true);
+  plantUnder(grass, scatterPoints(rand, 330 * f, 6, 55, 1.4, center, gtaken), rand, 0.3, 0.65, 0.03, false);
+}
+
 async function plantForest(center, y) {
   const [pine, pines, autumn, dead] = await Promise.all(TREE_URLS.map(loadTree));
   const rand = rng(7), f = lite ? 0.6 : 1, taken = [];
-  forestCenter = center;
+  forestCenter = center; setupTerrain(center); window.cabin.terrain = { terrain, terrainH, terrainSlope, THICKETS, SHRUB_XZ, TREE_XZ, STEEP, pathClear, trailClear }; // 调试 / navmap_out.py
   await maybeYield(); plant(pine, pathSidePoints(rand, 220 * f, 2.2, taken), rand, 3.5, 8.5, y);          // 路两边：先种，占好位置
   await maybeYield(); plant(pines, pathSidePoints(rand, 40 * f, 4, taken), rand, 4.5, 7, y);
   await maybeYield(); plant(autumn, pathSidePoints(rand, 50 * f, 2.2, taken), rand, 3.5, 7.5, y);
@@ -865,6 +960,7 @@ async function plantForest(center, y) {
   await maybeYield(); plant(autumn, ringPoints(rand, 80 * f, 20, 65, 2.4, center, taken), rand, 4, 8.5, y);
   await maybeYield(); plant(dead, ringPoints(rand, 25 * f, 20, 65, 3, center, taken), rand, 4, 7.5, y);  // 零星几棵枯树
   await maybeYield(); plant(simpleConifer(0xffffff), ringPoints(rand, 9000 * f, 65, 260, 2.2, center, taken), rand, 6, 10, y); // 远处：简化版
+  await plantUnderstory(center);
 }
 
 const bar = document.querySelector('#bar > div'), pct = document.getElementById('pct');
@@ -2287,6 +2383,8 @@ function shiftWorld() { // 第 3 天离家够远（家已被雾盖住）：屋�
   OUTDOOR.forEach(mv);
   for (const n of ['d2_stake', 'd2_blaze', 'd2_cairn', 'd2_lamp', 'd3_spruce']) { const o = layers.get(n); if (o) mv(o); }
   for (let i = 0; i < TREE_XZ.length; i += 2) { TREE_XZ[i] += dx; TREE_XZ[i + 1] += dz; }
+  for (let i = 0; i < SHRUB_XZ.length; i += 3) { SHRUB_XZ[i] += dx; SHRUB_XZ[i + 1] += dz; }
+  terrain.ox = XSHIFT.x; terrain.oz = XSHIFT.y; applyTerrain(ground.geometry); // 地形按「家的坐标」算，物件挪了 -XSHIFT，地面跟着换成同一块
   if (d2.samples) d2.samples.forEach((p) => { p.x += dx; p.z += dz; });
   WS.value.copy(XSHIFT);
   if (fp) mv(fp.p.root);
@@ -3062,6 +3160,7 @@ function fpTryMove(r, dx, dz, s) { // 整步走不了就试只走 x、只走 z�
   for (const [mx, mz] of [[dx, dz], [dx, 0], [0, dz]]) {
     if (!mx && !mz) continue;
     const q = fpProbe(r.position.x + mx, r.position.y, r.position.z + mz);
+    if (terrainSlope(r.position.x + mx, r.position.z + mz) > STEEP) continue; // 洼地的陡壁
     if (q.floor === null || q.ceil - q.floor < 0.95 * s / 0.94) continue;
     r.position.x += mx; r.position.z += mz; return true;
   }
@@ -3166,7 +3265,7 @@ function updateFP(dt) {
       else { p.play(MOODS.stand.idle, 0.3); p.cur.timeScale = 1; }
       const q0 = fpProbe(r.position.x, r.position.y, r.position.z);
       fpPush(r, s, Math.max(0.42 * s, Math.min(1.1 * s, q0.ceil - r.position.y - 0.3)));
-      fpTrees(r.position);
+      fpTrees(r.position); fpShrubs(r.position);
       const q = fpProbe(r.position.x, r.position.y, r.position.z);
       if (q.floor !== null) r.position.y += (q.floor - r.position.y) * Math.min(1, dt * 12);
       stepPrint(r, moving);
