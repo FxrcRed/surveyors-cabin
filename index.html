@@ -3296,8 +3296,8 @@ function roomAt(P) { // 稽查站在哪间（切片按位置触发房间说明�
   if (P.z > 0.75) return P.x < -0.5 ? 'Water Closet' : P.x > 0.77 ? 'Hall' : 'Entry';
   return P.x > 0.5 ? 'Kitchen & Dining' : 'Parlour';
 }
+const lampTasks = (n) => [['face', LAMPS[n].pos[0], LAMPS[n].pos[2]], ['anim', 'Interact'], ['lamp', n]];
 const HOUSE_LAMPS = ['ceiling_light_entry', 'ceiling_light_living', 'hall_pendant_south', 'hall_pendant_north']; // 进屋时两人一盏盏开（壁灯留给夜里那一幕；只改 intensity，不切 visible）
-function lightHouse() { HOUSE_LAMPS.forEach((n, i) => setTimeout(() => { const l = toggles.get(n); if (l) l.on = true; }, 1500 + i * 2200)); }
 function sliceTick(dt) {
   if (!SLICE || game.day !== 1 || (SL.t -= dt) > 0) return; SL.t = 0.3;
   const rn = roomAt(fp.p.root.position);
@@ -3305,7 +3305,6 @@ function sliceTick(dt) {
   if (dw0 && nr0 && !dw0.on && !SL.norenUp) { SL.norenUp = true; nr0.on = true; }
   if (rn !== SL.room) { // 原来 goRoom 里做的那几件，改成走进去时做
     SL.room = rn; inside = rn ? ROOMS.find((r) => r.name === rn) : null;
-    if (rn && !game.entered) lightHouse();
     if (rn) game.entered = true;
     if (STOVE_ROOMS.includes(rn)) game.stoveSeen = true;
     if (rn && !SL.seen.has(rn)) { SL.seen.add(rn); showRoomNote(ROOM_NOTES[rn], rn); } // 每间只说一次（走来走去不重复）
@@ -3314,7 +3313,7 @@ function sliceTick(dt) {
   const w = people.get('person_woman');
   if (rn) SL.inT += 0.3;
   if (w && SL.w === 'porch' && (SL.inT > 6 || (rn && rn !== 'Entry'))) { // 稽查进门走开了（或 6 秒后）她才跟进来，站到书架前看着书桌（不站路点 sw，挡稽查的路；之后照白天的样子在楼下转）；跟太紧会堵在玄关挡他的路
-    SL.w = 'in'; w.tasks = [['walk', ...SL.door[0]], ['walk', ...SL.door[1]], ...goTasks(w, ...SL.door[1], 'books'), ['walk', ...NAV.books], ['face', -1.4, -1.15]]; w.roam = 25; w.next = 8;
+    SL.w = 'in'; w.tasks = [['walk', ...SL.door[0]], ['walk', ...SL.door[1]], ...goTasks(w, ...SL.door[1], 'entry'), ...lampTasks('ceiling_light_entry'), ...goTasks(w, ...NAV.entry, 'hall'), ...lampTasks('hall_pendant_south'), ...lampTasks('hall_pendant_north'), ...goTasks(w, ...NAV.hall, 'ne'), ...lampTasks('ceiling_light_living'), ...goTasks(w, ...NAV.ne, 'books'), ['walk', ...NAV.books], ['face', -1.4, -1.15]]; w.roam = 25; w.next = 8;
   }
 }
 // 触屏：单指拖动转头（拖世界：手指往右，视线往左），轻点（<600ms、移动 <10px）= 走过去
