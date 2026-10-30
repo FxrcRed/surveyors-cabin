@@ -429,6 +429,7 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { scene, sun, hemi, renderer, camera, controls, $, lang, esc, lbl } from './js/core.js';
 import { shared, share } from './js/state.js';
 import { terrain, terrainH, terrainSlope, sstep, makeGroundGeometry, applyTerrain } from './js/terrain.js';
+import { paperMesh, agedPaper, makeBook, inspectTick, inspecting, inspectBusy, inspectKind, inspectStart, inspectRelease } from './js/props3d.js';
 import { WX_ZH, sky, skyEl, skyU, indoorU, indoorShade, PANELS, wallU, updateSky } from './js/time-of-day.js';
 import { applyWeather, wsPos, WS, groundCover, cover, precipHole, setupRoofWeather, wx, roofWx, setWeather, wxTimer, slideSnow, updatePrecip, updateRoofWeather } from './js/weather.js';
 import { LAMPS, toggles, DOORS, swapSoftProps, splitParts, setupToggles, setupFire, setupWaterFx, toggle, fire, rocker, toggleOf, updateToggles, updateFire, updateLantern, updateRocker, updateWaterFx } from './js/interact.js';
@@ -1046,7 +1047,7 @@ loader.load('cabin.glb', async (gltf) => {
   sun.target.position.copy(center);
   const s = sun.shadow.camera; s.left = s.bottom = -r; s.right = s.top = r; s.near = 0.1; s.far = r * 5;
   s.updateProjectionMatrix();
-  window.cabin = { scene, camera, controls, model, box, renderer, layers, toggles, cover, wx, sky, roofWx, closeView, select, meshes, people, THREE, get held() { return held; }, get hand() { return hand; }, get HAND() { return HAND; }, wake: (id, a) => wakePerson(id, a), get drops() { return drops; }, hov: () => [hovered, hoverDirty, !!fly, !!(intro || morn), pointer.lastEvent && pointer.lastEvent.clientX] }; // 调试用
+  window.cabin = { infoOf, isClue, scene, camera, controls, model, box, renderer, layers, toggles, cover, wx, sky, roofWx, closeView, select, meshes, people, THREE, get held() { return held; }, get hand() { return hand; }, get HAND() { return HAND; }, wake: (id, a) => wakePerson(id, a), get drops() { return drops; }, hov: () => [hovered, hoverDirty, !!fly, !!(intro || morn), pointer.lastEvent && pointer.lastEvent.clientX] }; // 调试用
   window.cabin.game = game;
   T('setup');
   const peopleReady = loadPeople().catch(console.error); // 和种树一起加载，预热前要到齐（材质一起编译）
@@ -1466,7 +1467,7 @@ const MERGE = {
   wall_pot_rail: 'wall_dish_rack', wall_utensil_rack: 'wall_dish_rack', wall_dish_rack_plates: 'wall_dish_rack', wall_dish_rack_cups: 'wall_dish_rack', wall_dish_rack_towels: 'wall_dish_rack',
   dining_stool_1: 'dining_wall_table', dining_stool_2: 'dining_wall_table',
   living_coffee_table: 'living_sofa', living_rug: 'living_sofa',
-  living_bookcase_books_1: 'living_bookcase', living_bookcase_books_2: 'living_bookcase', living_bookcase_books_3: 'living_bookcase', living_bookcase_books_4: 'living_bookcase',
+  living_bookcase_books_1: 'living_bookcase', living_bookcase_books_2: 'living_bookcase', living_bookcase_books_3: 'living_bookcase', living_bookcase_books_4: 'living_bookcase', field_log: 'living_bookcase',
   loft_chair: 'loft_desk', wall_lamp: 'loft_desk', loft_rail: 'loft_ladder', loft_coat_hooks: 'loft_cabinet',
 };
 for (const [n, host] of Object.entries(MERGE)) INFO[n] = INFO[host];
@@ -1827,7 +1828,7 @@ function gameSeen(name) { // select 里调：这次点的东西算不算线索�
   if (game.night && !game.dusk && (title === 'Writing Desk, Chair & Wall Lamp' || name === 'person_woman')) { add('notes1'); over = NOTES_CARD; }
   else if (name === 'person_woman') { const z = STORY_ZH['The Clerk|Loft']; over = ['The Clerk', 'Parlour', z[0], STORY['The Clerk|Loft'], z[1].replace(/^[^。]*。/, ''), INFO.person_woman[2]]; } // 白天她没在读遗稿：去掉中文第一句「在摇椅上读……」
   if (['coat', 'boots', 'lantern'].every((k) => f.has(k))) add('took');
-  if (f.has('letter')) { const g = layers.get('stove_letter'); if (g) g.visible = false; } // 信拿出来了
+  if (f.has('letter') && inspecting() !== 'stove_letter') { const g = layers.get('stove_letter'); if (g) g.visible = false; } // 信拿出来了（飞在眼前时等飞回去再藏）
   gameSeen.got = got.length;
   if (!got.length) return over;
   saveGame(); renderJournal();
@@ -1947,35 +1948,35 @@ function planWander(p) {
 }
 // 没烧完的信：炉门里那条灰面（y 0.482；柴从 z −1.30 往里），一张纸片，后沿稍翘、斜着放；canvas 画纸色、炭笔字行、一边烧掉的焦边
 const LETTER = { at: [1.385, 0.488, -1.262], size: [0.14, 0.0875], rot: [-Math.PI / 2 + 0.14, 0, 0.35] };
-function makeLetter() {
-  const W = 256, H = 160, c = document.createElement('canvas'), x = c.getContext('2d'), R = rng(19);
-  c.width = W; c.height = H;
-  const burn = []; // 烧掉的那一边：从上沿右边斜到下沿中间，往外鼓、锯齿
-  for (let i = 0; i <= 24; i++) { const t = i / 24; burn.push([W * (0.8 - 0.4 * t) + Math.sin(Math.PI * t) * W * 0.14 + (R() - 0.5) * 14, 6 + (H - 12) * t + (R() - 0.5) * 6]); }
-  const line = () => { x.beginPath(); burn.forEach(([px, py], i) => (i ? x.lineTo(px, py) : x.moveTo(px, py))); };
-  x.fillStyle = '#c4b28a'; x.fillRect(0, 0, W, H);
-  x.strokeStyle = 'rgba(45,35,28,.8)'; x.lineWidth = 1.6; // 字行：一段一段的短横
-  for (let y = 26; y < H - 14; y += 15) for (let px = 16; px < W - 20;) { const w = 6 + R() * 22; x.beginPath(); x.moveTo(px, y + (R() - 0.5) * 2); x.lineTo(px + w, y + (R() - 0.5) * 2); x.stroke(); px += w + 4 + R() * 6; }
-  x.lineJoin = 'round';
-  for (const lw of [64, 48, 34, 22]) { x.strokeStyle = 'rgba(92,52,18,.3)'; x.lineWidth = lw; line(); x.stroke(); } // 焦黄：几层半透明叠出由浅到深
-  x.strokeStyle = '#1a120c'; x.lineWidth = 10; line(); x.stroke(); // 焦黑
-  for (let i = 0; i < 26; i++) { x.fillStyle = `rgba(${70 + R() * 30 | 0},${66 + R() * 26 | 0},${62 + R() * 20 | 0},${0.12 + R() * 0.3})`; x.beginPath(); x.arc(R() * W * 0.8, H * (0.35 + R() * 0.7), 4 + R() * 16, 0, 7); x.fill(); } // 压在上面的炉灰
-  x.globalCompositeOperation = 'destination-in'; x.fillStyle = '#000'; x.beginPath(); // 裁成纸的形状（填充色要不透明，否则整张变半透明被 alphaTest 丢掉） x.moveTo(6, 6); for (const [px, py] of burn) x.lineTo(px, py); x.lineTo(6, H - 6); x.closePath(); x.fill();
-  const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 4;
-  const m = new THREE.Mesh(new THREE.PlaneGeometry(...LETTER.size), new THREE.MeshStandardMaterial({ map: tex, alphaTest: 0.5, side: THREE.DoubleSide, roughness: 0.95 }));
-  m.rotation.set(...LETTER.rot); m.receiveShadow = true;
+function makeLetter() { // 纸：js/props3d.js 的 paperMesh（纤维、霉点、折痕、卷边的几何）；这里只画字行和烧焦的那一边
+  const m = paperMesh(...LETTER.size, { seed: 19, tone: '#c4b28a', cutout: true, curl: 0.003, crease: 0.002, draw(x, W0, H0, R) {
+    x.save(); x.scale(W0 / 256, H0 / 160); const W = 256, H = 160;
+    const burn = []; // 烧掉的那一边：从上沿右边斜到下沿中间，往外鼓、锯齿
+    for (let i = 0; i <= 24; i++) { const t = i / 24; burn.push([W * (0.8 - 0.4 * t) + Math.sin(Math.PI * t) * W * 0.14 + (R() - 0.5) * 14, 6 + (H - 12) * t + (R() - 0.5) * 6]); }
+    const line = () => { x.beginPath(); burn.forEach(([px, py], i) => (i ? x.lineTo(px, py) : x.moveTo(px, py))); };
+    x.strokeStyle = 'rgba(45,35,28,.8)'; x.lineWidth = 1.6; // 字行：一段一段的短横
+    for (let y = 26; y < H - 14; y += 15) for (let px = 16; px < W - 20;) { const w = 6 + R() * 22; x.beginPath(); x.moveTo(px, y + (R() - 0.5) * 2); x.lineTo(px + w, y + (R() - 0.5) * 2); x.stroke(); px += w + 4 + R() * 6; }
+    x.lineJoin = 'round';
+    for (const lw of [64, 48, 34, 22]) { x.strokeStyle = 'rgba(92,52,18,.3)'; x.lineWidth = lw; line(); x.stroke(); } // 焦黄：几层半透明叠出由浅到深
+    x.strokeStyle = '#1a120c'; x.lineWidth = 10; line(); x.stroke(); // 焦黑
+    for (let i = 0; i < 26; i++) { x.fillStyle = `rgba(${70 + R() * 30 | 0},${66 + R() * 26 | 0},${62 + R() * 20 | 0},${0.12 + R() * 0.3})`; x.beginPath(); x.arc(R() * W * 0.8, H * (0.35 + R() * 0.7), 4 + R() * 16, 0, 7); x.fill(); } // 压在上面的炉灰
+    x.globalCompositeOperation = 'destination-in'; x.fillStyle = '#000'; x.beginPath(); // 裁成纸的形状（填充色要不透明，否则整张变半透明被 alphaTest 丢掉）
+    x.moveTo(6, 6); for (const [px, py] of burn) x.lineTo(px, py); x.lineTo(6, H - 6); x.closePath(); x.fill();
+    x.restore();
+  } });
+  m.rotation.set(...LETTER.rot);
   const g = new THREE.Group(); g.name = 'stove_letter'; g.position.set(...LETTER.at); g.add(m);
   scene.add(g); layers.set('stove_letter', g); meshes.push(m); indoorShade(g);
 }
 function makePage() { // v2：书桌上那页调查记录（干净纸 + 墨水字行），放在桌面 loft_desk 包围盒顶上、靠前一点
   const d = layers.get('loft_desk'); if (!d) return;
-  const W = 192, H = 256, c = document.createElement('canvas'), x = c.getContext('2d'), R = rng(23);
-  c.width = W; c.height = H; x.fillStyle = '#d9cfb4'; x.fillRect(0, 0, W, H);
-  x.strokeStyle = 'rgba(30,28,48,.85)'; x.lineWidth = 1.8;
-  for (let y = 30; y < H - 40; y += 16) for (let px = 16, end = W - 16 - (y > H - 70 ? 70 : 0); px < end;) { const w = 6 + R() * 20; x.beginPath(); x.moveTo(px, y + (R() - 0.5) * 2); x.lineTo(Math.min(end, px + w), y + (R() - 0.5) * 2); x.stroke(); px += w + 4 + R() * 6; }
-  const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace; tex.anisotropy = 4;
-  const m = new THREE.Mesh(new THREE.PlaneGeometry(0.15, 0.2), new THREE.MeshStandardMaterial({ map: tex, roughness: 0.9, side: THREE.DoubleSide }));
-  m.rotation.set(-Math.PI / 2, 0, 0.25); m.receiveShadow = true;
+  const m = paperMesh(0.15, 0.2, { seed: 23, tone: '#d9cfb4', curl: 0.004, draw(x, W, H, R) {
+    x.save(); x.scale(W / 192, H / 256); W = 192; H = 256; // 下面的字行按 192×256 的坐标画
+    x.strokeStyle = 'rgba(30,28,48,.85)'; x.lineWidth = 1.8;
+    for (let y = 30; y < H - 40; y += 16) for (let px = 16, end = W - 16 - (y > H - 70 ? 70 : 0); px < end;) { const w = 6 + R() * 20; x.beginPath(); x.moveTo(px, y + (R() - 0.5) * 2); x.lineTo(Math.min(end, px + w), y + (R() - 0.5) * 2); x.stroke(); px += w + 4 + R() * 6; }
+    x.restore();
+  } });
+  m.rotation.set(-Math.PI / 2, 0, 0.25);
   const b = new THREE.Box3().setFromObject(d), g = new THREE.Group(); g.name = 'desk_page';
   g.position.set((b.min.x + b.max.x) / 2, b.max.y + 0.002, (b.min.z + b.max.z) / 2); g.add(m);
   scene.add(g); layers.set('desk_page', g); meshes.push(m); indoorShade(g);
@@ -2034,6 +2035,7 @@ function gameInit() { // 模型和开关都建好后调（loadPeople 之前）�
   const f = toggles.get('stove_fire');
   if (f && !game.found.has('fire')) { f.on = false; f.k = 0; for (const q of f.parts) q(0); fire.smoke = 0; }
   if (!game.found.has('letter')) makeLetter();
+  document.fonts.load('18px "IM Fell English SC"').then(makeBook, makeBook); // 书架上那本工作日志（js/props3d.js；等字体好了再画书脊和封面的字）
   if (game.day === 1 && !game.night) makePage(); // 天黑后（她坐下写了）那页纸就不在了
   notes1Text();
   sky.goal = null; sky.play = false; sky.indoorK = game.day === 1 ? 0.3 : 1; /* 第 1 天屋里不靠天光：灯没开前是暗的 */ sky.hour = game.night && game.day > 1 ? 21 : game.day >= 3 ? 9.5 : game.day >= 2 ? (DAY2_NEED.every((k) => game.found.has(k)) ? 17.5 : 9.5) : 15.5;
@@ -2477,20 +2479,21 @@ function mmTick(dt) {
 // 红圈 = 小屋（原点）、黄线 = 卵石路 pathCurve → 湖、河；绿线 = 林间踪迹 trailCurve → ✕（老云杉，踪迹 D3.s 处）。✕ 那间屋墙上同一张图，✕ 画在红圈的位置。
 const MAP = { x0: -200, z0: -100, w: 570, h: 410, W: 1024 }; // 墙上那张纸 0.64×0.46m，横的
 const mapP = (x, z) => [(x - MAP.x0) * MAP.W / MAP.w, (z - MAP.z0) * MAP.W / MAP.w];
-function mapBase() { // 不带记号的底图：纸、等高线、点状树、湖河、两条线、罗盘（只画一次）
+function mapBase() { // 不带记号的底图：做旧的纸、等高线、山丘排线、手绘松树、湖河、两条线、罗盘、标题、比例尺（只画一次）。手绘感：线条加抖动，墨色偏褐
   if (mapBase.c) return mapBase.c;
-  const W = MAP.W, k = W / MAP.w, H = Math.round(MAP.h * k), c = mapBase.c = document.createElement('canvas'); c.width = W; c.height = H;
-  const g = c.getContext('2d'), R = rng(11);
-  g.fillStyle = '#d8c7a0'; g.fillRect(0, 0, W, H);
-  for (let i = 0; i < 700; i++) { g.fillStyle = `rgba(${R() < 0.55 ? '120,88,48' : '250,240,214'},${0.025 + R() * 0.05})`; g.beginPath(); g.arc(R() * W, R() * H, 4 + R() * 46, 0, 7); g.fill(); }
-  const vg = g.createRadialGradient(W / 2, H / 2, H * 0.3, W / 2, H / 2, W * 0.62); vg.addColorStop(0, 'rgba(80,52,22,0)'); vg.addColorStop(1, 'rgba(80,52,22,.5)'); g.fillStyle = vg; g.fillRect(0, 0, W, H);
-  // 等高线：一个随便的起伏函数，marching squares 描十几条
+  const W = MAP.W, k = W / MAP.w, H = Math.round(MAP.h * k), c = mapBase.c = agedPaper(W, H, '#d3be90', 11), g = c.getContext('2d'), R = rng(11);
+  const wob = (v, a = 1.6) => v + (R() - 0.5) * a;
+  const hand = (pts, close) => { g.beginPath(); pts.forEach(([a, b], i) => g[i ? 'lineTo' : 'moveTo'](wob(a), wob(b))); if (close) g.closePath(); };
+  const RED = 'rgba(138,30,18,.9)', INK = 'rgba(58,38,18,', GREEN = '#456a36', OCHRE = '#a87420';
+  // 水渍圈
+  for (const [px, py, r] of [[W * 0.2, H * 0.78, 90], [W * 0.82, H * 0.62, 70]]) { g.strokeStyle = 'rgba(110,74,34,.14)'; g.lineWidth = 5; g.beginPath(); g.arc(px, py, r, 0, 7); g.stroke(); g.fillStyle = 'rgba(110,74,34,.05)'; g.fill(); }
+  // 等高线：一个随便的起伏函数，marching squares 描十几条，每三条一条粗的
   const hf = (x, z) => 1.2 * Math.sin(x * 0.011 + 1.3) + 1.1 * Math.cos(z * 0.014 - 0.4) + 0.9 * Math.sin((x + z) * 0.007) + 0.35 * Math.sin(x * 0.031 - z * 0.022);
   const st = 6, nx = Math.ceil(W / st) + 1, ny = Math.ceil(H / st) + 1, V = new Float32Array(nx * ny);
   for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) V[j * nx + i] = hf(MAP.x0 + i * st / k, MAP.z0 + j * st / k);
-  g.strokeStyle = 'rgba(105,76,42,.42)'; g.lineWidth = 1.3;
-  for (let L = -3; L <= 3; L += 0.42) {
-    g.beginPath();
+  let li = 0;
+  for (let L = -3; L <= 3; L += 0.42, li++) {
+    g.strokeStyle = INK + (li % 3 ? '.32)' : '.5)'); g.lineWidth = li % 3 ? 1.1 : 1.8; g.beginPath();
     for (let j = 0; j < ny - 1; j++) for (let i = 0; i < nx - 1; i++) {
       const X = i * st, Y = j * st, q = [];
       const cr = (a, b, x0, y0, x1, y1) => { if ((a < L) !== (b < L)) { const t = (L - a) / (b - a); q.push(x0 + (x1 - x0) * t, y0 + (y1 - y0) * t); } };
@@ -2500,43 +2503,76 @@ function mapBase() { // 不带记号的底图：纸、等高线、点状树、�
     }
     g.stroke();
   }
-  // 点状树：避开路、踪迹、湖河、院子
   const [lx, lz, lr] = WATER.lake || [0, 0, 0];
-  g.fillStyle = 'rgba(52,44,26,.72)';
-  for (let i = 0; i < 1500; i++) {
-    const x = MAP.x0 + R() * MAP.w, z = MAP.z0 + R() * MAP.h;
-    if (Math.hypot(x, z) < 14 || nearAny(pathClear, x, z, 5) || nearAny(trailClear, x, z, 4) || nearAny(WATER.river, x, z, 9) || Math.hypot((x - lx) / 1.35, (z - lz) / 0.85) < lr * 1.3) continue;
-    const [a, b] = mapP(x, z), r = 1.2 + R() * 1.3; g.beginPath(); g.arc(a, b, r, 0, 7); g.fill();
+  const free = (x, z, rr = 1) => !(Math.hypot(x, z) < 14 || nearAny(pathClear, x, z, 5 * rr) || nearAny(trailClear, x, z, 4 * rr) || nearAny(WATER.river, x, z, 9 * rr) || Math.hypot((x - lx) / 1.35, (z - lz) / 0.85) < lr * 1.3);
+  // 山丘：起伏函数的几个高点画成排线小丘（半圆拱 + 向下的短排线）
+  for (let n = 0, tries = 0; n < 9 && tries < 400; tries++) {
+    const x = MAP.x0 + 30 + R() * (MAP.w - 60), z = MAP.z0 + 30 + R() * (MAP.h - 60);
+    if (hf(x, z) < 2.1 || !free(x, z, 3)) continue; n++;
+    const [a, b] = mapP(x, z), r = 15 + R() * 9; g.strokeStyle = INK + '.55)'; g.lineWidth = 1.5;
+    g.beginPath(); g.arc(a, b, r, Math.PI * 1.05, Math.PI * 1.95); g.stroke();
+    g.lineWidth = 1; g.beginPath(); for (let t = -r * 0.8; t <= r * 0.8; t += 3.4) { const hh = Math.sqrt(Math.max(0, r * r - t * t)) * 0.8; g.moveTo(a + t, b - hh + 3); g.lineTo(a + t * 0.9 + 2, b - hh + 3 + 7 + R() * 5); } g.stroke();
   }
-  const line = (pts, col, w) => { g.strokeStyle = col; g.lineWidth = w; g.lineCap = g.lineJoin = 'round'; g.beginPath(); pts.forEach(([x, z], i) => g[i ? 'lineTo' : 'moveTo'](...mapP(x, z))); g.stroke(); };
-  if (WATER.river.length) line(WATER.river, '#55707c', 4.5);
+  // 手绘松树：小三角 + 一笔树干，避开路、踪迹、湖河、院子
+  g.lineWidth = 1; g.lineJoin = 'round';
+  for (let i = 0; i < 620; i++) {
+    const x = MAP.x0 + R() * MAP.w, z = MAP.z0 + R() * MAP.h; if (!free(x, z)) continue;
+    const [a, b] = mapP(x, z), s = 3.2 + R() * 2.4;
+    g.fillStyle = R() < 0.5 ? 'rgba(58,64,34,.7)' : 'rgba(46,50,26,.62)'; g.beginPath(); g.moveTo(a, b - s * 1.6); g.lineTo(a - s, b + s * 0.5); g.lineTo(a + s, b + s * 0.5); g.closePath(); g.fill();
+    g.strokeStyle = INK + '.55)'; g.beginPath(); g.moveTo(a, b + s * 0.5); g.lineTo(a, b + s * 1.1); g.stroke();
+  }
+  // 湖河：淡水彩底 + 墨线轮廓，湖里几笔波纹
+  if (WATER.river.length) {
+    const pts = WATER.river.map(([x, z]) => mapP(x, z));
+    g.lineCap = g.lineJoin = 'round'; g.strokeStyle = 'rgba(112,142,150,.6)'; g.lineWidth = 7; hand(pts); g.stroke();
+    g.strokeStyle = 'rgba(52,70,78,.85)'; g.lineWidth = 1.5; for (const o of [-3.5, 3.5]) { g.beginPath(); pts.forEach(([a, b], i) => g[i ? 'lineTo' : 'moveTo'](wob(a), wob(b + o))); g.stroke(); }
+  }
   if (WATER.lake) {
-    g.fillStyle = '#5b7886'; g.strokeStyle = '#3c5260'; g.lineWidth = 2; g.beginPath();
-    for (let i = 0; i <= 48; i++) { const t = i / 48 * Math.PI * 2, r = lr * (1 + 0.12 * Math.sin(t * 3 + 1) + 0.07 * Math.sin(t * 5)); g[i ? 'lineTo' : 'moveTo'](...mapP(lx + Math.cos(t) * r * 1.35, lz - Math.sin(t) * r * 0.85)); } // 同 extendPath 里湖的形状（rotateX(-π/2)：shape y → -z）
-    g.fill(); g.stroke();
+    const shore = []; for (let i = 0; i <= 48; i++) { const t = i / 48 * Math.PI * 2, r = lr * (1 + 0.12 * Math.sin(t * 3 + 1) + 0.07 * Math.sin(t * 5)); shore.push(mapP(lx + Math.cos(t) * r * 1.35, lz - Math.sin(t) * r * 0.85)); }
+    g.fillStyle = 'rgba(112,142,150,.72)'; hand(shore, true); g.fill(); g.strokeStyle = 'rgba(44,62,70,.9)'; g.lineWidth = 2; g.stroke();
+    g.strokeStyle = 'rgba(52,70,78,.5)'; g.lineWidth = 1; const [cx0, cy0] = mapP(lx, lz);
+    for (let i = 0; i < 9; i++) { const a = cx0 + (R() - 0.5) * lr * 2.4 * k * 0.7, b = cy0 + (R() - 0.5) * lr * 1.2 * k * 0.8; g.beginPath(); g.moveTo(a - 8, b); g.quadraticCurveTo(a - 4, b - 3, a, b); g.quadraticCurveTo(a + 4, b + 3, a + 8, b); g.stroke(); }
   }
-  if (pathCurve) line(pathCurve.getSpacedPoints(160).map((p) => [p.x, p.z]), '#d6a51c', 5);
-  if (trailCurve) line(trailCurve.getSpacedPoints(80).map((p) => [p.x, p.z]), '#4c8a3a', 4.5);
-  // 罗盘：右上角，N 朝上
-  const cx = W - 74, cy = 74; g.strokeStyle = g.fillStyle = 'rgba(60,40,20,.8)'; g.lineWidth = 1.5;
-  g.beginPath(); g.arc(cx, cy, 40, 0, 7); g.stroke(); g.beginPath(); g.arc(cx, cy, 34, 0, 7); g.stroke();
-  for (let i = 0; i < 8; i++) { const t = i * Math.PI / 4, r = i % 2 ? 18 : 32; g.beginPath(); g.moveTo(cx + Math.sin(t) * r, cy - Math.cos(t) * r); g.lineTo(cx + Math.sin(t + 0.5) * 6, cy - Math.cos(t + 0.5) * 6); g.lineTo(cx + Math.sin(t - 0.5) * 6, cy - Math.cos(t - 0.5) * 6); g.fill(); }
-  g.font = '20px "IM Fell English", Georgia, serif'; g.textAlign = 'center'; g.fillText('N', cx, cy - 46);
+  // 卵石路（赭色虚线）、林间踪迹（绿墨点线），线条带一点抖动
+  const route = (pts, col, w, dash) => { g.strokeStyle = col; g.lineWidth = w; g.lineCap = 'round'; g.setLineDash(dash); hand(pts); g.stroke(); g.setLineDash([]); };
+  if (pathCurve) { const P = pathCurve.getSpacedPoints(160).map((p) => mapP(p.x, p.z)); route(P, 'rgba(226,176,60,.5)', 8, []); route(P, OCHRE, 3.2, [11, 5]); }
+  if (trailCurve) { const P = trailCurve.getSpacedPoints(80).map((p) => mapP(p.x, p.z)); route(P, 'rgba(90,140,70,.35)', 7, []); route(P, GREEN, 3, [2, 6]); }
+  // 注记：湖、路、踪迹（斜体，沿线摆）
+  const label = (t, x, z, ang = 0, size = 22, col = INK + '.78)') => { const [a, b] = mapP(x, z); g.save(); g.translate(a, b); g.rotate(ang); g.fillStyle = col; g.font = `italic ${size}px "IM Fell English", Georgia, serif`; g.textAlign = 'center'; g.fillText(t, 0, 0); g.restore(); };
+  if (WATER.lake) label('The Lake', lx, lz + lr * 0.05, -0.03, 24, RED);
+  if (pathCurve) { const p = pathCurve.getPointAt(0.42), q = pathCurve.getPointAt(0.46); label('Cobble Road', p.x, p.z - 6, Math.atan2(q.z - p.z, q.x - p.x), 19, RED); }
+  if (trailCurve) { const p = trailCurve.getPointAt(0.5), q = trailCurve.getPointAt(0.54); label('Forest Trail', p.x, p.z - 7, Math.atan2(q.z - p.z, q.x - p.x), 18, RED); }
+  // 罗盘：右上角，N 朝上；三层环、八芒星
+  const cx = W - 84, cy = 86; g.strokeStyle = g.fillStyle = INK + '.8)'; g.lineWidth = 1.5;
+  for (const r of [46, 40, 28]) { g.beginPath(); g.arc(cx, cy, r, 0, 7); g.stroke(); }
+  for (let i = 0; i < 8; i++) { const t = i * Math.PI / 4, r = i % 2 ? 22 : 38, w = i % 2 ? 0.34 : 0.22; g.beginPath(); g.moveTo(cx + Math.sin(t) * r, cy - Math.cos(t) * r); g.lineTo(cx + Math.sin(t + w) * 7, cy - Math.cos(t + w) * 7); g.lineTo(cx, cy); g.lineTo(cx + Math.sin(t - w) * 7, cy - Math.cos(t - w) * 7); g.closePath(); i % 4 === 0 ? g.fill() : g.stroke(); }
+  g.font = '22px "IM Fell English SC", Georgia, serif'; g.textAlign = 'center'; g.fillText('N', cx, cy - 52);
+  // 标题牌：左上角，双线框
+  const tx = 26, ty = 24, tw = 330, th = 84; g.fillStyle = 'rgba(214,190,140,.55)'; g.fillRect(tx, ty, tw, th); g.strokeStyle = INK + '.75)'; g.lineWidth = 2.5; g.strokeRect(tx, ty, tw, th); g.lineWidth = 1; g.strokeRect(tx + 6, ty + 6, tw - 12, th - 12);
+  g.fillStyle = INK + '.88)'; g.textAlign = 'center'; g.font = '25px "IM Fell English SC", Georgia, serif'; g.fillText('The Northern Woods', tx + tw / 2, ty + 40); g.font = 'italic 17px "IM Fell English", Georgia, serif'; g.fillText('surveyed for the Imperial Map Office', tx + tw / 2, ty + 64);
+  // 比例尺：左下角，三格黑白相间
+  const sx = 36, sy = H - 54, sw = 46; g.font = '14px "IM Fell English", Georgia, serif'; g.textAlign = 'center';
+  for (let i = 0; i < 3; i++) { g.fillStyle = i % 2 ? 'rgba(58,38,18,.1)' : INK + '.8)'; g.fillRect(sx + i * sw, sy, sw, 6); } g.strokeStyle = INK + '.8)'; g.lineWidth = 1.2; g.strokeRect(sx, sy, sw * 3, 6);
+  g.fillStyle = INK + '.8)'; [0, 1, 2, 3].forEach((v, i) => g.fillText(String(v * 50), sx + i * sw, sy - 6)); g.fillText('yards', sx + sw * 3 + 28, sy + 6);
+  // 外框：双线；整张四周烧黄发暗（盖在最上面）
+  g.strokeStyle = INK + '.7)'; g.lineWidth = 3; g.strokeRect(10, 10, W - 20, H - 20); g.lineWidth = 1; g.strokeRect(16, 16, W - 32, H - 32);
+  const vg = g.createRadialGradient(W / 2, H / 2, H * 0.34, W / 2, H / 2, W * 0.66); vg.addColorStop(0, 'rgba(80,52,22,0)'); vg.addColorStop(1, 'rgba(80,52,22,.55)'); g.fillStyle = vg; g.fillRect(0, 0, W, H);
   return c;
 }
 function mapXat() { const p = trailCurve.getPointAt(Math.min(1, D3.s / trailCurve.getLength())); return [p.x, p.z]; } // 老云杉 = 踪迹 D3.s 处（同 pathAt(D3.s)）
 function mapPaint(c, xHouse) { // 底图 + 记号：家里那张红圈在小屋、✕ 在老云杉；✕ 那间屋的那张 ✕ 在红圈的位置，旁注一样
   const b = mapBase(); c.width = b.width; c.height = b.height; const g = c.getContext('2d'); g.drawImage(b, 0, 0);
   const [hx, hz] = mapP(0, 0), [xx, xz] = xHouse ? [hx, hz] : mapP(...mapXat());
-  if (!xHouse) { g.strokeStyle = '#b02e1a'; g.lineWidth = 5; g.beginPath(); g.ellipse(hx, hz, 19, 15, -0.3, 0.3, Math.PI * 2.15); g.stroke(); }
-  g.strokeStyle = '#a3281a'; g.lineWidth = 6; g.lineCap = 'round'; g.beginPath(); g.moveTo(xx - 15, xz - 15); g.lineTo(xx + 15, xz + 15); g.moveTo(xx + 15, xz - 15); g.lineTo(xx - 15, xz + 15); g.stroke();
-  g.fillStyle = 'rgba(70,30,18,.9)'; g.font = 'italic 22px "IM Fell English", Georgia, serif'; g.textAlign = 'left'; g.fillText('Do Not Enter', xx + 22, xz - 10);
+  g.lineCap = 'round'; g.strokeStyle = '#9c2a18';
+  if (!xHouse) { g.lineWidth = 4.5; g.beginPath(); g.ellipse(hx, hz, 19, 15, -0.3, 0.3, Math.PI * 2.15); g.stroke(); g.fillStyle = 'rgba(138,30,18,.9)'; g.font = 'italic 19px "IM Fell English", Georgia, serif'; g.textAlign = 'center'; g.fillText('The Cabin', hx + 4, hz + 38); }
+  g.lineWidth = 5.5; g.beginPath(); g.moveTo(xx - 15, xz - 14); g.lineTo(xx + 14, xz + 15); g.moveTo(xx + 15, xz - 15); g.lineTo(xx - 14, xz + 14); g.stroke(); // 红墨水两笔 ✕，笔画略不对称
+  g.fillStyle = 'rgba(128,28,16,.92)'; g.font = 'italic 24px "IM Fell English", Georgia, serif'; g.textAlign = 'left'; g.save(); g.translate(xx + 22, xz - 10); g.rotate(-0.06); g.fillText('Do Not Enter', 0, 0); g.restore();
   return c;
 }
 function mapWall() { // 墙上那张：换成画出来的图（材质先克隆，别动共用的）
   let m; layers.get('wall_map')?.traverse((q) => { if (q.isMesh && q.material.name === 'wall_old_map') m = q; }); if (!m) return;
   if (!mapWall.t) { mapWall.c = document.createElement('canvas'); mapWall.t = new THREE.CanvasTexture(mapWall.c); mapWall.t.colorSpace = THREE.SRGBColorSpace; mapWall.t.anisotropy = 8;
-    m.material = m.material.clone(); m.material.map = mapWall.t; document.fonts.ready.then(mapWall); } // u 从左到右、v 从下到上，CanvasTexture 默认 flipY 正好对上
+    m.material = m.material.clone(); m.material.map = mapWall.t; Promise.all(['italic 20px "IM Fell English"', '20px "IM Fell English SC"'].map((f) => document.fonts.load(f))).then(() => { mapBase.c = null; mmDraw.home = null; mmDirty = true; mapWall(); }); } // u 从左到右、v 从下到上，CanvasTexture 默认 flipY 正好对上
   mapPaint(mapWall.c, x3.on); mapWall.t.needsUpdate = true;
 }
 function mmDraw() {
@@ -2705,7 +2741,18 @@ function cardOpen() { // 第一人称：放出鼠标，「走近看」「×」�
   if (document.pointerLockElement) document.exitPointerLock();
   card.hidden = cardBg.hidden = false; drawCard();
 }
-function select(name) {
+const inspectOn = () => !navigator.webdriver || window.cabinFly || /[?&]fly/.test(location.search); // 无头测试（webdriver）默认不飞，原来的流程脚本要求点了立刻出卡片；测飞行：页面里设 window.cabinFly = true
+function bookText() { // 翻开的书页上的字 = 当天工作日志卡片的字
+  const d = game.day, G = GAME_TEXT, T = d >= 3 ? [G.log3[1], G.log3[2]] : d >= 2 ? [G.log2[1], G.log2[2]] : [G.logIntro[1] + String.fromCharCode(10, 10) + G.log1[1], G.logIntro[2] + String.fromCharCode(10, 10) + G.log1[2]];
+  return { en: T[0], zh: T[1] };
+}
+function select(name, direct) {
+  if (!direct && inspectOn()) { // 书架上的日志、桌上和炉里的纸：先飞到眼前（书还会翻开几页），飞完再出卡片；卡片关了飞回去（js/props3d.js）
+    if (inspectBusy()) { if (name) return; inspectRelease(); } // 飞的途中点别处不理；按 Esc / × 直接收尾
+    else if (inspecting()) inspectRelease(() => { if (game.found.has('letter')) { const l = layers.get('stove_letter'); if (l) l.visible = false; } });
+    const k = name && (/^(living_bookcase|field_log)/.test(name) && infoOf(name)?.[0] === 'Bookcase' && isClue(name) ? 'field_log' : inspectKind(name) && name);
+    if (k && inspectStart(k, bookText(), () => select(name, true))) return;
+  }
   const prev = selected; selected = name; paint(prev); paint(name);
   if (!card.hidden && card.classList.contains('clue')) clueFly();
   const was = !card.hidden; card.classList.remove('clue'); card.hidden = cardBg.hidden = true;
@@ -3845,6 +3892,7 @@ renderer.setAnimationLoop(() => {
   if (veilEl.style.opacity !== '0' && !(fly && fly.veil) && !d2.veil) veilEl.style.opacity = 0;
   if (game.day >= 3) updateDay3(dt); // 走到老云杉、✕ 那间屋（摇椅、门廊、院子）
   mmTick(dt); // 迷雾小地图
+  inspectTick(dt); // 书、纸飞到眼前 / 飞回去（js/props3d.js）
   spotsTick(dt); // 地板光点
   if (game.day >= 2) updateDay2(dt); // 雾、走远了绕回门口、傍晚的灯 // 出屋飞行被打断/结束：撤掉黑幕
   // 屋里离东西很近，用最小 near；出屋飞行中 inside 已是 null，但相机还在屋里/门口（原来按离地高度算 near，阁楼约 0.65m，把近处的墙和家具切开）
