@@ -536,6 +536,7 @@ function grassTexture() { // 程序生成的草地贴图（可平铺，8m 一块
 
 // 小路从院子边沿 +z 方向弯弯曲曲伸进林子，同一卵石贴图；返回路中心线上的点，种树时避开
 const pathClear = [], trailClear = [], WATER = { lake: null, river: [] }; // WATER.lake = [x, z, 半径]；river = 河中心线点（种树避开）
+const lakeD = (x, z) => WATER.lake ? Math.hypot((x - WATER.lake[0]) / 1.35, (z - WATER.lake[1]) / 0.85) : 1e9; // 到湖心的「椭圆距离」，和半径 WATER.lake[2] 同单位
 let pathCurve = null, trailCurve = null;
 const OUTDOOR = [], XSHIFT = new THREE.Vector2(); // 走到 ✕ 时要一起平移的屋外物件；XSHIFT = ✕ 那间屋在自家坐标里的位置
 function extendPath() {
@@ -550,7 +551,7 @@ function extendPath() {
   trailCurve = new THREE.CatmullRomCurve3([[0, 1], [3, 2.5], [8, 2], [14, -1], [22, -6], [32, -12], [44, -18], [56, -24], [68, -32], [80, -40], [92, -46], [104, -52], [116, -56], [128, -58]]
     .map(([dx, dz]) => new THREE.Vector3(x0 + dx, 0, z0 + dz)));
   trailCurve.getSpacedPoints(300).forEach((c) => trailClear.push([c.x, c.z]));
-  WATER.lake = [x0 + 136, z0 + 258, 24];
+  WATER.lake = [x0 + 164, z0 + 304, 80]; // 10-30 放大（原 [136,258,24]）：椭圆半轴 1.35r × 0.85r，卵石路尽头 (124,244) 正好在西北岸
   const N = Math.round(curve.getLength() / 0.311), pts = curve.getSpacedPoints(N); // 点距同原来 560m / 1800
   pts.forEach((c, i) => i % 3 === 0 && pathClear.push([c.x, c.z]));
   // 路边缘不规则：几种频率的起伏 + 逐行小抖动，左右两边各不相同；和院子里那段接头处（前 15 行）先保持原宽
@@ -766,7 +767,7 @@ function ringPoints(rand, n, r0, r1, gap, center, taken) {
     if (nearAny(taken, x, z, gap)) continue;
     if (nearAny(pathClear, x, z, 5)) continue; // 路两边留出 5m
     if (nearAny(trailClear, x, z, 2.6) || nearAny(WATER.river, x, z, 7)) continue; // 林间踪迹只留一人宽；河两岸
-    if (WATER.lake && Math.hypot(x - WATER.lake[0], z - WATER.lake[1]) < WATER.lake[2] * 1.6) continue;
+    if (lakeD(x, z) < WATER.lake[2] * 1.6) continue;
     if (Math.hypot(x - XSHIFT.x, z - XSHIFT.y) < 12) continue; // ✕ 那间屋的空地（跟自家院子一样大）
     if (terrain.pits.some(([px, pz, pr]) => Math.hypot(x - px, z - pz) < pr * 1.6)) continue; // 洼地里不种树
     pts.push([x, z]); takeAt(taken, x, z);
@@ -863,10 +864,10 @@ function setupTerrain(center) {
   const R = WATER.lake ? WATER.lake[2] * 1.3 : 0;
   terrain.flat = (x, z) => Math.min(sstep(10, 24, Math.hypot(x, z)), sstep(10, 24, Math.hypot(x - XSHIFT.x, z - XSHIFT.y)),
     sstep(2.2, 8, nearD(pathClear, x, z)), sstep(1.5, 6, nearD(trailClear, x, z)), sstep(3.5, 8, nearD(WATER.river, x, z)),
-    WATER.lake ? sstep(R, R + 12, Math.hypot(x - WATER.lake[0], z - WATER.lake[1])) : 1);
+    sstep(R, R + 12, lakeD(x, z)));
   // 洼地、密灌丛的位置：固定种子；离路、踪迹、河湖、视线通道、两间屋都要远
   const rand = rng(31), ok = (x, z, r) => minDist(pathClear, x, z) > r + 6 && minDist(trailClear, x, z) > r + 5 && minDist(WATER.river, x, z) > r + 8
-    && !(WATER.lake && Math.hypot(x - WATER.lake[0], z - WATER.lake[1]) < WATER.lake[2] * 1.3 + r + 8)
+    && lakeD(x, z) >= WATER.lake[2] * 1.3 + r + 8
     && Math.hypot(x, z) > r + 22 && Math.hypot(x - XSHIFT.x, z - XSHIFT.y) > r + 22 && SIGHT.every((sg) => segD(x, z, sg) > r + 3)
     && ![...terrain.pits, ...THICKETS].some(([px, pz, pr]) => Math.hypot(x - px, z - pz) < pr + r + 8);
   const put = (n, rMin, rMax, d0, d1, f) => { for (let t = 0; t < 400 && n > 0; t++) { const a = rand() * 6.283, d = d0 + (d1 - d0) * rand(), r = rMin + (rMax - rMin) * rand(), x = center.x + Math.cos(a) * d, z = center.z + Math.sin(a) * d; if (ok(x, z, r)) { f(x, z, r); n--; } } };
@@ -897,7 +898,7 @@ function plantUnder(parts, pts, rand, hMin, hMax, sink, block) { // 灌木/草�
 }
 function underOk(x, z, pathD) { // 灌木/草不压路、踪迹、看灯的视线、河湖、两间屋的空地、洼地
   return !nearAny(pathClear, x, z, pathD) && !nearAny(trailClear, x, z, 2.2) && !nearAny(WATER.river, x, z, 4)
-    && !(WATER.lake && Math.hypot(x - WATER.lake[0], z - WATER.lake[1]) < WATER.lake[2] * 1.3) && Math.hypot(x, z) > 9 && Math.hypot(x - XSHIFT.x, z - XSHIFT.y) > 9
+    && lakeD(x, z) >= WATER.lake[2] * 1.3 && Math.hypot(x, z) > 9 && Math.hypot(x - XSHIFT.x, z - XSHIFT.y) > 9
     && SIGHT.every((sg) => segD(x, z, sg) > 1.2) && !terrain.pits.some(([px, pz, pr]) => Math.hypot(x - px, z - pz) < pr * 1.3);
 }
 function roadsidePoints(rand, n, d0, d1, gap, taken) { // 沿路两边（前 130m）离路中心 d0–d1 米
@@ -2457,7 +2458,7 @@ function mmTick(dt) {
 }
 // —— 羊皮纸地图（v3，2026-10-29）：墙上 wall_map 和左下小地图是同一张，按自家世界坐标画（北 = -z 在上），风格照 story/map-sketch.png。
 // 红圈 = 小屋（原点）、黄线 = 卵石路 pathCurve → 湖、河；绿线 = 林间踪迹 trailCurve → ✕（老云杉，踪迹 D3.s 处）。✕ 那间屋墙上同一张图，✕ 画在红圈的位置。
-const MAP = { x0: -200, z0: -100, w: 570, h: 410, W: 1024 }; // 墙上那张纸 0.64×0.46m，横的
+const MAP = { x0: -200, z0: -100, w: 680, h: 490, W: 1024 }; // 墙上那张纸 0.64×0.46m，横的
 const mapP = (x, z) => [(x - MAP.x0) * MAP.W / MAP.w, (z - MAP.z0) * MAP.W / MAP.w];
 function mapBase() { // 不带记号的底图：纸、等高线、点状树、湖河、两条线、罗盘（只画一次）
   if (mapBase.c) return mapBase.c;
@@ -2487,7 +2488,7 @@ function mapBase() { // 不带记号的底图：纸、等高线、点状树、�
   g.fillStyle = 'rgba(52,44,26,.72)';
   for (let i = 0; i < 1500; i++) {
     const x = MAP.x0 + R() * MAP.w, z = MAP.z0 + R() * MAP.h;
-    if (Math.hypot(x, z) < 14 || nearAny(pathClear, x, z, 5) || nearAny(trailClear, x, z, 4) || nearAny(WATER.river, x, z, 9) || Math.hypot((x - lx) / 1.35, (z - lz) / 0.85) < lr * 1.3) continue;
+    if (Math.hypot(x, z) < 14 || nearAny(pathClear, x, z, 5) || nearAny(trailClear, x, z, 4) || nearAny(WATER.river, x, z, 9) || lakeD(x, z) < lr * 1.3) continue;
     const [a, b] = mapP(x, z), r = 1.2 + R() * 1.3; g.beginPath(); g.arc(a, b, r, 0, 7); g.fill();
   }
   const line = (pts, col, w) => { g.strokeStyle = col; g.lineWidth = w; g.lineCap = g.lineJoin = 'round'; g.beginPath(); pts.forEach(([x, z], i) => g[i ? 'lineTo' : 'moveTo'](...mapP(x, z))); g.stroke(); };
