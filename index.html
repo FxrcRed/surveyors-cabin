@@ -642,6 +642,16 @@ float wH(vec2 p) { vec2 q = p + 3.0 * vec2(wNoise(p * 0.06 + uT * 0.03), wNoise(
   for (let i = 0; i <= 48; i++) { const a = i / 48 * Math.PI * 2, r = lr * (1 + 0.12 * Math.sin(a * 3 + 1) + 0.07 * Math.sin(a * 5)); sh[i ? 'lineTo' : 'moveTo'](Math.cos(a) * r * 1.35, Math.sin(a) * r * 0.85); }
   const lake = new THREE.Mesh(new THREE.ShapeGeometry(sh).rotateX(-Math.PI / 2), water);
   lake.position.set(lx, P.y + 0.01, lz); lake.name = 'lake'; scene.add(lake);
+  // 浮冰（2026-10-31）：只在暴雪天出现；3 种不规则多边形冰片（挤出 0.18m），每块绕自己的起点慢慢漂、慢慢转。挂在湖下面，湖跟着世界平移
+  { const rand = rng(91), mat = new THREE.MeshStandardMaterial({ color: '#dfe7ec', roughness: 0.55, flatShading: true, polygonOffset: true, polygonOffsetFactor: -8, polygonOffsetUnits: -16 }) /* 水面自带 -3/-6 的偏移，冰要更靠前才不被水盖住 */, ims = [];
+    for (let g = 0; g < 3; g++) { const n = 5 + g * 2, sp = new THREE.Shape();
+      for (let i = 0; i < n; i++) { const a = (i + (rand() - 0.5) * 0.6) / n * Math.PI * 2, r = 0.6 + 0.4 * rand(); sp[i ? 'lineTo' : 'moveTo'](Math.cos(a) * r, Math.sin(a) * r); }
+      ims.push(new THREE.InstancedMesh(new THREE.ExtrudeGeometry(sp, { depth: 0.18, bevelEnabled: false }).rotateX(-Math.PI / 2), mat, 24)); }
+    const fl = [];
+    for (let i = 0; i < 72; i++) { const a = rand() * Math.PI * 2, k = 0.15 + 0.78 * Math.sqrt(rand()), r = lr * k * (1 + 0.12 * Math.sin(a * 3 + 1) + 0.07 * Math.sin(a * 5));
+      fl.push({ im: ims[i % 3], j: Math.floor(i / 3), x: Math.cos(a) * r * 1.35, z: -Math.sin(a) * r * 0.85, s: 0.8 + 3 * rand() ** 2, sx: 0.6 + 0.8 * rand(), yaw: rand() * 6.28, R: 0.8 + 2.5 * rand(), w: (rand() < 0.5 ? -1 : 1) * (0.004 + 0.01 * rand()), ph: rand() * 6.28 }); }
+    for (const im of ims) { im.visible = false; im.frustumCulled = false; im.receiveShadow = true; im.name = 'ice'; lake.add(im); }
+    WATER.ice = { ims, fl, k: 0, o: new THREE.Object3D() }; }
   const river = new THREE.CatmullRomCurve3([[-430, 46], [-330, 20], [-240, 32], [-160, 10], [-80, 16], [-24, 4], [0, 0], [24, -4], [70, -14], [140, -8], [220, -24], [310, -16], [430, -30]]
     .map(([dx, dz]) => new THREE.Vector3(lx + dx, 0, lz + dz)));
   const rp = river.getSpacedPoints(300);
@@ -4061,6 +4071,12 @@ renderer.setAnimationLoop(() => {
   adaptRes(now, dt);
   updatePeople(dt);
   if (WATER.mat) WATER.mat.userData.u.uT.value = now / 1000;
+  if (WATER.ice) { const I = WATER.ice, k1 = wx.name === 'Blizzard' ? 1 : 0; // 浮冰：暴雪时约 4 秒长出来，转晴时缩回去；看不到就不算
+    I.k = I.t ? I.k + THREE.MathUtils.clamp(k1 - I.k, -0.004, 0.004) * Math.min(4, (now - I.t) / 16.7) : k1; I.t = now; // 开局就是暴雪：直接满冰
+    for (const im of I.ims) im.visible = I.k > 0.01;
+    if (I.k > 0.01) { const t = now / 1000, o = I.o, e = I.k * I.k * (3 - 2 * I.k);
+      for (const f of I.fl) { const a = f.ph + t * f.w; o.position.set(f.x + Math.cos(a) * f.R, -0.05, f.z + Math.sin(a) * f.R); o.rotation.set(0, f.yaw + t * f.w * 3, 0); o.scale.set(f.s * e, 1, f.s * f.sx * e); o.updateMatrix(); f.im.setMatrixAt(f.j, o.matrix); }
+      for (const im of I.ims) im.instanceMatrix.needsUpdate = true; } } // 冰面露出水面 13cm（y -0.05 + 厚 0.18）：水面有 polygonOffset，露太少会被水盖住
   for (const n of ['person_man', 'person_woman']) { const q = people.get(n); if (q && !(fp && fp.p === q)) stepPrint(q.root, true, q); } // 稽查、书记员在雪地上走也留脚印（玩家自己的在 updateFP）
   if (FAR_DETAIL.length) { const v = !!intro || Math.hypot(camera.position.x, camera.position.z) > 45; if (FAR_DETAIL[0].visible !== v) { for (const o of FAR_DETAIL) o.visible = v; for (const o of NEAR_CONES) o.visible = !v; shadowDirty = true; } } // 远处细模：开场或走远时才画
   if (intro) updateIntro(now);
