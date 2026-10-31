@@ -1040,17 +1040,17 @@ async function plantUnderstory(center) {
   plantUnder(b1, await scatterPoints(rand, 90 * f, 8, 70, 3.2, center, taken), rand, 0.8, 1.6, 0.25, true);
   plantUnder(b3, await scatterPoints(rand, 80 * f, 8, 70, 3.2, center, taken), rand, 0.7, 1.4, 0.25, true);
   plantUnder(grass, await scatterPoints(rand, 330 * f, 6, 55, 1.4, center, gtaken), rand, 0.3, 0.65, 0.03, false);
-  await maybeYield(); plantShore(rand, f, b1, b3, grass, taken, gtaken);
+  await maybeYield(); await plantShore(rand, f, b1, b3, grass, taken, gtaken);
 }
 // 湖岸（2026-10-31）：芦苇、石头用代码生成（平面着色低多边形，同树和码头；网上没找到授权明确、风格一致的），灌木和草用 plants/ 里的 Quaternius CC0。
 // 只种开场看得到的一段岸（introSees），离卵石路/码头 3m 外。s = 沿那个方向「离湖心 / 岸线」的倍数：<1 在水里
-function plantShore(rand, f, b1, b3, grass, taken, gtaken) {
+async function plantShore(rand, f, b1, b3, grass, taken, gtaken) { // 2026-10-31 用户：岸边太稀 → 芦苇 ×1.5、石头 ×3（加小卵石）、灌木 ×1.7、草 ×3
   const [lx, lz, lr] = WATER.lake, gy = ground.position.y;
   const at = (s) => { for (let t = 0; t < 30; t++) { const a = rand() * Math.PI * 2, r = lr * (1 + 0.12 * Math.sin(a * 3 + 1) + 0.07 * Math.sin(a * 5)) * s(), x = lx + Math.cos(a) * r * 1.35, z = lz - Math.sin(a) * r * 0.85;
     if (introSees(x, z) && !nearAny(pathClear, x, z, 3)) return [x, z]; } return null; };
   const grp = new THREE.Group(); grp.name = 'shore'; const o = new THREE.Object3D(), col = new THREE.Color();
   // 芦苇：一根三棱细锥，一丛 4–7 根，往外歪；岸线内外各一点（水里那几根更显眼）
-  const reedG = new THREE.ConeGeometry(0.045, 1, 3).translate(0, 0.5, 0), clumps = Math.round(320 * f), reeds = new THREE.InstancedMesh(reedG, new THREE.MeshStandardMaterial({ roughness: 0.9, flatShading: true }), clumps * 11);
+  const reedG = new THREE.ConeGeometry(0.045, 1, 3).translate(0, 0.5, 0), clumps = Math.round(480 * f), reeds = new THREE.InstancedMesh(reedG, new THREE.MeshStandardMaterial({ roughness: 0.9, flatShading: true }), clumps * 11);
   let n = 0;
   for (let c = 0; c < clumps; c++) { const p = at(() => 0.96 + rand() * 0.09); if (!p) continue; const k = 7 + Math.floor(rand() * 5);
     for (let i = 0; i < k; i++) { const x = p[0] + (rand() - 0.5) * 0.6, z = p[1] + (rand() - 0.5) * 0.6, h = 0.7 + rand() * 0.9;
@@ -1060,17 +1060,17 @@ function plantShore(rand, f, b1, b3, grass, taken, gtaken) {
   // 石头：二十面体顶点打乱一次，压扁，半埋；有的在水里露个头
   const rockG = new THREE.IcosahedronGeometry(1, 0), rp = rockG.attributes.position;
   for (let i = 0; i < rp.count; i++) { const v = new THREE.Vector3().fromBufferAttribute(rp, i), j = 0.75 + 0.5 * wHash01(v.x * 7.1 + v.y * 3.3 + v.z * 5.7); rp.setXYZ(i, v.x * j, v.y * j, v.z * j); }
-  rockG.computeVertexNormals(); const nr = Math.round(150 * f), rocks = new THREE.InstancedMesh(rockG, new THREE.MeshStandardMaterial({ roughness: 0.95, flatShading: true }), nr); n = 0;
-  for (let i = 0; i < nr; i++) { const p = at(() => 0.97 + rand() * 0.13); if (!p) continue; const sz = 0.25 + rand() ** 2 * 0.9;
+  rockG.computeVertexNormals(); const nr = Math.round(450 * f), rocks = new THREE.InstancedMesh(rockG, new THREE.MeshStandardMaterial({ roughness: 0.95, flatShading: true }), nr); n = 0;
+  for (let i = 0; i < nr; i++) { const p = at(() => 0.97 + rand() * 0.13); if (!p) continue; const sz = rand() < 0.4 ? 0.08 + rand() * 0.12 : 0.25 + rand() ** 2 * 0.9; // 四成是小卵石
     o.position.set(p[0], gy - sz * 0.35, p[1]); o.rotation.set(rand() * 3, rand() * 6.28, rand() * 3); o.scale.set(sz * (0.9 + rand() * 0.6), sz * (0.45 + rand() * 0.3), sz * (0.9 + rand() * 0.6)); o.updateMatrix(); rocks.setMatrixAt(n, o.matrix);
     rocks.setColorAt(n++, col.setHSL(0.08 + rand() * 0.05, 0.06 + rand() * 0.06, 0.13 + rand() * 0.09)); }
-  rocks.count = n; rocks.receiveShadow = true; grp.add(rocks);
+  rocks.count = n; rocks.receiveShadow = true; grp.add(rocks); await maybeYield();
   scene.add(grp); OUTDOOR.push(grp);
   // 岸上一圈灌木和草（同林下那套模型）
-  const pts = (m, s0, s1) => { const out = []; for (let i = 0; i < m; i++) { const p = at(() => s0 + rand() * (s1 - s0)); if (p && !nearAny(taken, p[0], p[1], 1.6)) { out.push(p); takeAt(taken, ...p); } } return out; };
-  plantUnder(b1, pts(Math.round(70 * f), 1.06, 1.25), rand, 0.8, 1.6, 0.25, true);
-  plantUnder(b3, pts(Math.round(60 * f), 1.05, 1.25), rand, 0.7, 1.4, 0.25, true);
-  plantUnder(grass, pts(Math.round(260 * f), 1.02, 1.2), rand, 0.35, 0.7, 0.03, false);
+  const pts = (m, s0, s1, tk = taken, gap = 1.6) => { const out = []; for (let i = 0; i < m; i++) { const p = at(() => s0 + rand() * (s1 - s0)); if (p && !nearAny(tk, p[0], p[1], gap)) { out.push(p); takeAt(tk, ...p); } } return out; };
+  plantUnder(b1, pts(Math.round(150 * f), 1.06, 1.4), rand, 0.8, 1.6, 0.25, true);
+  plantUnder(b3, pts(Math.round(130 * f), 1.05, 1.4), rand, 0.7, 1.4, 0.25, true);
+  plantUnder(grass, pts(Math.round(1100 * f), 1.02, 1.4, gtaken, 0.9), rand, 0.35, 0.7, 0.03, false);
 }
 function wHash01(v) { const s = Math.sin(v * 12.9898) * 43758.5453; return s - Math.floor(s); }
 
