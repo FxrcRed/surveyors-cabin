@@ -923,13 +923,25 @@ function crownRoom(x, z, mutual) {
     for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) for (const [px, pz, r] of crownGrid.get((cx + i) * 100003 + cz + j) || []) m = Math.min(m, Math.hypot(px - x, pz - z) / 0.85 - r); }
   return m;
 }
+// 林冠成片高低（2026-10-31，用户：从湖面上空看林冠线一样高、像毯子）：两层低频值噪声（70m、28m）给每个位置一个高度系数 0.72–1.32（中位树高同原来）（老林高、新林矮，渐变），
+// 约 4% 的树再 ×1.35 冒出林冠线。按位置哈希算、不用 rand()，种树位置序列不变
+function hash2(i, j) { let h = (Math.imul(i, 374761393) + Math.imul(j, 668265263)) | 0; h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; }
+function vnoise(x, z) {
+  const i = Math.floor(x), j = Math.floor(z), u = x - i, v = z - j, a = u * u * (3 - 2 * u), b = v * v * (3 - 2 * v);
+  return THREE.MathUtils.lerp(THREE.MathUtils.lerp(hash2(i, j), hash2(i + 1, j), a), THREE.MathUtils.lerp(hash2(i, j + 1), hash2(i + 1, j + 1), a), b);
+}
+function canopyK(x, z) {
+  const n = 0.65 * vnoise(x / 70 + 11.3, z / 70 + 3.7) + 0.35 * vnoise(x / 28 - 5.1, z / 28 + 7.9);
+  return (0.72 + 0.6 * THREE.MathUtils.smoothstep(n, 0.3, 0.7)) * (hash2(Math.round(x * 8), Math.round(z * 8) + 7) < 0.04 ? 1.35 : 1);
+}
 function plant(parts, pts, rand, hMin, hMax, y) {
   const tint = new THREE.Color(), m = new THREE.Matrix4(), q = new THREE.Quaternion(), s = new THREE.Vector3(), p = new THREE.Vector3(), up = new THREE.Vector3(0, 1, 0);
   const ims = parts.map(({ geometry, material }) => new THREE.InstancedMesh(geometry, material, pts.length));
   if (!crownGrid.size) for (const k of CROWN_KEEP) crownAdd(...k);
   const R = parts.radius || 0.3, mutual = !!parts.radius; // 远处简化版（雾里）只避路和视线，彼此可以交叠，不然远山就稀了
   pts.forEach(([x, z], i) => {
-    let h = (hMin + (hMax - hMin) * rand()) * TREE_K, w = h * (0.7 + rand() * 0.6) * TREE_W; // 胖瘦差别大一点
+    const ck = canopyK(x, z); // 单棵随机只占原范围的中间 60%，高低主要看成片的系数；宽只随系数开方变（矮林不显得扁、冒尖的树细高），路边照旧由 crownRoom 收窄
+    let h = Math.min(27, (hMin + (hMax - hMin) * (0.2 + 0.6 * rand())) * TREE_K * ck), w = h / Math.sqrt(ck) * (0.7 + rand() * 0.6) * TREE_W; // 胖瘦差别大一点；最高 27m（开场在 30m 高飞）
     // 树冠边缘离小屋中心至少 7m（院子角 5.7m + 屋檐余量），太胖就按比例缩小，缩太多就不种
     const room = Math.hypot(x - forestCenter.x, z - forestCenter.z) - 7, fit = room / (R * w);
     if (fit < 1) { if (fit < 0.5) { h = w = 0; } else { h *= fit; w *= fit; } }
@@ -945,6 +957,71 @@ function plant(parts, pts, rand, hMin, hMax, y) {
     ims.forEach((im, k) => !parts[k].trunk && im.setColorAt(i, tint));
   });
   ims.forEach((im) => { im.computeBoundingSphere(); im.name = 'forest'; scene.add(im); OUTDOOR.push(im); });
+  return ims;
+}
+
+// 挡住的远树不种（2026-10-31）：加载时从开场镜头路线（复刻 startDockIntro 的引导线和视线）和绕屋远景（220m 外 24 个方向）各渲染一次编号图（320×160，每棵树一个颜色），
+// 一个像素都没露出、又不在 walkSees 里的树从实例里删掉（整组压紧、count 变小）。sets：每组是同一次 plant() 的几个网格（树干 + 树冠，实例序号一一对应）
+async function cullHidden(sets, y) {
+  const t0 = performance.now();
+  const W = 320, H = 160, rt = new THREE.WebGLRenderTarget(W * 4, H * 4), buf = new Uint8Array(W * H * 64), LAY = 7; rt.scissorTest = true;
+  const vs = `uniform float uBase; out vec3 vId;
+    void main() { float id = uBase < 0.0 ? 0.0 : uBase + float(gl_InstanceID) + 1.0; vId = vec3(mod(id, 256.0), mod(floor(id / 256.0), 256.0), floor(id / 65536.0)) / 255.0;
+      vec4 p = vec4(position, 1.0);
+      #ifdef USE_INSTANCING
+      p = instanceMatrix * p;
+      #endif
+      gl_Position = projectionMatrix * modelViewMatrix * p; }`;
+  const mat = (base) => new THREE.ShaderMaterial({ uniforms: { uBase: { value: base } }, vertexShader: vs, fragmentShader: 'in vec3 vId; void main() { gl_FragColor = vec4(vId, 1.0); }', side: THREE.DoubleSide });
+  const swap = [], inSet = new Set(sets.flat()), occ = mat(-1); let total = 0;
+  const use = (o, m) => { swap.push([o, o.material, o.visible]); o.material = m; o.visible = true; o.layers.enable(LAY); }; // FAR_DETAIL 此时可能被渲染循环藏着
+  scene.traverse((o) => { if (o.isInstancedMesh && o.name === 'forest' && !inSet.has(o)) use(o, occ); }); use(ground, occ); // 近处细模、地面只挡、不记
+  const base = sets.map((set) => { const b = total; total += set[0].count; for (const o of set) use(o, mat(b)); return b; });
+  const seen = new Uint8Array(total + 1), cam = new THREE.PerspectiveCamera(70, W / H, 0.5, 450); cam.layers.set(LAY); // 视场比开场（58–62°、16:9）宽一圈，容得下引导线日后小改和宽屏
+  const views = [], [dx, dz] = WATER.dockDir, [kx, kz] = WATER.dock, L = pathCurve.getLength(), gy = y, c = forestCenter;
+  const hOf = (d) => { const k = THREE.MathUtils.clamp((140 - d) / 70, 0, 1); return DOCK_LO + (DOCK_HI - DOCK_LO) * (1 - k * k * k * (k * (k * 6 - 15) + 10)); };
+  const pts = [110, 55].map((k) => new THREE.Vector3(kx + dx * k, gy + DOCK_HI, kz + dz * k));
+  for (let d = L - 5; d > DOCK_E; d -= d > 150 ? 40 : 5) { const p = pathCurve.getPointAt(d / L); pts.push(new THREE.Vector3(p.x, gy + hOf(d), p.z)); }
+  const guide = new THREE.CatmullRomCurve3(pts, false, 'centripetal'), Lg = guide.getLength();
+  for (let s = 0; s <= Lg; s += 6) { const u = s / Lg, p = guide.getPointAt(u), h = (p.y - gy - DOCK_LO) / (DOCK_HI - DOCK_LO), ahead = THREE.MathUtils.lerp(14, 60, h);
+    const look = guide.getPointAt(Math.min(1, u + ahead / Lg)); look.y = p.y - ahead * THREE.MathUtils.lerp(0.04, 0.32, h); if (u + ahead / Lg > 1) look.set(c.x, gy + 1.5, c.z); views.push([p, look, 450, 1]); }
+  views.push([sliceEye(), new THREE.Vector3(SL.door[1][0], gy + 1.5, SL.door[1][1]), 450, 1]);
+  for (const el of [0.42, 0.9]) for (let a = 0; a < 12; a++) { const r = 220 * Math.cos(el), b = (a + el) * Math.PI / 6; views.push([new THREE.Vector3(c.x + r * Math.cos(b), gy + 220 * Math.sin(el), c.z + r * Math.sin(b)), new THREE.Vector3(c.x, gy, c.z), 300, 2]); } // 绕屋远景（最远 220m，雾到 300m）
+  const prevRT = renderer.getRenderTarget(), prevBg = scene.background, cc = renderer.getClearColor(new THREE.Color()), ca = renderer.getClearAlpha(), sm = renderer.shadowMap.enabled;
+  scene.background = null; renderer.setClearColor(0, 0); renderer.shadowMap.enabled = false; renderer.setRenderTarget(rt); // 关阴影：不然 shadowDirty 时会顺带画一遍阴影、同步编译深度着色器
+  for (let v0 = 0; v0 < views.length; v0 += 16) { // 16 个视点拼一张 4×4 的图，读回一次（每个视点都读回要等 GPU 92 次）
+    await maybeYield(); const n = Math.min(16, views.length - v0);
+    for (let j = 0; j < n; j++) {
+      const [p, look, far] = views[v0 + j]; cam.far = far; cam.position.copy(p); cam.lookAt(look); cam.updateProjectionMatrix(); cam.updateMatrixWorld();
+      rt.viewport.set((j & 3) * W, (j >> 2) * H, W, H); rt.scissor.copy(rt.viewport); renderer.setRenderTarget(rt); renderer.clear(); renderer.render(scene, cam);
+    }
+    renderer.readRenderTargetPixels(rt, 0, 0, W * 4, H * 4, buf);
+    for (let i = 0; i < buf.length; i += 4) { const px = (i >> 2) % (W * 4), j = Math.floor(px / W) + 4 * Math.floor((i >> 2) / (W * 4) / H);
+      if (j < n) seen[buf[i] | (buf[i + 1] << 8) | (buf[i + 2] << 16)] |= views[v0 + j][3]; }
+  }
+  renderer.setRenderTarget(prevRT); scene.background = prevBg; renderer.setClearColor(cc, ca); renderer.shadowMap.enabled = sm; rt.dispose();
+  for (const [o, m, v] of swap) { o.material.dispose(); o.material = m; o.visible = v; o.layers.disable(LAY); }
+  // 第一人称走得到（同 walkSees，但路/踪迹 40m 要另建 40m 一格的网格：nearAny 只支持 8m 内）
+  const g40 = new Map(), k40 = (x, z) => Math.floor(x / 40) * 100003 + Math.floor(z / 40);
+  for (const [x, z] of [...pathClear, ...trailClear]) { const k = k40(x, z); (g40.get(k) || g40.set(k, []).get(k)).push([x, z]); }
+  const fpSees = (x, z) => { if (Math.hypot(x, z) < 80 || Math.hypot(x - XSHIFT.x, z - XSHIFT.y) < 60) return true;
+    for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) for (const [px, pz] of g40.get(k40(x + i * 40, z + j * 40)) || []) if ((px - x) ** 2 + (pz - z) ** 2 < 1600) return true;
+    return false; };
+  const m4 = new THREE.Matrix4(), gone = new Set(); let kept = 0, keptIntro = 0;
+  sets.forEach((set, k) => { // 压紧：留下的实例挪到前面，count 变小
+    const n0 = set[0].count; let n = 0;
+    for (let i = 0; i < n0; i++) {
+      set[0].getMatrixAt(i, m4); const x = m4.elements[12], z = m4.elements[14];
+      const sn = seen[base[k] + i + 1], fp = fpSees(x, z); if ((sn & 1) || fp) keptIntro++;
+      if (!sn && !fp) { gone.add(x + ',' + z); continue; }
+      if (n !== i) for (const o of set) { o.instanceMatrix.array.copyWithin(n * 16, i * 16, i * 16 + 16); if (o.instanceColor) o.instanceColor.array.copyWithin(n * 3, i * 3, i * 3 + 3); }
+      n++;
+    }
+    for (const o of set) { o.count = n; o.instanceMatrix.needsUpdate = true; if (o.instanceColor) o.instanceColor.needsUpdate = true; o.computeBoundingSphere(); }
+    kept += n;
+  });
+  for (let i = TREE_XZ.length - 2; i >= 0; i -= 2) if (gone.has(Math.fround(TREE_XZ[i]) + ',' + Math.fround(TREE_XZ[i + 1]))) TREE_XZ.splice(i, 2); // 删掉的树不留碰撞
+  window.__cull = { views: views.length, total, kept, keptIntro, ms: Math.round(performance.now() - t0) };
 }
 
 // 只去掉挡住首页画面（开场结尾）那条视线的几棵树：树冠碰到「相机 → 小屋」视线就不种（缩放置 0）
@@ -1129,12 +1206,15 @@ async function plantForest(center, y) {
   // 远处简化版：只种开场看得到或走路走得到的（范围从 260m 扩到 420m，补上湖西边那片空地；看不到的不种）
   // 其中离开场镜头路线 130m 内的（约 4400 棵）换减面细模，收进 FAR_DETAIL；平时在屋子附近换回同位置的圆锥（NEAR_CONES，雾里看不出）
   const far = await ringPoints(rand, 12000 * f, 65, 420, 2.2, center, taken, (x, z) => introSees(x, z) || walkSees(x, z)), near = far.filter(([x, z]) => introNear(x, z) < 130);
-  await maybeYield(); plant(simpleConifer(0xffffff), far.filter(([x, z]) => introNear(x, z) >= 130), rand, 6, 10, y);
-  await maybeYield(); const lodP = lodTree(pine, 0.25), lodA = lodTree(autumn, 0.25), cone = simpleConifer(0xffffff)[0];
-  for (const [parts, pts] of [[lodP, near.filter((_, i) => i % 4)], [lodA, near.filter((_, i) => !(i % 4))]]) {
-    await maybeYield(); const n1 = scene.children.length; plant(parts, pts, rand, 5, 10, y);
-    const ims = scene.children.slice(n1), crown = ims.find((o) => o.instanceColor); FAR_DETAIL.push(...ims);
-    const c = new THREE.InstancedMesh(cone.geometry, cone.material, pts.length); c.instanceMatrix.array.set(crown.instanceMatrix.array); c.instanceColor = crown.instanceColor.clone();
+  await maybeYield(); const cones = plant(simpleConifer(0xffffff), far.filter(([x, z]) => introNear(x, z) >= 130), rand, 6, 10, y);
+  await maybeYield(); const lodP = lodTree(pine, 0.25), lodA = lodTree(autumn, 0.25), cone = simpleConifer(0xffffff)[0], lods = [];
+  for (const [parts, pts] of [[lodP, near.filter((_, i) => i % 4)], [lodA, near.filter((_, i) => !(i % 4))]]) { await maybeYield(); lods.push(plant(parts, pts, rand, 5, 10, y)); }
+  const heads = new Set([pine, pines, autumn, dead].map((p) => p[0].geometry)), farSets = []; // 按 plant() 一次一组：碰到某种树的第一个网格就开新组
+  for (const o of FAR_DETAIL) if (heads.has(o.geometry) || !farSets.length) farSets.push([o]); else farSets.at(-1).push(o);
+  await cullHidden([...farSets, cones, ...lods], y);
+  for (const ims of lods) { // 压紧后再拷给圆锥替身
+    const crown = ims.find((o) => o.instanceColor); FAR_DETAIL.push(...ims);
+    const c = new THREE.InstancedMesh(cone.geometry, cone.material, crown.count); c.instanceMatrix.array.set(crown.instanceMatrix.array.subarray(0, crown.count * 16)); c.instanceColor = new THREE.InstancedBufferAttribute(crown.instanceColor.array.slice(0, crown.count * 3), 3);
     c.visible = false; c.computeBoundingSphere(); c.name = 'forest'; scene.add(c); OUTDOOR.push(c); NEAR_CONES.push(c);
   }
   await plantUnderstory(center);
