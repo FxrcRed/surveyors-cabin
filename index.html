@@ -2228,7 +2228,7 @@ function startNight(late) { // 线索找齐：书记员说一句 → 天色转�
   game.night = game.dusk = true;
   const t0 = late ? 6000 : 1500;
   setTimeout(() => showRoomNote(CLERK_SAYS), t0);
-  setTimeout(() => { clerkToDesk(); sky.play = false; sky.goal = 18.3; sky.goalRate = 0.08; }, t0 + 3500); // 灯在进屋时就一盏盏开了；17 点起天色约 16 秒慢慢转到黄昏 18:20（太阳刚落）
+  setTimeout(() => { clerkToDesk(); sky.play = false; sky.goal = 18.3; sky.goalRate = 0.15; }, t0 + 3500); // 灯在进屋时就一盏盏开了；天色从下午 15:30 约 19 秒慢慢转到黄昏 18:20（太阳刚落）
   setTimeout(() => { game.dusk = false; const w = toggles.get('wall_lamp'); if (w) w.on = true; const pg = layers.get('desk_page'); if (pg) pg.visible = false; showQuest(); unlockJournal(); }, t0 + 10500); // 她坐下写：下午那页纸不见了
 }
 // —— 房间变化（v2，第 1 天）：玩家亲手关 / 开过的灯、炉门、抽屉，等他离开那里（看不见、或走远）4 秒后悄悄变回去；
@@ -2373,7 +2373,7 @@ function gameInit() { // 模型和开关都建好后调（loadPeople 之前）�
   document.fonts.load('18px "IM Fell English SC"').then(makeBook, makeBook); // 书架上那本工作日志（js/props3d.js；等字体好了再画书脊和封面的字）
   if (game.day === 1 && !game.night) makePage(); // 天黑后（她坐下写了）那页纸就不在了
   notes1Text();
-  sky.goal = null; sky.play = false; sky.bearing = skyEl.bearing.value = game.day === 1 ? 335 : 55; /* 第 1 天傍晚：太阳转到小屋前右方，正面受光、屋檐影子落在墙上（55 时傍晚是逆光） */ sky.indoorK = game.day === 1 ? 0.3 : 1; /* 第 1 天屋里不靠天光：灯没开前是暗的 */ sky.hour = game.night && game.day > 1 ? 21 : game.day >= 3 ? 9.5 : game.day >= 2 ? (DAY2_NEED.every((k) => game.found.has(k)) ? 17.5 : 9.5) : game.night ? 18.3 : 17; // 第 1 天 17 点到：太阳低、偏暖，进屋开灯合理
+  sky.goal = null; sky.play = false; sky.bearing = skyEl.bearing.value = game.day === 1 ? 335 : 55; /* 第 1 天：太阳转到小屋前方（15:30 方位约 21°），正面受光、山墙檐口影子落在前墙上；55 时下午太阳在侧面、前墙背光，黄昏时逆光 */ sky.indoorK = game.day === 1 ? 0.3 : 1; /* 第 1 天屋里不靠天光：灯没开前是暗的 */ sky.hour = game.night && game.day > 1 ? 21 : game.day >= 3 ? 9.5 : game.day >= 2 ? (DAY2_NEED.every((k) => game.found.has(k)) ? 17.5 : 9.5) : game.night ? 18.3 : 15.5; // 第 1 天下午到，找齐线索后转黄昏（用户 2026-10-31：17 点太暗，改回下午）
   if (game.day === 2 && game.found.has('notes2')) endDay2(); // 读完第 2 夜的记录还没点「第三天早上」就刷新了
   if (game.day === 1 && game.found.has('notes1')) endDay(); // 读完第 1 夜的记录还没点「第二天早上」就刷新了 // 下午到，找齐线索时天黑；时间不自己走，免得找着找着天就黑了
   if (game.day >= 2) { setWeather('Snow', true); clearTimeout(wxTimer); cover.uSnow.value = 1; game.entered = true; } // 第 2、3 天：地面积雪 + 小雪，不自动换天气（2026-10-29 起不再起雾；玩家走过留脚印）
