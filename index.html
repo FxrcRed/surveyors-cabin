@@ -3613,7 +3613,6 @@ function stepPrint(r, moving, st = fp) { r = r.position; // 野外雪地上每�
 }
 function updateFP(dt) {
   const p = fp.p, r = p.root, s = r.scale.x, k = fp.keys;
-  if (fp.fov0) { const k = Math.min(1, (fp.fovT += dt) / 1.5); camera.fov = THREE.MathUtils.lerp(fp.fov0, 72, k * k * k * (k * (k * 6 - 15) + 10)); camera.updateProjectionMatrix(); if (k === 1) fp.fov0 = 0; }
   fpTouchTick(dt); sliceTick(dt); // 触屏点物件后转头 + 动手；切片按位置认房间、书记员跟进门
   if ((fp.solidT -= dt) < 0) { fp.solid = fpSolid(); fp.floors = fp.solid.concat(ground); fp.solidT = 0.5; } // 门开关、积雪会变，半秒刷新一次
   const f = (k.has('KeyW') || k.has('ArrowUp') ? 1 : 0) - (k.has('KeyS') || k.has('ArrowDown') ? 1 : 0);
@@ -3970,7 +3969,7 @@ const smoothstep = (a, b, x) => { const t = THREE.MathUtils.clamp((x - a) / (b -
 // 湖面上空 30m 高（树最高约 22m）飞过码头和船 → 沿卵石路上空 230m→70m 处降进林子（降到 2.6m 后贴路中线飞，路中线离树冠 ≥1.6m，不会穿树）
 // → 绕过 S 弯看到前面一前一后走着的两人 → 离终点 35m 起单调减速，从稽查头顶越过，缓缓停在终点他的眼睛（同 sliceEye），他走进来后交给 sliceStart。
 // 两人从开场一开始就在林子里沿路走（不在码头上）；起点按镜头停稳的时刻倒推，镜头一路减速、从他头顶越过先到终点，他再从镜头后面走进来。
-const DOCK_E = 14, DOCK_FOV = 84, DOCK_RS = 35, DOCK_REM = 2.2, DOCK_HI = 30, DOCK_LO = 2.6, DOCK_WALK = 0.9; // DOCK_FOV：结尾视场角（最后 DOCK_RS 米跟着减速一起缓缓拉宽，看到小屋被林子包住；用户：镜头不用动，最后段拉大视角）；DOCK_RS：离终点多远开始减速；DOCK_REM：镜头停稳时他离终点还剩多远；DOCK_WALK：实测沿路走的速度（一段段 walk 任务，比 WALK_SPEED 略慢）
+const DOCK_E = 14, DOCK_RS = 35, DOCK_REM = 2.2, DOCK_HI = 30, DOCK_LO = 2.6, DOCK_WALK = 0.9; // DOCK_RS：离终点多远开始减速；DOCK_REM：镜头停稳时他离终点还剩多远；DOCK_WALK：实测沿路走的速度（一段段 walk 任务，比 WALK_SPEED 略慢）
 // 离小屋 230m 起往下降，70m 处到底（smootherstep；原来 140→70m，那时速度还有 20+m/s，竖直速度峰值 12.6m/s，用户说像掉下去）
 function dockH(d) { const k = THREE.MathUtils.clamp((230 - d) / 160, 0, 1); return DOCK_LO + (DOCK_HI - DOCK_LO) * (1 - k * k * k * (k * (k * 6 - 15) + 10)); }
 const dockStep = (d) => dockH(d - 40) > DOCK_HI - 1 ? 40 : 5; // 看下一点的高度（只看当前点时最后一大步从 29m 跨到 22.8m，引导线折一下，竖直速度鼓包） // 引导线取点间距：还没开始降时 40m 一点（不跟小弯），降下来就 5m 一点贴着路中线
@@ -4019,7 +4018,7 @@ function updateDockIntro(now) {
   const w = I.passed || r > 30 ? 0 : Math.min(1 - sm(g, 0.3, 1.5), sm(g, -1.2, -0.2)), top = mp.y + 1.62 * 0.94 + 0.2;
   cp.y = Math.max(cp.y, THREE.MathUtils.lerp(cp.y, top + 0.8, w));
   look.lerp(_slD.copy(cp).add(new THREE.Vector3(0, -0.4, -4)), 1 - sm(r, 0, 6)); // 停下时朝门、稍低头（同 sliceStart）
-  camera.lookAt(look); camera.fov = THREE.MathUtils.lerp(THREE.MathUtils.lerp(58, 62, h), DOCK_FOV, 1 - sm(r, 0, DOCK_RS)); camera.updateProjectionMatrix(); camera.updateMatrixWorld();
+  camera.lookAt(look); camera.fov = THREE.MathUtils.lerp(THREE.MathUtils.lerp(58, 62, h), 72, 1 - sm(r, 0, 14)); camera.updateProjectionMatrix(); camera.updateMatrixWorld();
   const hide = I.passed && g > -1.2; if (m.root.visible === hide) m.root.visible = !hide;
   if (!hide && r < 30) window.__introMinD = Math.min(window.__introMinD, cp.distanceTo(_slD.copy(mp).setY(mp.y + 1.55))); // 调试：镜头离他的头最近多远（他显示着的时候）
   const rem = Math.hypot(mp.x - SL.man[0], mp.z - SL.man[1]);
@@ -4108,7 +4107,7 @@ function endIntro(skip) {
   if (!intro) return;
   const { homePos, homeTgt, lamp } = intro;
   if (lamp) { scene.remove(lamp); lamp.material.map.dispose(); lamp.material.dispose(); }
-  if (intro.slice) { const f = camera.fov; if (intro.m) intro.m.root.visible = true; intro = null; if (skip) openingCard(); sliceStart(); if (fp && !skip) { fp.fov0 = f; fp.fovT = 0; camera.fov = f; camera.updateProjectionMatrix(); } return; } // fov0：开场结尾的宽视角，updateFP 里 1.5 秒收回 72 // 切片：直接交给玩家（跳过也一样，镜头跳到门廊）
+  if (intro.slice) { if (intro.m) intro.m.root.visible = true; intro = null; if (skip) openingCard(); sliceStart(); return; } // 切片：直接交给玩家（跳过也一样，镜头跳到门廊）
   intro = null; if (skip) openingCard(); controls.enabled = true; spin = true; spinK = skip ? 0 : 1; // 开场结束就绕小屋转着展示
   camera.fov = FOV1; camera.updateProjectionMatrix();
   if (skip) fly = { t: 0, fromPos: camera.position.clone(), fromTgt: controls.target.clone(), toPos: homePos, toTgt: homeTgt };
