@@ -3927,10 +3927,10 @@ const introDist = (s) => THREE.MathUtils.lerp(INTRO_FROM, 6, 1 - Math.pow(1 - s,
 const DIVE = 0.39, BLEND = 0.6; // 俯冲落在离院子约 65m（S 弯开头），贴路段短一点 // u 的前 36% 俯冲；60% 起过渡到首页视角
 const smoothstep = (a, b, x) => { const t = THREE.MathUtils.clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
 // —— 第 1 天开场（2026-10-30 重做，用户：两人坐船来、不要扭来扭去、别穿树、结尾别太快）：
-// 湖面上空 30m 高（树最高约 22m）飞过码头和船 → 沿卵石路上空 140m→70m 处降进林子（降到 2.6m 后贴路中线飞，路中线离树冠 ≥1.6m，不会穿树）
-// → 绕过 S 弯看到前面一前一后走着的两人 → 减速到和走路一样（1m/s）停在稽查身后 → 跟着他走、水平先到高度后到，落进他的眼睛（同 sliceEye），交给 sliceStart。
-// 两人从开场一开始就在林子里沿路走（不在码头上）；起点按镜头到 DOCK_E 的时间倒推，保证镜头追上时正好在他身后 DOCK_GAP 米。
-const DOCK_E = 14, DOCK_GAP = 4.5, DOCK_HI = 30, DOCK_LO = 2.6, DOCK_WALK = 0.9; // DOCK_WALK：实测沿路走的速度（一段段 walk 任务，比 WALK_SPEED 略慢）
+// 湖面上空 30m 高（树最高约 22m）飞过码头和船 → 沿卵石路上空 230m→70m 处降进林子（降到 2.6m 后贴路中线飞，路中线离树冠 ≥1.6m，不会穿树）
+// → 绕过 S 弯看到前面一前一后走着的两人 → 离终点 35m 起单调减速，从稽查头顶越过，缓缓停在终点他的眼睛（同 sliceEye），他走进来后交给 sliceStart。
+// 两人从开场一开始就在林子里沿路走（不在码头上）；起点按镜头停稳的时刻倒推，镜头一路减速、从他头顶越过先到终点，他再从镜头后面走进来。
+const DOCK_E = 14, DOCK_RS = 35, DOCK_REM = 2.2, DOCK_HI = 30, DOCK_LO = 2.6, DOCK_WALK = 0.9; // DOCK_RS：离终点多远开始减速；DOCK_REM：镜头停稳时他离终点还剩多远；DOCK_WALK：实测沿路走的速度（一段段 walk 任务，比 WALK_SPEED 略慢）
 // 离小屋 230m 起往下降，70m 处到底（smootherstep；原来 140→70m，那时速度还有 20+m/s，竖直速度峰值 12.6m/s，用户说像掉下去）
 function dockH(d) { const k = THREE.MathUtils.clamp((230 - d) / 160, 0, 1); return DOCK_LO + (DOCK_HI - DOCK_LO) * (1 - k * k * k * (k * (k * 6 - 15) + 10)); }
 const dockStep = (d) => dockH(d - 40) > DOCK_HI - 1 ? 40 : 5; // 看下一点的高度（只看当前点时最后一大步从 29m 跨到 22.8m，引导线折一下，竖直速度鼓包） // 引导线取点间距：还没开始降时 40m 一点（不跟小弯），降下来就 5m 一点贴着路中线
@@ -3942,55 +3942,48 @@ function startDockIntro() {
   for (const k of [110, 55]) pts.push(new THREE.Vector3(kx + dx * k, gy + DOCK_HI, kz + dz * k)); // 湖面上空，朝码头
   for (let d = L - 5; d > DOCK_E; d -= dockStep(d)) { const p = pathCurve.getPointAt(d / L); pts.push(new THREE.Vector3(p.x, gy + dockH(d), p.z)); } // 高处 40m 一点（不跟小弯），低处 5m 一点（贴着路中线）
   const pe = pathCurve.getPointAt(DOCK_E / L); pts.push(new THREE.Vector3(pe.x, gy + DOCK_LO, pe.z));
+  // 引导线直接接到终点的眼睛（sliceEye），最后 2m 朝门（-z），整段一条线、一张速度表（原来到路上 14m 处先减到走路速度、再接跟随段加速到 4m/s 再刹，用户说结尾先快后慢）
+  const E = sliceEye(), fw = new THREE.Vector3(0, 0, -1), e2 = E.clone().addScaledVector(fw, -2), mid = pts[pts.length - 1].clone().lerp(e2, 0.5);
+  mid.y = gy + DOCK_LO; e2.y = THREE.MathUtils.lerp(gy + DOCK_LO, E.y, 0.7); pts.push(mid, e2, E);
   const guide = new THREE.CatmullRomCurve3(pts, false, 'centripetal'), Lg = guide.getLength();
-  // 速度表：起步 6m/s 加速到高空 28m/s，降下来时按高度减到 7m/s，最后 18m 减到走路速度（接跟随段不顿）
-  const N = 1200, S = [0], P = [];
-  const vAt = (f, y) => { const s = f * Lg, up = Math.min(1, s / 50), h = (y - gy - DOCK_LO) / (DOCK_HI - DOCK_LO), end = THREE.MathUtils.clamp((Lg - s) / 18, 0, 1);
-    const cruise = 7 + 21 * Math.pow(Math.max(0, h), 1.3); return Math.max(DOCK_WALK, (6 + (cruise - 6) * up) * (end * end * (3 - 2 * end)) + DOCK_WALK * (1 - end)); };
-  for (let i = 0; i <= N; i++) { const p = guide.getPointAt(i / N); P.push(p); if (i) S.push(S[i - 1] + p.distanceTo(P[i - 1]) / ((vAt(i / N, p.y) + vAt((i - 1) / N, P[i - 1].y)) / 2)); }
-  const TE = S[N], D0 = DOCK_E - DOCK_GAP + TE * DOCK_WALK;
+  // 速度表：起步 6m/s 加速到高空 28m/s，降下来时按高度减到 7m/s；离终点 DOCK_RS 米内按 7·(r/RS)^0.6 单调减到 0（减速度越来越小，缓缓停住）
+  const N = 1500, S = [0], P = [];
+  const vAt = (f, y) => { const s = f * Lg, up = Math.min(1, s / 50), h = (y - gy - DOCK_LO) / (DOCK_HI - DOCK_LO);
+    const cruise = 7 + 21 * Math.pow(Math.max(0, h), 1.3); return Math.min(6 + (cruise - 6) * up, 7 * Math.pow(Math.max(0, Lg - s) / DOCK_RS, 0.6)); };
+  const uOf = (i) => 1 - (1 - i / N) ** 2; // 取样往终点加密：低速时一格要走一两秒，格内线性插值会变成阶梯速度
+  for (let i = 0; i <= N; i++) { const p = guide.getPointAt(uOf(i)); P.push(p); if (i) S.push(S[i - 1] + p.distanceTo(P[i - 1]) / ((vAt(uOf(i), p.y) + vAt(uOf(i - 1), P[i - 1].y)) / 2)); }
+  // TE = 镜头停稳的时刻；他那时离终点还剩 DOCK_REM 米（从镜头后面走进来，近到 1.2m 先藏），按沿路走的距离倒推出发点
+  const TE = S[N], p4 = pathSide(4, -0.25), D0 = 4 + DOCK_REM - Math.hypot(p4.x - SL.man[0], p4.z - SL.man[1]) + TE * DOCK_WALK;
   for (const q of [m, w]) q.roam = q.next = 1e9;
   const along = (from, side) => { const out = []; for (let d = from - 2.5; d > 4; d -= 2.5) { const p = pathSide(d, side); out.push(['walk', p.x, p.z]); } return out; }; // 沿卵石路一段段走（路是弯的，直线走会走到草地上）
   const pm = pathSide(D0, -0.25), pw = pathSide(D0 + 1.2, 0.5), nx = pathSide(D0 - 2.5, 0), yaw = Math.atan2(nx.x - pm.x, nx.z - pm.z); // 稽查中线偏左，书记员并排偏右、落后一步多
   placeMan(m, pm.x, pm.z, yaw); placeMan(w, pw.x, pw.z, yaw); m.root.position.y = floorAt(pm.x, pm.z); w.root.position.y = floorAt(pw.x, pw.z);
   m.tasks = [...along(D0, -0.25), ['walk', ...SL.man], ['face', SL.man[0], SL.man[1] - 5]]; w.tasks = [...along(D0 + 1.2, 0.5), ['walk', ...SL.woman], ['face', SL.woman[0], SL.woman[1] - 5]];
-  intro = { dock: true, slice: true, t0: performance.now(), guide, P, S, TE, m, w, off0: null, d0: 0, lamp: null };
-  camera.fov = 60; camera.updateProjectionMatrix(); controls.enabled = false;
+  intro = { dock: true, slice: true, t0: performance.now(), guide, Lg, E, fw, P, S, TE, m, w, off0: null, d0: 0, lamp: null };
+  window.__introMinD = 1e9; camera.fov = 60; camera.updateProjectionMatrix(); controls.enabled = false;
   updateDockIntro(intro.t0);
 }
 function updateDockIntro(now) {
   const I = intro; I.t = (I.t || 0) + Math.min(0.1, Math.max(0, (now - (I.last || now)) / 1000)); I.last = now; // 按帧累加（每帧最多 0.1s，同人物走路），页面卡住或在后台时镜头和人一起停，不会错位
-  const t = I.t, gy = ground.position.y, { m, P, S } = I;
-  if (t < I.TE) { // 沿引导线飞：时间表里二分查位置；视线看前方（高处远、低处近），低处几乎平视
-    let lo = 0, hi = S.length - 1; while (hi - lo > 1) { const k = (lo + hi) >> 1; if (S[k] <= t) lo = k; else hi = k; }
-    const f = THREE.MathUtils.clamp((t - S[lo]) / (S[hi] - S[lo] || 1), 0, 1), p = P[lo].clone().lerp(P[hi], f), u = (lo + f) / (P.length - 1);
-    const h = (p.y - gy - DOCK_LO) / (DOCK_HI - DOCK_LO), ahead = THREE.MathUtils.lerp(14, 60, h), Lg = I.guide.getLength();
-    const look = new THREE.Vector3(); let wsum = 0; // 视线看前方 0.5–2.5 倍 ahead 一段点的加权平均（原来只看一个点，S 弯处视线角速度 22°/s、角加速度 29°/s²）
-    for (let j = 0; j <= 6; j++) { const k = 0.5 + j / 3, wt = 1 - Math.abs(j - 3) / 4; look.addScaledVector(I.guide.getPointAt(Math.min(1, u + k * ahead / Lg)), wt); wsum += wt; }
-    look.divideScalar(wsum); look.y = p.y - ahead * THREE.MathUtils.lerp(0.04, 0.32, h);
-    if (t > I.TE - 1.2) { const r = Math.hypot(m.root.position.x - SL.man[0], m.root.position.z - SL.man[1]); if (I.rq == null) { I.rq = r; I.tq = t; } I.rr = r; I.tr = t; } // 记下他最后 1.2 秒离终点缩短得多快，跟随段起步速度按这个接上
-    if (u + ahead / Lg > 1) { const head = m.root.position.clone().add(new THREE.Vector3(0, 1.3, 0)); look.lerp(head, THREE.MathUtils.clamp((u + ahead / Lg - 1) * Lg / ahead, 0, 1)); } // 快到时视线落到他身上
-    camera.position.copy(p); camera.lookAt(look); camera.fov = THREE.MathUtils.lerp(58, 62, h); camera.updateProjectionMatrix();
-    return;
-  }
-  // 越过他、先到终点（2026-10-31 用户画的图；原来从身后贴近、最后穿进头里）：按他离终点还剩多远算进度，他离终点 1.6m 时镜头已停在终点的眼睛（sliceEye）朝门看；
-  // 路上从他头顶上方 0.8m 越过（g = 他在前面多远），越过后再降到眼高；他从镜头后面走进来，近到 1.2m 就整个人先藏起来（在镜头后看不到；免得胳膊、头穿进画面），sliceStart 时再显示
-  const mp = m.root.position, rem = Math.hypot(mp.x - SL.man[0], mp.z - SL.man[1]), sm = THREE.MathUtils.smoothstep;
-  if (!I.c0) { const n = I.P.length - 1; I.c0 = I.P[n].clone(); I.E = sliceEye(); I.r0 = Math.max(2, rem); I.tf = t; I.dir = I.E.clone().sub(I.c0).setY(0).normalize(); window.__introMinD = 1e9;
-    // 接上引导段末尾的速度（原来 e = smoothstep(p) 从 0 起步，0.9m/s 掉到 0.5 再升）：水平走三次贝塞尔，起点切线沿引导线末端（原来直线拐 17°），e(p) 起点斜率 k 让起步正好 DOCK_WALK
-    const D = Math.hypot(I.E.x - I.c0.x, I.E.z - I.c0.z), vr = I.tr - I.tq > 0.3 ? (I.rq - I.rr) / (I.tr - I.tq) : DOCK_WALK, tan = I.P[n].clone().sub(I.P[n - 3]).setY(0).normalize();
-    I.k = THREE.MathUtils.clamp(DOCK_WALK * (I.r0 - 1.6) / (D * Math.max(0.3, vr)), 0, 2.5); I.c1 = I.c0.clone().addScaledVector(tan, D / 3); I.c2 = I.c0.clone().lerp(I.E, 2 / 3); }
-  const p = THREE.MathUtils.clamp(1 - (rem - 1.6) / (I.r0 - 1.6), 0, 1), A = 1 - I.k, e = p * (I.k + p * p * (10 * A + 4 * I.k + p * (-15 * A - 7 * I.k + p * (6 * A + 3 * I.k)))), q = 1 - e; // 五次：起点斜率 k、两端二阶导为 0（k = 0 即 smootherstep），速度和加速度都接得上
-  const cp = camera.position.set(0, 0, 0).addScaledVector(I.c0, q * q * q).addScaledVector(I.c1, 3 * q * q * e).addScaledVector(I.c2, 3 * q * e * e).addScaledVector(I.E, e * e * e);
-  cp.y = THREE.MathUtils.lerp(I.c0.y, I.E.y, sm(p, 0.55, 1));
-  const g = _slO.copy(mp).sub(cp).setY(0).dot(I.dir); if (g < -1.2) I.passed = true; // g > 0：他还在镜头前面
-  const w = I.passed ? 0 : Math.min(1 - sm(g, 0.3, 1.5), sm(g, -1.2, -0.2)), top = mp.y + 1.62 * 0.94 + 0.2;
+  const t = Math.min(I.t, I.TE), gy = ground.position.y, { m, P, S, Lg } = I, sm = THREE.MathUtils.smoothstep;
+  // 沿引导线飞：时间表里二分查位置；视线看前方（高处远、低处近），低处几乎平视
+  let lo = 0, hi = S.length - 1; while (hi - lo > 1) { const k = (lo + hi) >> 1; if (S[k] <= t) lo = k; else hi = k; }
+  const f = THREE.MathUtils.clamp((t - S[lo]) / (S[hi] - S[lo] || 1), 0, 1), cp = camera.position.copy(P[lo]).lerp(P[hi], f), u = 1 - (1 - (lo + f) / (P.length - 1)) ** 2, r = (1 - u) * Lg; // r：离终点还剩多远
+  const h = THREE.MathUtils.clamp((cp.y - gy - DOCK_LO) / (DOCK_HI - DOCK_LO), 0, 1), ahead = THREE.MathUtils.lerp(14, 60, h);
+  const look = new THREE.Vector3(); let wsum = 0; // 视线看前方 0.5–2.5 倍 ahead 一段点的加权平均（原来只看一个点，S 弯处视线角速度 22°/s、角加速度 29°/s²）；过了终点的部分沿朝门方向延长
+  for (let j = 0; j <= 6; j++) { const q = u + (0.5 + j / 3) * ahead / Lg, wt = 1 - Math.abs(j - 3) / 4; look.addScaledVector(q <= 1 ? I.guide.getPointAt(q) : _slD.copy(I.E).addScaledVector(I.fw, (q - 1) * Lg), wt); wsum += wt; }
+  look.divideScalar(wsum); look.y = cp.y - ahead * THREE.MathUtils.lerp(0.04, 0.32, h);
+  // 路上从他头顶上方 0.8m 越过（g = 他在前面多远，沿镜头前进方向）；越过后他从镜头后面走进来，近到 1.2m 就整个人先藏起来（免得胳膊、头穿进画面），sliceStart 时再显示
+  const mp = m.root.position, dir = I.guide.getTangentAt(Math.min(u, 0.999)).setY(0).normalize(), g = _slO.copy(mp).sub(cp).setY(0).dot(dir);
+  if (r < 30 && g < -1.2) I.passed = true; // g > 0：他还在镜头前面
+  const w = I.passed || r > 30 ? 0 : Math.min(1 - sm(g, 0.3, 1.5), sm(g, -1.2, -0.2)), top = mp.y + 1.62 * 0.94 + 0.2;
   cp.y = Math.max(cp.y, THREE.MathUtils.lerp(cp.y, top + 0.8, w));
-  const head = mp.clone().add(new THREE.Vector3(0, 1.3, 0)), fwd = cp.clone().add(new THREE.Vector3(0, -0.4, -4));
-  camera.lookAt(head.lerp(fwd, sm(p, 0.1, 0.6))); camera.fov = THREE.MathUtils.lerp(58, 72, e); camera.updateProjectionMatrix(); camera.updateMatrixWorld();
+  look.lerp(_slD.copy(cp).add(new THREE.Vector3(0, -0.4, -4)), 1 - sm(r, 0, 6)); // 停下时朝门、稍低头（同 sliceStart）
+  camera.lookAt(look); camera.fov = THREE.MathUtils.lerp(THREE.MathUtils.lerp(58, 62, h), 72, 1 - sm(r, 0, 14)); camera.updateProjectionMatrix(); camera.updateMatrixWorld();
   const hide = I.passed && g > -1.2; if (m.root.visible === hide) m.root.visible = !hide;
-  if (!hide) window.__introMinD = Math.min(window.__introMinD, cp.distanceTo(_slD.copy(mp).setY(mp.y + 1.55))); // 调试：镜头离他的头最近多远（他显示着的时候）
-  if ((rem < 0.08 && m.tasks.length <= 1) || t - I.tf > 40) endIntro(false);
+  if (!hide && r < 30) window.__introMinD = Math.min(window.__introMinD, cp.distanceTo(_slD.copy(mp).setY(mp.y + 1.55))); // 调试：镜头离他的头最近多远（他显示着的时候）
+  const rem = Math.hypot(mp.x - SL.man[0], mp.z - SL.man[1]);
+  if (I.t >= I.TE && ((rem < 0.08 && m.tasks.length <= 1) || I.t - I.TE > 40)) endIntro(false);
 }
 // 滑动平均（三角权重，半窗 W 点，两端窗口逐渐收窄所以首尾点不动）
 function smoothPts(raw, W) {
