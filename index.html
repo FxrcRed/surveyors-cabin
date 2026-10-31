@@ -534,10 +534,10 @@ function grassTexture() { // 程序生成的草地贴图（可平铺，8m 一块
       g.fillStyle = gr; g.fillRect(x + dx - r, y + dy - r, r * 2, r * 2);
     });
   }
-  for (let i = 0; i < 9000; i++) { // 草叶小点
+  for (let i = 0; i < 9000; i++) { // 草叶小点：转角度的细椭圆（10-31 原来 fillRect 方点，近看是 2–5cm 的方块）
     const x = Math.random() * n, y = Math.random() * n, s = 1 + Math.random() * 2.5;
     g.fillStyle = `hsl(${50 + Math.random() * 35},${12 + Math.random() * 16}%,${16 + Math.random() * 17}%)`;
-    g.fillRect(x, y, s, s);
+    g.beginPath(); g.ellipse(x, y, s * 0.35, s * (0.7 + Math.random()), Math.random() * Math.PI, 0, Math.PI * 2); g.fill();
   }
   const t = new THREE.CanvasTexture(c);
   t.wrapS = t.wrapT = THREE.RepeatWrapping;
@@ -1099,7 +1099,6 @@ function fpShrubs(o) { // 灌木也是 InstancedMesh：和 fpTrees 一样按位�
   }
 }
 const STEEP = 0.5; // 坡度（m/m）超过这个走不上去（洼地的壁）
-const SHORE_GRASS = [[0x22301d, 0.35], [0x2b3b23, 0.35], [0x34452a, 0.2], [0x414a2e, 0.1]]; // 岸边草（10-31）：比 BUSHES 深、偏绿；原来混着黄褐两档，阴天看像枯稻草
 function plantUnder(parts, pts, rand, hMin, hMax, sink, block, pal = BUSHES) { // 灌木/草：保持模型原有长宽比（只有 ±12% 的胖瘦），不拉高
   const tint = new THREE.Color(), m = new THREE.Matrix4(), q = new THREE.Quaternion(), s = new THREE.Vector3(), p = new THREE.Vector3(), up = new THREE.Vector3(0, 1, 0);
   const ims = parts.map(({ geometry, material }) => new THREE.InstancedMesh(geometry, material, pts.length)), asp = (parts.radius || 0.5) * 2; // 宽 / 高
@@ -1206,25 +1205,36 @@ async function plantShore(rand, f, b1, b3, grass, taken, gtaken) { // 2026-10-31
   const pts = (m, s0, s1, tk = taken, gap = 1.6) => { const out = []; for (let i = 0; i < m; i++) { const p = at(() => s0 + rand() * (s1 - s0)); if (p && !nearAny(tk, p[0], p[1], gap)) { out.push(p); takeAt(tk, ...p); } } return out; };
   plantUnder(b1, pts(Math.round(90 * f), 1.06, 1.4), rand, 0.8, 1.6, 0.25, true);
   plantUnder(b3, pts(Math.round(80 * f), 1.06, 1.4), rand, 0.7, 1.4, 0.25, true);
-  plantUnder(grass, pts(Math.round(1700 * f), 1.05, 1.4, gtaken, 0.8), rand, 0.35, 0.75, 0.03, false, SHORE_GRASS);
   const rpts = (m, o0, o1, tk, gap, ci) => { const out = []; for (let i = 0; i < m; i++) { const p = riv(o0, o1, ci && ci[i % ci.length]); if (p && !nearAny(tk, p[0], p[1], gap)) { out.push(p); takeAt(tk, ...p); } } return out; };
   plantUnder(b1, rpts(Math.round(60 * f), 1.5, 6, taken, 1.6), rand, 0.8, 1.6, 0.25, true);
-  plantUnder(grass, rpts(Math.round(900 * f), 2, 5, gtaken, 0.8), rand, 0.35, 0.75, 0.03, false, SHORE_GRASS);
   // 10-31 第二轮（用户：还是稀）：原来 0.35–0.75m 一丛、0.8m 间距均匀撒在 30m 宽的环上，覆盖率约 4%，高空看不见。
   // 改成代码生成的草簇（7 片单三角形叶，法线朝上不显黑背面）成团种：离水距离按指数分布（贴水最密），一团 0.5–2m 里十几到几十簇，高矮两层
-  const tuftG = new THREE.BufferGeometry(), tp = [], tc = [], tn = [];
-  for (let b = 0; b < 7; b++) { const a = b / 7 * 6.28 + wHash01(b * 3.7) * 0.8, ln = 0.2 + 0.4 * wHash01(b * 5.3), h = 0.6 + 0.4 * wHash01(b * 1.9), cx = Math.cos(a), sz = Math.sin(a), w = 0.035;
-    tp.push(cx * 0.03 - sz * w, 0, sz * 0.03 + cx * w, cx * 0.03 + sz * w, 0, sz * 0.03 - cx * w, cx * ln, h, sz * ln); tc.push(0.35, 0.35, 0.35, 0.35, 0.35, 0.35, 1, 1, 1); tn.push(0, 1, 0, 0, 1, 0, 0, 1, 0); }
-  tuftG.setAttribute('position', new THREE.Float32BufferAttribute(tp, 3)); tuftG.setAttribute('color', new THREE.Float32BufferAttribute(tc, 3)); tuftG.setAttribute('normal', new THREE.Float32BufferAttribute(tn, 3));
+  const mkTuft = (nb, w, l0, l1, c0 = 0.35) => { const g = new THREE.BufferGeometry(), tp = [], tc = [], tn = []; // nb 片叶，叶根半宽 w，外倾 l0–l1，叶根亮度 c0
+    for (let b = 0; b < nb; b++) { const a = b / nb * 6.28 + wHash01(b * 3.7) * 0.8, ln = l0 + (l1 - l0) * wHash01(b * 5.3), h = 0.6 + 0.4 * wHash01(b * 1.9), cx = Math.cos(a), sz = Math.sin(a);
+      tp.push(cx * 0.03 - sz * w, 0, sz * 0.03 + cx * w, cx * 0.03 + sz * w, 0, sz * 0.03 - cx * w, cx * ln, h, sz * ln); tc.push(c0, c0, c0, c0, c0, c0, 1, 1, 1); tn.push(0, 1, 0, 0, 1, 0, 0, 1, 0); }
+    g.setAttribute('position', new THREE.Float32BufferAttribute(tp, 3)); g.setAttribute('color', new THREE.Float32BufferAttribute(tc, 3)); g.setAttribute('normal', new THREE.Float32BufferAttribute(tn, 3)); return g; };
+  const tuftG = mkTuft(7, 0.035, 0.2, 0.6);
   const nL = Math.round(1100 * f), nR = Math.round(500 * f), tufts = new THREE.InstancedMesh(tuftG, new THREE.MeshLambertMaterial({ vertexColors: true, side: THREE.DoubleSide }), (nL + nR) * 60);
   const expo = (m, mx) => Math.min(-Math.log(1 - rand()) * m, mx); n = 0;
-  for (let c = 0; c < nL + nR; c++) { const d = expo(c < nL ? 3 : 1.5, c < nL ? 10 : 4) + (c < nL ? 4 : 2); // 第三轮：近水 4m（河 2m）是泥，只长芦苇 let p = null;
+  for (let c = 0; c < nL + nR; c++) { const d = expo(c < nL ? 3 : 1.5, c < nL ? 10 : 4) + (c < nL ? 4 : 2); let p = null; // 第三轮：近水 4m（河 2m）是泥，只长芦苇
     if (c < nL) { for (let t = 0; t < 30 && !p; t++) { const q = pos(rand() * Math.PI * 2, 1 + d / (lr * 1.1)); if (okP(q)) p = q; } } else p = riv(d, d);
     if (!p) continue; const rc = 0.5 + rand() * 1.5, m = Math.round((14 + rand() * 30) * (1.3 - Math.min(Math.max(d, 0), 12) / 12 * 0.7));
     for (let i = 0; i < m && n < tufts.count; i++) { const x = p[0] + (rand() + rand() - 1) * rc, z = p[1] + (rand() + rand() - 1) * rc, h = (rand() < 0.55 ? 0.18 + rand() * 0.17 : 0.4 + rand() * 0.45) * (d < 7 ? 1.2 : 1), w = h * (0.8 + 0.5 * rand());
       o.position.set(x, terrainH(x, z) - 0.02, z); o.rotation.set((rand() - 0.5) * 0.3, rand() * 6.28, (rand() - 0.5) * 0.3); o.scale.set(w, h, w); o.updateMatrix(); tufts.setMatrixAt(n, o.matrix);
       tufts.setColorAt(n++, rand() < 0.12 ? col.setHSL(0.12 + rand() * 0.04, 0.35, 0.3 + rand() * 0.08, THREE.SRGBColorSpace) : col.setHSL(0.2 + rand() * 0.08, 0.35 + rand() * 0.2, 0.2 + rand() * 0.16, THREE.SRGBColorSpace)); } }
   tufts.count = n; tufts.computeBoundingSphere(); grp.add(tufts);
+  // 10-31 第四轮（用户：高空看岸边只有零星几丛）：原芦苇是 9cm 粗的锥，开场高空离岸 ~70m 每米 ~7.7px，单根 0.7px 画不出来；650 丛撒在 ~6.6m 宽的带上，覆盖 ~6%。
+  // 加一条贴水的芦苇带：沿岸线每 ~0.2m 一步，沿岸低频噪声 rn 决定成片 / 断开、几排、往水里伸多远（密处 ~4m，高空俯看要有面积）；叶丛 bedG 12 片宽叶（叶根半宽 0.12 × 缩放）较直立，1.3–2.4m 高，连起来高空约 10px 高的带
+  const rn = (a) => 0.5 + 0.5 * Math.sin(a * 7 + 1.3) * Math.sin(a * 17.3) + 0.3 * Math.sin(a * 41 + 2), bedC = () => rand() < 0.25 ? col.setHSL(0.16 + rand() * 0.04, 0.22, 0.32 + rand() * 0.08, THREE.SRGBColorSpace) : col.setHSL(0.11 + rand() * 0.04, 0.25 + rand() * 0.12, 0.38 + rand() * 0.12, THREE.SRGBColorSpace); // 枯黄比湿泥亮，高空靠明暗反差看得出
+  const steps = Math.round(lr * 1.1 * 6.28 / 0.2), bed = new THREE.InstancedMesh(mkTuft(12, 0.12, 0.08, 0.3, 0.55), tufts.material, Math.round((steps * 6 + RV.length * 40) * f)); n = 0;
+  const bedAt = (x, z, k) => { const h = (1.3 + rand() * 1.1) * (0.7 + 0.5 * k), w = h * (0.45 + 0.25 * rand()); o.position.set(x, Math.max(gy, terrainH(x, z)) - 0.1, z); o.rotation.set((rand() - 0.5) * 0.2, rand() * 6.28, (rand() - 0.5) * 0.2); o.scale.set(w, h, w); o.updateMatrix(); bed.setMatrixAt(n, o.matrix); bed.setColorAt(n++, bedC()); };
+  for (let i = 0; i < steps; i++) { const a = i / steps * 6.28, k = rn(a); if (k < 0.3 || rand() > f) continue;
+    for (let r = 0, rows = 1 + Math.floor(k * 5); r < rows && n < bed.count; r++) { const p = pos(a + (rand() - 0.5) * 0.004, 1.01 - rand() * (0.015 + 0.04 * k)); if (okP(p)) bedAt(p[0], p[1], k); } }
+  for (let i = 1; i < RV.length - 1; i++) for (let j = 0; j < 15; j++) { const k = rn(i * 0.11 + j * 0.0073); if (k < 0.35 || rand() > f) continue; // 河：每段 ~2.9m 走 15 步，两岸
+    const tx = RV[i + 1][0] - RV[i - 1][0], tz = RV[i + 1][1] - RV[i - 1][1], l = Math.hypot(tx, tz) || 1, al = j / 15;
+    for (const sd of [-1, 1]) for (let r = 0, rows = 1 + Math.floor(k * 2); r < rows && n < bed.count; r++) { const d = sd * (rw(i) - 1.2 + rand() * 1.5), x = RV[i][0] + (RV[i + 1][0] - RV[i][0]) * al + (tz / l) * d, z = RV[i][1] + (RV[i + 1][1] - RV[i][1]) * al - (tx / l) * d;
+      if (lakeD(x, z) > lr * 1.15 && (introSees(x, z) || walkSees(x, z)) && !nearAny(pathClear, x, z, 3) && !nearAny(trailClear, x, z, 2.2)) bedAt(x, z, k); } }
+  bed.count = n; bed.computeBoundingSphere(); grp.add(bed);
 }
 function wHash01(v) { const s = Math.sin(v * 12.9898) * 43758.5453; return s - Math.floor(s); }
 
