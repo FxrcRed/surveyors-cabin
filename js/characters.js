@@ -326,6 +326,7 @@ function runTask(p, dt) {
     if (T[1] === 'Sitting_Exit') r.position.y = p.sitY + (p.standY - p.sitY) * e; // 坐着压低一点贴坐垫，站起来脚踩回地板
     if (T[1] === 'Sitting_Enter') r.position.y = p.standY + (p.sitY - p.standY) * e;
     done = a.time >= d - 0.05;
+  } else if (k === 'lamp') { const l = shared.toggles.get(T[1]); if (l) l.on = true; done = true; // 开灯（只改 intensity）
   } else if (k === 'idle') done = T.t >= T[1];
   else if (k === 'seat') { const a = seatPose(p, T[1], SEATS[T[1]].pull ? 1 : 0); p.seat = T[1]; p.standY = r.position.y; p.sitY = a.y; done = true; }
   else if (k === 'unseat') { p.seat = null; const f = _cv.set(0, 0, 1).applyQuaternion(r.quaternion); r.rotation.set(0, Math.atan2(f.x, f.z), 0); done = true; } // 摇椅上 quaternion 是「仰 × 朝向」，拆成 XYZ 欧拉角时朝向 >90° 会落到 x/z=±π 上，直接清 x/z 会一下转 86°；按正前方重算朝向
