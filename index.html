@@ -544,7 +544,8 @@ function grassTexture() { // 程序生成的草地贴图（可平铺，8m 一块
 }
 
 // 小路从院子边沿 +z 方向弯弯曲曲伸进林子，同一卵石贴图；返回路中心线上的点，种树时避开
-const pathClear = [], trailClear = [], WATER = { lake: null, river: [] }; // WATER.lake = [x, z, 半径]；river = 河中心线点（种树避开）
+let pathHalf = 0.8; // 卵石路半宽（extendPath 按 path_core 定）
+const pathClear = [], trailClear = [], WATER ={ lake: null, river: [] }; // WATER.lake = [x, z, 半径]；river = 河中心线点（种树避开）
 const lakeD = (x, z) => WATER.lake ? Math.hypot((x - WATER.lake[0]) / 1.35, (z - WATER.lake[1]) / 0.85) : 1e9; // 到湖心的「椭圆距离」，和半径 WATER.lake[2] 同单位；湖岸起伏 ±19%，留空按 1.2r + 余量算（原来 1.6r 是小湖时定的，大湖会空出 50m 一圈）
 // 岸线：角度 a 方向「岸 / 名义半径」的倍数。两层低频大起伏 + 两层高频小湾小岬（10-31 加，原来只有前两项，岸是光滑大弧）；GLSL 版给水面、地面着色器用
 const shoreR = (a) => 1 + 0.12 * Math.sin(a * 3 + 1) + 0.07 * Math.sin(a * 5) + 0.03 * Math.sin(a * 13 + 2) + 0.018 * Math.sin(a * 23 + 4.1);
@@ -556,7 +557,7 @@ const OUTDOOR = [], XSHIFT = new THREE.Vector2(); // 走到 ✕ 时要一起平�
 function extendPath() {
   const P = planarUV('path_core'); if (!P) return;
   const b = new THREE.Box3().setFromObject(layers.get('path_core'));
-  const w = b.max.x - b.min.x, x0 = (b.min.x + b.max.x) / 2, z0 = b.max.z - 0.02;
+  const w = b.max.x - b.min.x, x0 = (b.min.x + b.max.x) / 2, z0 = b.max.z - 0.02; pathHalf = w / 2;
   // v3 地理（story/map-sketch.png，北 = -z）：卵石路往南再往东南，进湖为止；湖接一条东西向的河
   const curve = new THREE.CatmullRomCurve3([[0, 0], [0, 2], [0.6, 6], [2, 12], [6, 20], [8, 29], [5, 38], [-2, 47], [-6, 56], [-5, 66], [-1, 78], [4, 95], [12, 115], [22, 135], [34, 155], [48, 172], [62, 188], [78, 203], [95, 218], [112, 232], [124, 244]]
     .map(([dx, dz]) => new THREE.Vector3(x0 + dx, 0, z0 + dz)));
@@ -595,12 +596,12 @@ float en(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
   path.receiveShadow = true;
   scene.add(path);
 
-  // 路两边铺一窄条落叶：路边不透明，往外 1–2m 渐隐到草地（宽度沿路起伏），压在地面上、路面下
+  // 路两边一窄条踩秃的暗土（2026-10-31，原来是落叶带：从空中看是贴路一圈连续亮橙线，改两轮仍丑，换掉）：路边最浓也只半透明，往外 0.5–1m 渐隐，路缘再由路边草（plantUnderstory）盖进来
   const L = planarUV('base_box'); if (!L) return;
-  const leafW = (i) => w / 2 + 1.25 + 0.35 * Math.sin(i * 0.37) + 0.2 * Math.sin(i * 1.3 + 1);
+  const leafW = (i) => w / 2 + 0.75 + 0.25 * Math.sin(i * 0.37) + 0.15 * Math.sin(i * 1.3 + 1);
   const leaves = new THREE.Mesh(ribbon(curve, pts, (i) => [[leafW(i), 0], [w / 2, 1], [-w / 2, 1], [-leafW(i + 50), 0]], L.uv, L.y - 0.002),
     Object.assign(L.material.clone(), { transparent: true, depthWrite: false, vertexColors: true, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -2 }));
-  // 落叶带边缘：顶点色的线性渐隐 + 三层噪声（1.5m 大块、35cm 成团、8cm 碎叶）再卡阈值 → 一团团参差散开，最外面零星几片，不是一条整齐的渐变带
+  // 边缘：顶点色的线性渐隐 + 三层噪声（1.5m 大块、35cm 成团、8cm 碎屑）→ 软边、断续；颜色只取贴图明暗、换成暗土色（线性值），不出橙
   leaves.material.onBeforeCompile = (sh) => {
     sh.uniforms.uWShift = WS;
     antiTile(sh, '');
@@ -611,9 +612,10 @@ float ln(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
   return mix(mix(lh(i), lh(i + vec2(1, 0)), f.x), mix(lh(i + vec2(0, 1)), lh(i + 1.0), f.x), f.y); }
 ` + sh.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>
         float ln3 = 0.45 * ln(vLeafP / 1.5) + 0.35 * ln(vLeafP / 0.35 + 7.3) + 0.2 * ln(vLeafP / 0.08 + 3.1);
-        float la = vColor.a + (ln3 - 0.5) * 2.2 - 0.12;
-        diffuseColor.a = opacity * smoothstep(0.38, 0.55, la);
-        diffuseColor.rgb *= mix(0.55, 0.92, smoothstep(0.2, 1.0, la)); // 越往外越暗、越稀，融进暗草地`);
+        float la = vColor.a + (ln3 - 0.5) * 1.2;
+        diffuseColor.a = opacity * 0.6 * smoothstep(0.15, 0.9, la);
+        float lum = dot(diffuseColor.rgb, vec3(0.3, 0.59, 0.11));
+        diffuseColor.rgb = vec3(0.045, 0.036, 0.026) * (0.55 + 2.5 * lum);`);
     groundCover(sh);
   };
   leaves.receiveShadow = true;
@@ -1094,11 +1096,11 @@ function underOk(x, z, pathD) { // 灌木/草不压路、踪迹、看灯的视�
     && lakeD(x, z) >= (WATER.lake[2] * 1.2 + 4) && Math.hypot(x, z) > 9 && Math.hypot(x - XSHIFT.x, z - XSHIFT.y) > 9
     && SIGHT.every((sg) => segD(x, z, sg) > 1.2) && !terrain.pits.some(([px, pz, pr]) => Math.hypot(x - px, z - pz) < pr * 1.3);
 }
-async function roadsidePoints(rand, n, d0, d1, gap, taken) { // 沿路两边（前 130m）离路中心 d0–d1 米
+async function roadsidePoints(rand, n, d0, d1, gap, taken, iMax = 130) { // 沿路两边（前 iMax 个点，约 iMax m）离路中心 d0–d1 米
   const pts = [], P = pathClear;
   for (let t = 0; pts.length < n && t < n * 30 && P.length > 2; t++) {
     if (!(t & 127)) await maybeYield();
-    const i = 1 + Math.floor(rand() * Math.min(P.length - 2, 130));
+    const i = 1 + Math.floor(rand() * Math.min(P.length - 2, iMax));
     const tx = P[i + 1][0] - P[i - 1][0], tz = P[i + 1][1] - P[i - 1][1], l = Math.hypot(tx, tz) || 1, d = (rand() < 0.5 ? -1 : 1) * (d0 + (d1 - d0) * rand()), al = (rand() - 0.5) * 3;
     const x = P[i][0] + (tz / l) * d + (tx / l) * al, z = P[i][1] - (tx / l) * d + (tz / l) * al;
     if (underOk(x, z, d0 - 0.2) && !nearAny(taken, x, z, gap)) { pts.push([x, z]); takeAt(taken, x, z); }
@@ -1140,6 +1142,8 @@ async function plantUnderstory(center) {
   plantUnder(b3, await scatterPoints(rand, 80 * f, 8, 70, 3.2, center, taken), rand, 0.7, 1.4, 0.25, true);
   plantUnder(grass, await scatterPoints(rand, 330 * f, 6, 55, 1.4, center, gtaken), rand, 0.3, 0.65, 0.03, false);
   await maybeYield(); await plantShore(rand, f, b1, b3, grass, taken, gtaken);
+  await maybeYield(); // 路缘草（10-31，替掉路边落叶带）：整条路两边，草丛中心离路缘 0.2–1.5m，叶子伸进路边一点
+  plantUnder(grass, await roadsidePoints(rand, 1000 * f, pathHalf + 0.2, pathHalf + 1.5, 0.75, gtaken, Infinity), rand, 0.3, 0.6, 0.03, false);
 }
 // 湖岸（2026-10-31）：芦苇、石头用代码生成（平面着色低多边形，同树和码头；网上没找到授权明确、风格一致的），灌木和草用 plants/ 里的 Quaternius CC0。
 // 只种开场看得到的一段岸（introSees），离卵石路/码头 3m 外。s = 沿那个方向「离湖心 / 岸线」的倍数：<1 在水里
@@ -1152,9 +1156,15 @@ async function plantShore(rand, f, b1, b3, grass, taken, gtaken) { // 2026-10-31
   const inPatch = (ps, s) => { for (let t = 0; t < 10 && ps.length; t++) { const [a0, w] = ps[Math.floor(rand() * ps.length)], p = pos(a0 + (rand() + rand() - 1) * w, s()); if (okP(p)) return p; } return null; };
   const grp = new THREE.Group(); grp.name = 'shore'; const o = new THREE.Object3D(), col = new THREE.Color();
   // 芦苇：一根三棱细锥，一丛 7–11 根，往外歪；集中在 40 片浅水里（岸线往里 0–6m），片与片之间空着
-  const reedG = new THREE.ConeGeometry(0.045, 1, 3).translate(0, 0.5, 0), clumps = Math.round(480 * f), reeds = new THREE.InstancedMesh(reedG, new THREE.MeshStandardMaterial({ roughness: 0.9, flatShading: true }), clumps * 11);
-  let n = 0; const reedP = patches(40, 5, 18);
-  for (let c = 0; c < clumps; c++) { const p = inPatch(reedP, () => 0.94 + rand() * 0.075); if (!p) continue; const k = 7 + Math.floor(rand() * 5);
+  // 河岸（10-31 加）：沿河中心线 WATER.river（约 2.9m 一点，半宽 rw），离岸线 o0–o1 米；ci 给了就只在那段河（±8 点）附近。只种开场/走路看得到、湖岸以外的
+  const RV = WATER.river, rw = (i) => 4 + 1.2 * Math.sin(i * 0.21);
+  const riv = (o0, o1, ci) => { for (let t = 0; t < 20; t++) { const i = ci == null ? 1 + Math.floor(rand() * (RV.length - 2)) : THREE.MathUtils.clamp(ci + Math.round((rand() + rand() - 1) * 8), 1, RV.length - 2);
+    const tx = RV[i + 1][0] - RV[i - 1][0], tz = RV[i + 1][1] - RV[i - 1][1], l = Math.hypot(tx, tz) || 1, al = rand(), d = (rand() < 0.5 ? -1 : 1) * (rw(i) + o0 + (o1 - o0) * rand());
+    const x = RV[i][0] + (RV[i + 1][0] - RV[i][0]) * al + (tz / l) * d, z = RV[i][1] + (RV[i + 1][1] - RV[i][1]) * al - (tx / l) * d;
+    if (lakeD(x, z) > lr * 1.15 && (introSees(x, z) || walkSees(x, z)) && !nearAny(pathClear, x, z, 3) && !nearAny(trailClear, x, z, 2.2)) return [x, z]; } return null; };
+  const reedG = new THREE.ConeGeometry(0.045, 1, 3).translate(0, 0.5, 0), clumps = Math.round(650 * f), rClumps = Math.round(260 * f), reeds = new THREE.InstancedMesh(reedG, new THREE.MeshStandardMaterial({ roughness: 0.9, flatShading: true }), (clumps + rClumps) * 11);
+  let n = 0; const reedP = patches(55, 5, 18), rivP = Array.from({ length: 26 }, () => 1 + Math.floor(rand() * (RV.length - 2)));
+  for (let c = 0; c < clumps + rClumps; c++) { const p = c < clumps ? inPatch(reedP, () => 0.94 + rand() * 0.075) : riv(-0.9, 0.3, rivP[c % rivP.length]); if (!p) continue; const k = 7 + Math.floor(rand() * 5);
     for (let i = 0; i < k; i++) { const x = p[0] + (rand() - 0.5) * 0.6, z = p[1] + (rand() - 0.5) * 0.6, h = 0.7 + rand() * 0.9;
       o.position.set(x, gy - 0.05, z); o.rotation.set((rand() - 0.5) * 0.35, rand() * 6.28, (rand() - 0.5) * 0.35); o.scale.set(1, h, 1); o.updateMatrix(); reeds.setMatrixAt(n, o.matrix);
       reeds.setColorAt(n++, col.setHSL(0.17 + rand() * 0.07, 0.3 + rand() * 0.15, 0.2 + rand() * 0.12, THREE.SRGBColorSpace)); } } // 10-31 按 sRGB 给、偏绿（原来按线性空间给，显示成浅黄白）
@@ -1173,7 +1183,10 @@ async function plantShore(rand, f, b1, b3, grass, taken, gtaken) { // 2026-10-31
   const pts = (m, s0, s1, tk = taken, gap = 1.6) => { const out = []; for (let i = 0; i < m; i++) { const p = at(() => s0 + rand() * (s1 - s0)); if (p && !nearAny(tk, p[0], p[1], gap)) { out.push(p); takeAt(tk, ...p); } } return out; };
   plantUnder(b1, pts(Math.round(150 * f), 1.06, 1.4), rand, 0.8, 1.6, 0.25, true);
   plantUnder(b3, pts(Math.round(130 * f), 1.05, 1.4), rand, 0.7, 1.4, 0.25, true);
-  plantUnder(grass, pts(Math.round(1100 * f), 1.02, 1.4, gtaken, 0.9), rand, 0.35, 0.7, 0.03, false, SHORE_GRASS);
+  plantUnder(grass, pts(Math.round(1700 * f), 1.0, 1.4, gtaken, 0.8), rand, 0.35, 0.75, 0.03, false, SHORE_GRASS);
+  const rpts = (m, o0, o1, tk, gap, ci) => { const out = []; for (let i = 0; i < m; i++) { const p = riv(o0, o1, ci && ci[i % ci.length]); if (p && !nearAny(tk, p[0], p[1], gap)) { out.push(p); takeAt(tk, ...p); } } return out; };
+  plantUnder(b1, rpts(Math.round(110 * f), 1.5, 6, taken, 1.6), rand, 0.8, 1.6, 0.25, true);
+  plantUnder(grass, rpts(Math.round(900 * f), 0.2, 4, gtaken, 0.8), rand, 0.35, 0.75, 0.03, false, SHORE_GRASS);
 }
 function wHash01(v) { const s = Math.sin(v * 12.9898) * 43758.5453; return s - Math.floor(s); }
 
@@ -1192,6 +1205,10 @@ async function plantForest(center, y) {
   await maybeYield(); plant(pine, await ringPoints(rand, 220 * f, 20, 65, 2.4, center, taken), rand, 4, 9.5, y);
   await maybeYield(); plant(autumn, await ringPoints(rand, 80 * f, 20, 65, 2.4, center, taken), rand, 4, 8.5, y);
   await maybeYield(); plant(dead, await ringPoints(rand, 25 * f, 20, 65, 3, center, taken), rand, 4, 7.5, y);  // 零星几棵枯树
+  { const r2 = rng(71); // 小屋外一圈加密（10-31，用户：小屋旁树太少）：另用一个随机数，上面各组位置不变；路/踪迹/视线/首页视角照旧由 ringPoints、crownRoom、clearOrbitView 让开
+    await maybeYield(); plant(pine, await ringPoints(r2, 40 * f, 9, 28, 3, center, taken), r2, 3, 8, y);
+    await maybeYield(); plant(pines, await ringPoints(r2, 10 * f, 10, 28, 4, center, taken), r2, 4, 6.5, y);
+    await maybeYield(); plant(autumn, await ringPoints(r2, 14 * f, 9, 28, 3, center, taken), r2, 3, 6.5, y); }
   const n0 = scene.children.length; // 下面这组远处细模（约 240 万面）收进 FAR_DETAIL：只在开场、或镜头离小屋 45m 外时显示（平时在屋子附近，面数同原来）
   await maybeYield(); plant(pine, await bandPoints(rand, 300 * f, 2.8, 12, 2.2, taken), rand, 3.5, 8.5, y);    // 路远段两边贴路一排（同 pathSidePoints）
   await maybeYield(); plant(pine, await bandPoints(rand, 500 * f, 9, 60, 2.4, taken), rand, 4, 9.5, y);       // 开场沿路飞过的一带：细模（原来 65m 外全是简化圆锥）
