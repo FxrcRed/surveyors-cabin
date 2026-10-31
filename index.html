@@ -586,7 +586,7 @@ float en(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
 
   // 路两边铺一窄条落叶：路边不透明，往外 1–2m 渐隐到草地（宽度沿路起伏），压在地面上、路面下
   const L = planarUV('base_box'); if (!L) return;
-  const leafW = (i) => w / 2 + 2.2 + 0.8 * Math.sin(i * 0.37) + 0.4 * Math.sin(i * 1.3 + 1);
+  const leafW = (i) => w / 2 + 1.25 + 0.35 * Math.sin(i * 0.37) + 0.2 * Math.sin(i * 1.3 + 1);
   const leaves = new THREE.Mesh(ribbon(curve, pts, (i) => [[leafW(i), 0], [w / 2, 1], [-w / 2, 1], [-leafW(i + 50), 0]], L.uv, L.y - 0.002),
     Object.assign(L.material.clone(), { transparent: true, depthWrite: false, vertexColors: true, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -2 }));
   // 落叶带边缘：顶点色的线性渐隐 + 三层噪声（1.5m 大块、35cm 成团、8cm 碎叶）再卡阈值 → 一团团参差散开，最外面零星几片，不是一条整齐的渐变带
@@ -600,9 +600,9 @@ float ln(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
   return mix(mix(lh(i), lh(i + vec2(1, 0)), f.x), mix(lh(i + vec2(0, 1)), lh(i + 1.0), f.x), f.y); }
 ` + sh.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>
         float ln3 = 0.45 * ln(vLeafP / 1.5) + 0.35 * ln(vLeafP / 0.35 + 7.3) + 0.2 * ln(vLeafP / 0.08 + 3.1);
-        float la = vColor.a + (ln3 - 0.5) * 1.3;
-        diffuseColor.a = opacity * smoothstep(0.12, 0.75, la);
-        diffuseColor.rgb *= mix(0.6, 1.0, smoothstep(0.2, 1.0, la)); // 越往外越暗、越稀，融进暗草地`);
+        float la = vColor.a + (ln3 - 0.5) * 2.2 - 0.12;
+        diffuseColor.a = opacity * smoothstep(0.38, 0.55, la);
+        diffuseColor.rgb *= mix(0.55, 0.92, smoothstep(0.2, 1.0, la)); // 越往外越暗、越稀，融进暗草地`);
     groundCover(sh);
   };
   leaves.receiveShadow = true;
