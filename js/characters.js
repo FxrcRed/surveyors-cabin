@@ -47,7 +47,7 @@ async function loadPeople() {
     if (P.seatActs) for (const s of Object.values(P.seatActs)) s.mood = { ...MOODS.sit, idle: s.idle, extra: [] };
     const cushion = gltf.scene.getObjectByName('Cushion'); // 靠垫用摇椅座垫同一块红亚麻布
     if (cushion) shared.layers.get('loft_rocking_chair')?.traverse((o) => { if (o.isMesh && o.material?.name === 'loft_mattress_linen_red') cushion.material = o.material; });
-    gltf.scene.traverse((o) => { if (o.isMesh) { o.castShadow = false; o.receiveShadow = true; o.frustumCulled = false; } }); // 蒙皮网格包围球不跟动作，别被裁掉
+    gltf.scene.traverse((o) => { if (o.isMesh) { o.castShadow = o.receiveShadow = true; o.frustumCulled = false; } }); // 蒙皮网格包围球不跟动作，别被裁掉
     // 点选用隐形胶囊：蒙皮网格逐面射线慢，而且包围球是静止姿势的
     const hit = new THREE.Mesh(new THREE.CapsuleGeometry(0.24, 1, 2, 8), new THREE.MeshBasicMaterial({ visible: false }));
     root.add(hit); shared.meshes.push(hit);
@@ -352,8 +352,11 @@ function runTask(p, dt) {
   if (T[1] === 'Sitting_Enter') { p.setMode('sit'); if (p.seat === p.home) p.claim = null; p.next = 10 + Math.random() * 15; if (SEATS[p.seat]?.rock) p.ride = { x: r.position.x, y: r.position.y, z: r.position.z, yaw: r.rotation.y }; }
   if (k === 'unseat') p.ride = null;
 }
+let shadowT = 0;
 function updatePeople(dt) {
-  for (const [id, p] of people) { unLook(p); unDesk(p); p.mixer.update(dt); stepPerson(id, p, dt); deskFix(p); updateLook(p, dt); }
+  let busy = false;
+  for (const [id, p] of people) { unLook(p); unDesk(p); p.mixer.update(dt); stepPerson(id, p, dt); deskFix(p); updateLook(p, dt); busy ||= p.tasks.length > 0; }
+  if (busy && (shadowT -= dt) < 0) { shadowT = 0.25; shared.shadowDirty = true; } // 人在走/做事：阴影图 0.25 秒重画一次（每帧重画太贵），原地待机的小动作不重画
 }
 function stepPerson(id, p, dt) {
   if (p.tasks.length) { runTask(p, dt); return; }
