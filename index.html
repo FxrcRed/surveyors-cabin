@@ -179,9 +179,9 @@
   #card .row { display: flex; gap: 8px; }
   #fpHud { position: fixed; inset: 0; z-index: 5; pointer-events: none; }
   #fpHud .dot { position: absolute; left: 50%; top: 50%; width: 6px; height: 6px; margin: -3px 0 0 -3px; border-radius: 50%; background: rgba(244,239,230,.85); box-shadow: 0 0 0 1px rgba(43,38,32,.5); }
-  #fpHud .help { position: absolute; left: 50%; bottom: 84px; transform: translateX(-50%); padding: 6px 12px; border-radius: 6px; background: rgba(43,38,32,.6); color: #f4efe6; font-size: var(--fs-xs); text-align: center; white-space: nowrap; transition: opacity .6s; }
+  #fpHud .help { position: absolute; left: 50%; bottom: 20px; transform: translateX(-50%); padding: 6px 12px; border-radius: 6px; background: rgba(43,38,32,.6); color: #f4efe6; font-size: var(--fs-xs); text-align: center; white-space: nowrap; transition: opacity .6s; }
   #fpHud .help .zh { display: block; margin-top: 2px; font-size: var(--fs-xs); opacity: .9; }
-  #fpHud.live .help, #fpHud.seen .help { opacity: 0; } /* 只在开局显示一次：碰过画面（live）后加 seen，再退出/换天都不再出；位置在旁白（bottom 150px）下面，不叠 */
+  #fpHud.live .help, #fpHud.seen .help { opacity: 0; } /* 只在开局显示一次：碰过画面（live）后加 seen，再退出/换天都不再出；位置在画面最下方（2026-10-31 用户要求），旁白在 bottom 150px，不叠 */
   body:has(#enter.wait, #subs.on) #fpHud .help { opacity: 0; } /* 开场字幕和操作说明同在底部 150px：整段开场播完（#enter 去掉 wait）再出，句间空档也不闪（手机上叠成一行，2026-10-30） */
   #fpHud .hint { position: absolute; left: 50%; top: calc(50% + 48px); transform: translateX(-50%); font-size: var(--fs-xs); color: #f4efe6; text-shadow: 0 1px 2px rgba(0,0,0,.7); white-space: nowrap; }
   #fpHud .hint:not(:empty) { padding: 2px 8px; border-radius: 6px; background: rgba(43,38,32,.42); }
@@ -245,7 +245,7 @@
   #wxPanel[hidden] { display: none; }
   #wxPanel button { padding: 5px 2px; font-size: var(--fs-xs); }
   #wxPanel button.on { background: rgba(232,200,154,.3); border-color: #e8c89a; }
-  @media (max-width: 600px) { #subs, #note, #roomNote, #quest:not(.end) { bottom: 140px; font-size: var(--fs-s); } #quest.end { bottom: 140px; } #fpHud .help { bottom: 80px; } #fpHud .help { width: calc(100vw - 32px); box-sizing: border-box; white-space: normal; } #prog { bottom: 116px; } #opening .box { font-size: var(--fs-s); } }
+  @media (max-width: 600px) { #subs, #note, #roomNote, #quest:not(.end) { bottom: 140px; font-size: var(--fs-s); } #quest.end { bottom: 140px; } #fpHud .help { bottom: 56px; } #fpHud .help { width: calc(100vw - 32px); box-sizing: border-box; white-space: normal; } #prog { bottom: 116px; } #opening .box { font-size: var(--fs-s); } }
   @media (max-width: 600px) { body:has(#card:not([hidden])) :is(#quest, #prog) { opacity: 0; } }
   @media (max-width: 600px) { #card { left: 16px; top: 50%; transform: translateY(-50%); width: calc(100vw - 32px); max-height: calc(100vh - 160px); } #rooms { right: 8px; gap: 2px; } #rooms button { font-size: var(--fs-s); padding: 2px 6px; } #rooms button .zh { font-size: var(--fs-xs); } #rooms.bottom { gap: 0 4px; } #skyPresets { grid-template-columns: repeat(3, 1fr); } #skyL .btns { flex-direction: column; align-items: flex-start; gap: 0; } #skyName { display: none; } }
 </style>
@@ -3504,7 +3504,7 @@ function updateFP(dt) {
 // —— 第一人称切片（2026-10-28，网址带 ?fp）：开场落在门廊，玩家就是稽查，推门进屋；书记员当同伴。手机：点哪走哪 + 拖动转头（不做摇杆）——
 // 2026-10-29 起是默认（用户：旧的环视版第 1 天不要了）；?nofp 只留给老的无头测试 day1.py。?touch：电脑上测触屏那套
 const SLICE = !/[?&]nofp\b/.test(location.search), touchFP = matchMedia('(pointer: coarse)').matches || /[?&]touch\b/.test(location.search);
-const SL = { man: [-0.05, 3.4], woman: [0.6, 3.25], door: [[-0.05, 2.45], [-0.05, 1.5]], sofa: [0.19, -0.17], seen: new Set(), room: undefined, t: 0, w: null, inT: 0 }; // door：门外 → 门里（门轴 x -0.49、z 1.9）
+const SL = { man: [-0.05, 6.0], woman: [0.75, 5.75], door: [[-0.05, 2.45], [-0.05, 1.5]], sofa: [0.19, -0.17], seen: new Set(), room: undefined, t: 0, w: null, inT: 0 }; // door：门外 → 门里（门轴 x -0.49、z 1.9）；man/woman 离门 4m（2026-10-31，用户：原来 1.5m 只看到门板，门和门廊灯要整体入画）
 const FP_DRAG = 0.006, _slO = new THREE.Vector3(), _slD = new THREE.Vector3();
 const fpT = { id: null, x: 0, y: 0, x0: 0, y0: 0, t: 0, drag: false, at: 0 };
 window.__slice = SL; // 调试 / 无头测试
