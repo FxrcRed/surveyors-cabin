@@ -491,13 +491,19 @@ function matchGround(center) {
   const yb = new THREE.Box3().setFromObject(layers.get('base_box'));
   const yc = yb.getCenter(new THREE.Vector3()), yh = yb.getSize(new THREE.Vector3()).multiplyScalar(0.5);
   // 落叶 → 草地：按离院子方框边的距离算（不按离中心，否则院子四角外直接是草，接缝很硬）
-  // 院子边上全是落叶，约 2m 外全是草（10-31 从 4.5m 收窄）；噪声只在离开院子边以后才起作用
+  // 院子的形状见下面 yd/yn（10-31 改成不规则边）
   mat.onBeforeCompile = (sh) => {
-    Object.assign(sh.uniforms, { uWShift: WS, uGrass: { value: grass }, uCenter: { value: new THREE.Vector2(yc.x, yc.z) }, uHalf: { value: new THREE.Vector2(yh.x, yh.z) } });
+    Object.assign(sh.uniforms, { uWShift: WS, uGrass: { value: grass }, uCenter: { value: new THREE.Vector2(yc.x, yc.z) }, uHalf: { value: new THREE.Vector2(yh.x, yh.z) }, uX: { value: XSHIFT } });
+    // 10-31（用户：院子是直边矩形地块，很假）：院子地坪不画了（下面 discard），由地面在这里画：圆角方框（角半径 1.5m）+ 三层起伏噪声当边界，
+    // 草能伸进原方框 ~1.5m、落叶也能伸出去，没有直线边；✕ 那间屋（XSHIFT，挪世界后就在原点）同样一块。里面按低频斑块露出更暗的踩秃泥土
     antiTile(sh, `
       float nz = sin(vGPos.x * 0.37) * sin(vGPos.y * 0.29) + 0.6 * sin(vGPos.x * 0.83 + vGPos.y * 0.61);
-      float dy = length(max(abs(vGPos - uCenter) - uHalf, 0.0));
-      float k = smoothstep(0.1, 1.8, dy + nz * 0.4 * smoothstep(0.0, 1.0, dy)); // 噪声小一点，四个角外的落叶范围差不多
+      vec2 q0 = vGPos - uCenter, q1 = q0 - uX;
+      float yd = min(length(max(abs(q0) - uHalf + 1.5, 0.0)), length(max(abs(q1) - uHalf + 1.5, 0.0))) - 1.5, dy = max(yd, 0.0);
+      float yn = 0.9 * sin(vGPos.x * 0.53 + 0.4) * sin(vGPos.y * 0.47 + 1.3) + 0.4 * sin(vGPos.x * 1.31 - vGPos.y * 1.07) + 0.2 * sin(vGPos.x * 2.9 + vGPos.y * 2.3);
+      float k = smoothstep(-0.6, 1.4, yd + yn);
+      float bare = smoothstep(0.2, 0.8, 0.5 + 0.5 * sin(vGPos.x * 0.8 + 2.0) * sin(vGPos.y * 0.9 + 0.5));
+      diffuseColor.rgb = mix(diffuseColor.rgb, vec3(dot(diffuseColor.rgb, vec3(0.3, 0.59, 0.11))) * vec3(0.9, 0.75, 0.55) * 0.75, 0.5 * bare);
       diffuseColor.rgb = mix(diffuseColor.rgb, texture2D(uGrass, vGPos / 8.0).rgb, k);
       // 草地整体再压暗 20%；离院子越远越暗（8m 起、60m 外只剩 55%），像林下见不到光；加 20m 级的大块明暗，远处不呆板
       float far = smoothstep(8.0, 60.0, dy);
@@ -510,12 +516,12 @@ function matchGround(center) {
       float gl = dot(diffuseColor.rgb, vec3(0.3, 0.59, 0.11)); // 按原地面亮度换成褐色再压暗（湖边地面已被上面压到 55%，给绝对色会比草地还亮）
       diffuseColor.rgb = mix(diffuseColor.rgb, gl * vec3(0.95, 0.75, 0.5) * mix(0.75, 0.45, smoothstep(1.03, 0.99, lk)), lw);`);
     sh.uniforms.uLake = { value: new THREE.Vector3(...(WATER.lake || [1e6, 1e6, 1])) };
-    sh.fragmentShader = 'uniform sampler2D uGrass;\nuniform vec2 uCenter;\nuniform vec2 uHalf;\nuniform vec3 uLake;\n' + SHORE_GLSL + sh.fragmentShader
+    sh.fragmentShader = 'uniform sampler2D uGrass;\nuniform vec2 uCenter;\nuniform vec2 uHalf;\nuniform vec2 uX;\nuniform vec3 uLake;\n' + SHORE_GLSL + sh.fragmentShader
       .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\n  roughnessFactor = mix(roughnessFactor, 0.45, lw); // 湿泥反一点光');
     groundCover(sh);
   };
   ground.material = mat;
-  g.material.onBeforeCompile = (sh) => { antiTile(sh, ''); groundCover(sh); }; // 院子地坪本身也去重复（3m 一块，8m 院子里能看出来）
+  g.material.onBeforeCompile = (sh) => { sh.fragmentShader = sh.fragmentShader.replace('void main() {', 'void main() { discard;'); }; // 院子地坪不画（10-31，地面画不规则边的院子）；网格留着：人物站点射线要打它（characters.js NPC_FLOOR）
   g.material.needsUpdate = true;
   ground.position.y = g.y - 0.004; // 和院子顶面齐平（略低防闪烁），院子的侧边埋进地里
 }
@@ -1154,19 +1160,15 @@ async function plantUnderstory(center) {
   const clump = (x, z) => vnoise(x / 18 + 5.3, z / 18 - 2.1) > 0.58 || vnoise(x / 5 - 1.7, z / 5 + 8.2) > 0.9;
   plantUnder(b1, await roadsidePoints(rand, 130 * f, 2.2, 9, 1.2, taken, 130, clump), rand, 0.5, 1.9, 0.25, true);
   plantUnder(b3, await roadsidePoints(rand, 100 * f, 2.2, 9, 1.2, taken, 130, clump), rand, 0.45, 1.7, 0.25, true);
-  plantUnder(grass, await roadsidePoints(rand, 330 * f, 2.4, 5, 1.0, gtaken), rand, 0.35, 0.7, 0.03, false);
-  await maybeYield(); // 密灌丛：灌木间距 1.0m、个头大，挤成一堵墙；脚下铺草
-  const bt = [], gt = [];
-  for (const th of THICKETS) { bt.push(...await blobPoints(rand, Math.round(th[2] * th[2] * 0.42 * f), th, 1.0, taken)); gt.push(...await blobPoints(rand, Math.round(th[2] * 3 * f), th, 0.9, gtaken)); }
+  // 10-31 用户：Quaternius 弯曲草丛像触手、和画风不符 → 路边、林下、密灌丛、路缘的草全删（湖岸那部分归水岸对话）；路边过渡靠地面颜色和灌木
+  await maybeYield(); // 密灌丛：灌木间距 1.0m、个头大，挤成一堵墙
+  const bt = [];
+  for (const th of THICKETS) { bt.push(...await blobPoints(rand, Math.round(th[2] * th[2] * 0.42 * f), th, 1.0, taken)); }
   plantUnder(b1, bt.filter((_, i) => i % 2), rand, 1.2, 2.0, 0.25, true); plantUnder(b3, bt.filter((_, i) => !(i % 2)), rand, 1.1, 1.9, 0.25, true);
-  plantUnder(grass, gt, rand, 0.4, 0.75, 0.03, false);
   await maybeYield(); // 林下散点：8–70m
   plantUnder(b1, await scatterPoints(rand, 90 * f, 8, 70, 3.2, center, taken), rand, 0.8, 1.6, 0.25, true);
   plantUnder(b3, await scatterPoints(rand, 80 * f, 8, 70, 3.2, center, taken), rand, 0.7, 1.4, 0.25, true);
-  plantUnder(grass, await scatterPoints(rand, 330 * f, 6, 55, 1.4, center, gtaken), rand, 0.3, 0.65, 0.03, false);
   await maybeYield(); await plantShore(rand, f, b1, b3, grass, taken, gtaken);
-  await maybeYield(); // 路缘草（10-31，替掉路边落叶带）：整条路两边，草丛中心离路缘 0.2–1.5m，叶子伸进路边一点
-  plantUnder(grass, await roadsidePoints(rand, 1000 * f, pathHalf + 0.2, pathHalf + 1.5, 0.75, gtaken, Infinity), rand, 0.3, 0.6, 0.03, false);
 }
 // 湖岸（2026-10-31）：芦苇、石头用代码生成（平面着色低多边形，同树和码头；网上没找到授权明确、风格一致的），灌木和草用 plants/ 里的 Quaternius CC0。
 // 只种开场看得到的一段岸（introSees），离卵石路/码头 3m 外。s = 沿那个方向「离湖心 / 岸线」的倍数：<1 在水里
@@ -1244,9 +1246,9 @@ async function plantForest(center, y) {
   await maybeYield(); plant(autumn, await ringPoints(rand, 80 * f, 20, 65, 2.4, center, taken), rand, 4, 8.5, y);
   await maybeYield(); plant(dead, await ringPoints(rand, 25 * f, 20, 65, 3, center, taken), rand, 4, 7.5, y);  // 零星几棵枯树
   { const r2 = rng(71); // 小屋外一圈加密（10-31，用户：小屋旁树太少）：另用一个随机数，上面各组位置不变；路/踪迹/视线/首页视角照旧由 ringPoints、crownRoom、clearOrbitView 让开
-    await maybeYield(); plant(pine, await ringPoints(r2, 75 * f, 7.5, 28, 2.6, center, taken), r2, 3, 8, y); // 10-31 第二轮：9 → 7.5m 起、64 → 115 棵（离屋近的由 fit 缩成小树）
+    await maybeYield(); plant(pine, await ringPoints(r2, 110 * f, 7.5, 28, 2.3, center, taken), r2, 3, 8, y); // 10-31 第二轮：9 → 7.5m 起、64 → 115 棵（离屋近的由 fit 缩成小树）；第三轮 → 约 165 棵、间距 2.6 → 2.3
     await maybeYield(); plant(pines, await ringPoints(r2, 14 * f, 9, 28, 4, center, taken), r2, 4, 6.5, y);
-    await maybeYield(); plant(autumn, await ringPoints(r2, 26 * f, 7.5, 28, 2.6, center, taken), r2, 3, 6.5, y); }
+    await maybeYield(); plant(autumn, await ringPoints(r2, 40 * f, 7.5, 28, 2.3, center, taken), r2, 3, 6.5, y); }
   const n0 = scene.children.length; // 下面这组远处细模（约 240 万面）收进 FAR_DETAIL：只在开场、或镜头离小屋 45m 外时显示（平时在屋子附近，面数同原来）
   await maybeYield(); plant(pine, await bandPoints(rand, 300 * f, 1.8, 12, 2.2, taken), rand, 3.5, 8.5, y);    // 路远段两边贴路一排（同 pathSidePoints；10-31 起点 2.8 → 1.8，原来实际被 5m 留空挡在 5m 外）
   await maybeYield(); plant(pine, await bandPoints(rand, 500 * f, 9, 60, 2.4, taken), rand, 4, 9.5, y);       // 开场沿路飞过的一带：细模（原来 65m 外全是简化圆锥）
