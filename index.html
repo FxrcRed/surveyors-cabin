@@ -11,6 +11,7 @@
 <meta property="og:url" content="https://fxrcred.github.io/surveyors-cabin/">
 <meta name="twitter:card" content="summary_large_image">
 <script>/* 语言：记住的选择 > 浏览器语言（zh 开头 → 中文）> 英文；CSS 按 html[data-lang] 只显示一种 */ (() => { let l = null; try { l = localStorage.getItem('cabin.lang'); } catch (e) { /* 读不到就按浏览器 */ } if (l !== 'zh' && l !== 'en') l = /^zh/i.test(navigator.language || '') ? 'zh' : 'en'; document.documentElement.dataset.lang = l; document.documentElement.lang = l === 'zh' ? 'zh-CN' : 'en'; if (l === 'zh') document.title = '无名测绘员的遗稿'; })();</script>
+<script>/* 调试：加载期间主线程卡住超 100ms 记进 __LT：[结束 ms, 卡了 ms]（20ms 心跳，加载完 60 秒停；面板的 longtask 观察器不出数） */ (() => { window.__LT = []; let t = performance.now(); const h = setInterval(() => { const n = performance.now(); if (n - t > 100) __LT.push([Math.round(n), Math.round(n - t)]); t = n; if (n > 60000) clearInterval(h); }, 20); })();</script>
 <script>/* 调试：网址带 ?mc 时用 MessageChannel 代替 rAF（浏览器面板隐藏时 rAF 不跑） */ if (/[?&]mc\b/.test(location.search)) window.requestAnimationFrame = (cb) => { const c = new MessageChannel(); c.port1.onmessage = () => cb(performance.now()); c.port2.postMessage(0); };</script>
 <link rel="stylesheet" href="fonts/fonts.css">
 <style>
@@ -809,9 +810,10 @@ function segD(x, z, [ax, az, bx, bz]) { // 点到线段的水平距离
   return Math.hypot(x - ax - u * dx, z - az - u * dz);
 }
 function takeAt(taken, x, z) { gridOf(taken); taken.push([x, z]); gridAdd(taken, x, z); }
-function ringPoints(rand, n, r0, r1, gap, center, taken, keep) { // keep(x, z)：额外筛选（开场/走路看得到才种）
+async function ringPoints(rand, n, r0, r1, gap, center, taken, keep) { // keep(x, z)：额外筛选（开场/走路看得到才种）
   const pts = [];
   for (let tries = 0; pts.length < n && tries < n * 20; tries++) {
+    if (!(tries & 127)) await maybeYield(); // 选点循环一次几百 ms（远处 12000 棵要 300ms），切块让出主线程，鼠标不卡
     const r = r0 + (r1 - r0) * Math.sqrt(rand()), a = rand() * Math.PI * 2;
     const x = center.x + Math.cos(a) * r, z = center.z + Math.sin(a) * r;
     if (nearAny(taken, x, z, gap)) continue;
@@ -839,9 +841,10 @@ function walkSees(x, z) { // 第一人称走得到的地方（雾 26m）：卵�
   return Math.hypot(x, z) < 80 || Math.hypot(x - XSHIFT.x, z - XSHIFT.y) < 60 || nearAny(pathClear, x, z, 40) || nearAny(trailClear, x, z, 40);
 }
 // 沿卵石路远段（离小屋约 55m 外）路两侧 d0–d1 米种细模：开场贴路、从高处往下看都是这一带
-function bandPoints(rand, n, d0, d1, gap, taken) {
+async function bandPoints(rand, n, d0, d1, gap, taken) {
   const pts = [], P = pathClear;
   for (let tries = 0; pts.length < n && tries < n * 20 && P.length > 62; tries++) {
+    if (!(tries & 127)) await maybeYield();
     const i = 60 + Math.floor(rand() * (P.length - 62)), tx = P[i + 1][0] - P[i - 1][0], tz = P[i + 1][1] - P[i - 1][1], l = Math.hypot(tx, tz) || 1;
     const d = (rand() < 0.5 ? -1 : 1) * (d0 + (d1 - d0) * rand()), x = P[i][0] + (tz / l) * d, z = P[i][1] - (tx / l) * d;
     if (nearAny(P, x, z, 5) || nearAny(taken, x, z, gap) || nearAny(trailClear, x, z, 2.6) || nearAny(WATER.river, x, z, 7) || lakeD(x, z) < (WATER.lake[2] * 1.2 + 8)) continue;
@@ -852,9 +855,10 @@ function bandPoints(rand, n, d0, d1, gap, taken) {
 }
 
 // 沿小路两边种一排排树：离路中心 2.8–9m，比别处的 5m 留空更贴近路，形成林荫道
-function pathSidePoints(rand, n, gap, taken) {
+async function pathSidePoints(rand, n, gap, taken) {
   const pts = [], P = pathClear;
   for (let tries = 0; pts.length < n && tries < n * 20 && P.length > 2; tries++) {
+    if (!(tries & 127)) await maybeYield();
     const i = 1 + Math.floor(rand() * Math.min(P.length - 2, 130)); // 只在前 130m；再远是 bandPoints 那组（只在开场/走远时显示）
     const tx = P[i + 1][0] - P[i - 1][0], tz = P[i + 1][1] - P[i - 1][1], l = Math.hypot(tx, tz) || 1;
     const d = (rand() < 0.5 ? -1 : 1) * (2.8 + 6.2 * rand() ** 1.5), along = (rand() - 0.5) * 3;
@@ -979,9 +983,10 @@ function underOk(x, z, pathD) { // 灌木/草不压路、踪迹、看灯的视�
     && lakeD(x, z) >= (WATER.lake[2] * 1.2 + 4) && Math.hypot(x, z) > 9 && Math.hypot(x - XSHIFT.x, z - XSHIFT.y) > 9
     && SIGHT.every((sg) => segD(x, z, sg) > 1.2) && !terrain.pits.some(([px, pz, pr]) => Math.hypot(x - px, z - pz) < pr * 1.3);
 }
-function roadsidePoints(rand, n, d0, d1, gap, taken) { // 沿路两边（前 130m）离路中心 d0–d1 米
+async function roadsidePoints(rand, n, d0, d1, gap, taken) { // 沿路两边（前 130m）离路中心 d0–d1 米
   const pts = [], P = pathClear;
   for (let t = 0; pts.length < n && t < n * 30 && P.length > 2; t++) {
+    if (!(t & 127)) await maybeYield();
     const i = 1 + Math.floor(rand() * Math.min(P.length - 2, 130));
     const tx = P[i + 1][0] - P[i - 1][0], tz = P[i + 1][1] - P[i - 1][1], l = Math.hypot(tx, tz) || 1, d = (rand() < 0.5 ? -1 : 1) * (d0 + (d1 - d0) * rand()), al = (rand() - 0.5) * 3;
     const x = P[i][0] + (tz / l) * d + (tx / l) * al, z = P[i][1] - (tx / l) * d + (tz / l) * al;
@@ -989,38 +994,40 @@ function roadsidePoints(rand, n, d0, d1, gap, taken) { // 沿路两边（前 130
   }
   return pts;
 }
-function blobPoints(rand, n, [bx, bz, br], gap, taken) { // 密灌丛里撒点（圆内）
+async function blobPoints(rand, n, [bx, bz, br], gap, taken) { // 密灌丛里撒点（圆内）
   const pts = [];
   for (let t = 0; pts.length < n && t < n * 30; t++) {
+    if (!(t & 127)) await maybeYield();
     const a = rand() * 6.283, d = br * Math.sqrt(rand()), x = bx + Math.cos(a) * d, z = bz + Math.sin(a) * d;
     if (!nearAny(taken, x, z, gap)) { pts.push([x, z]); takeAt(taken, x, z); }
   }
   return pts;
 }
-function scatterPoints(rand, n, r0, r1, gap, center, taken) {
+async function scatterPoints(rand, n, r0, r1, gap, center, taken) {
   const pts = [];
   for (let t = 0; pts.length < n && t < n * 30; t++) {
+    if (!(t & 127)) await maybeYield();
     const r = r0 + (r1 - r0) * Math.sqrt(rand()), a = rand() * 6.283, x = center.x + Math.cos(a) * r, z = center.z + Math.sin(a) * r;
     if (underOk(x, z, 2.6) && !nearAny(taken, x, z, gap)) { pts.push([x, z]); takeAt(taken, x, z); }
   }
   return pts;
 }
 async function plantUnderstory(center) {
-  const [b1, b3, grass] = await Promise.all([...BUSH_URLS, GRASS_URL].map(loadPlant));
+  const [b1, b3, grass] = await Promise.all([...BUSH_URLS, GRASS_URL].map(loadPlant)); lastYield = performance.now(); // 等下载不算卡
   const rand = rng(53), f = lite ? 0.6 : 1, taken = [], gtaken = [];
   await maybeYield(); // 路两边：灌木 3–6m 成排但留缝，草紧贴 2.4–5m
-  plantUnder(b1, roadsidePoints(rand, 130 * f, 3, 6, 1.7, taken), rand, 0.9, 1.7, 0.25, true);
-  plantUnder(b3, roadsidePoints(rand, 100 * f, 3, 6.5, 1.7, taken), rand, 0.8, 1.5, 0.25, true);
-  plantUnder(grass, roadsidePoints(rand, 330 * f, 2.4, 5, 1.0, gtaken), rand, 0.35, 0.7, 0.03, false);
+  plantUnder(b1, await roadsidePoints(rand, 130 * f, 3, 6, 1.7, taken), rand, 0.9, 1.7, 0.25, true);
+  plantUnder(b3, await roadsidePoints(rand, 100 * f, 3, 6.5, 1.7, taken), rand, 0.8, 1.5, 0.25, true);
+  plantUnder(grass, await roadsidePoints(rand, 330 * f, 2.4, 5, 1.0, gtaken), rand, 0.35, 0.7, 0.03, false);
   await maybeYield(); // 密灌丛：灌木间距 1.0m、个头大，挤成一堵墙；脚下铺草
   const bt = [], gt = [];
-  for (const th of THICKETS) { bt.push(...blobPoints(rand, Math.round(th[2] * th[2] * 0.42 * f), th, 1.0, taken)); gt.push(...blobPoints(rand, Math.round(th[2] * 3 * f), th, 0.9, gtaken)); }
+  for (const th of THICKETS) { bt.push(...await blobPoints(rand, Math.round(th[2] * th[2] * 0.42 * f), th, 1.0, taken)); gt.push(...await blobPoints(rand, Math.round(th[2] * 3 * f), th, 0.9, gtaken)); }
   plantUnder(b1, bt.filter((_, i) => i % 2), rand, 1.2, 2.0, 0.25, true); plantUnder(b3, bt.filter((_, i) => !(i % 2)), rand, 1.1, 1.9, 0.25, true);
   plantUnder(grass, gt, rand, 0.4, 0.75, 0.03, false);
   await maybeYield(); // 林下散点：8–70m
-  plantUnder(b1, scatterPoints(rand, 90 * f, 8, 70, 3.2, center, taken), rand, 0.8, 1.6, 0.25, true);
-  plantUnder(b3, scatterPoints(rand, 80 * f, 8, 70, 3.2, center, taken), rand, 0.7, 1.4, 0.25, true);
-  plantUnder(grass, scatterPoints(rand, 330 * f, 6, 55, 1.4, center, gtaken), rand, 0.3, 0.65, 0.03, false);
+  plantUnder(b1, await scatterPoints(rand, 90 * f, 8, 70, 3.2, center, taken), rand, 0.8, 1.6, 0.25, true);
+  plantUnder(b3, await scatterPoints(rand, 80 * f, 8, 70, 3.2, center, taken), rand, 0.7, 1.4, 0.25, true);
+  plantUnder(grass, await scatterPoints(rand, 330 * f, 6, 55, 1.4, center, gtaken), rand, 0.3, 0.65, 0.03, false);
   await maybeYield(); plantShore(rand, f, b1, b3, grass, taken, gtaken);
 }
 // 湖岸（2026-10-31）：芦苇、石头用代码生成（平面着色低多边形，同树和码头；网上没找到授权明确、风格一致的），灌木和草用 plants/ 里的 Quaternius CC0。
@@ -1056,37 +1063,38 @@ function plantShore(rand, f, b1, b3, grass, taken, gtaken) {
 function wHash01(v) { const s = Math.sin(v * 12.9898) * 43758.5453; return s - Math.floor(s); }
 
 async function plantForest(center, y) {
-  const [pine, pines, autumn, dead] = await Promise.all(TREE_URLS.map(loadTree));
+  const [pine, pines, autumn, dead] = await Promise.all(TREE_URLS.map(loadTree)); lastYield = performance.now(); // 等下载不算卡
   const rand = rng(7), f = lite ? 0.6 : 1, taken = [];
   forestCenter = center; setupTerrain(center); window.cabin.terrain = { terrain, terrainH, terrainSlope, THICKETS, SHRUB_XZ, TREE_XZ, STEEP, pathClear, trailClear }; // 调试 / navmap_out.py
-  await maybeYield(); plant(pine, pathSidePoints(rand, 220 * f, 2.2, taken), rand, 3.5, 8.5, y);          // 路两边：先种，占好位置
-  await maybeYield(); plant(pines, pathSidePoints(rand, 40 * f, 4, taken), rand, 4.5, 7, y);
-  await maybeYield(); plant(autumn, pathSidePoints(rand, 50 * f, 2.2, taken), rand, 3.5, 7.5, y);
-  await maybeYield(); plant(dead, pathSidePoints(rand, 6 * f, 3, taken), rand, 3.5, 6, y);
-  await maybeYield(); plant(pines, ringPoints(rand, 8 * f, 7, 20, 5, center, taken), rand, 4, 6.5, y);    // 近处：稀疏，单棵和树丛混着（距离、树高单位 m）
-  await maybeYield(); plant(pine, ringPoints(rand, 26 * f, 7, 20, 3, center, taken), rand, 3, 8, y);
-  await maybeYield(); plant(autumn, ringPoints(rand, 8 * f, 7, 20, 3, center, taken), rand, 3, 6.5, y);
-  await maybeYield(); plant(pines, ringPoints(rand, 40 * f, 20, 65, 5, center, taken), rand, 5.5, 8, y);  // 中间：加密
-  await maybeYield(); plant(pine, ringPoints(rand, 220 * f, 20, 65, 2.4, center, taken), rand, 4, 9.5, y);
-  await maybeYield(); plant(autumn, ringPoints(rand, 80 * f, 20, 65, 2.4, center, taken), rand, 4, 8.5, y);
-  await maybeYield(); plant(dead, ringPoints(rand, 25 * f, 20, 65, 3, center, taken), rand, 4, 7.5, y);  // 零星几棵枯树
+  await maybeYield(); plant(pine, await pathSidePoints(rand, 220 * f, 2.2, taken), rand, 3.5, 8.5, y);          // 路两边：先种，占好位置
+  await maybeYield(); plant(pines, await pathSidePoints(rand, 40 * f, 4, taken), rand, 4.5, 7, y);
+  await maybeYield(); plant(autumn, await pathSidePoints(rand, 50 * f, 2.2, taken), rand, 3.5, 7.5, y);
+  await maybeYield(); plant(dead, await pathSidePoints(rand, 6 * f, 3, taken), rand, 3.5, 6, y);
+  await maybeYield(); plant(pines, await ringPoints(rand, 8 * f, 7, 20, 5, center, taken), rand, 4, 6.5, y);    // 近处：稀疏，单棵和树丛混着（距离、树高单位 m）
+  await maybeYield(); plant(pine, await ringPoints(rand, 26 * f, 7, 20, 3, center, taken), rand, 3, 8, y);
+  await maybeYield(); plant(autumn, await ringPoints(rand, 8 * f, 7, 20, 3, center, taken), rand, 3, 6.5, y);
+  await maybeYield(); plant(pines, await ringPoints(rand, 40 * f, 20, 65, 5, center, taken), rand, 5.5, 8, y);  // 中间：加密
+  await maybeYield(); plant(pine, await ringPoints(rand, 220 * f, 20, 65, 2.4, center, taken), rand, 4, 9.5, y);
+  await maybeYield(); plant(autumn, await ringPoints(rand, 80 * f, 20, 65, 2.4, center, taken), rand, 4, 8.5, y);
+  await maybeYield(); plant(dead, await ringPoints(rand, 25 * f, 20, 65, 3, center, taken), rand, 4, 7.5, y);  // 零星几棵枯树
   const n0 = scene.children.length; // 下面这组远处细模（约 240 万面）收进 FAR_DETAIL：只在开场、或镜头离小屋 45m 外时显示（平时在屋子附近，面数同原来）
-  await maybeYield(); plant(pine, bandPoints(rand, 300 * f, 2.8, 12, 2.2, taken), rand, 3.5, 8.5, y);    // 路远段两边贴路一排（同 pathSidePoints）
-  await maybeYield(); plant(pine, bandPoints(rand, 500 * f, 9, 60, 2.4, taken), rand, 4, 9.5, y);       // 开场沿路飞过的一带：细模（原来 65m 外全是简化圆锥）
-  await maybeYield(); plant(autumn, bandPoints(rand, 180 * f, 9, 60, 2.4, taken), rand, 4, 8.5, y);
-  await maybeYield(); plant(pines, bandPoints(rand, 60 * f, 9, 60, 5, taken), rand, 5.5, 8, y);
-  await maybeYield(); plant(dead, bandPoints(rand, 25 * f, 9, 60, 3, taken), rand, 4, 7.5, y);
+  await maybeYield(); plant(pine, await bandPoints(rand, 300 * f, 2.8, 12, 2.2, taken), rand, 3.5, 8.5, y);    // 路远段两边贴路一排（同 pathSidePoints）
+  await maybeYield(); plant(pine, await bandPoints(rand, 500 * f, 9, 60, 2.4, taken), rand, 4, 9.5, y);       // 开场沿路飞过的一带：细模（原来 65m 外全是简化圆锥）
+  await maybeYield(); plant(autumn, await bandPoints(rand, 180 * f, 9, 60, 2.4, taken), rand, 4, 8.5, y);
+  await maybeYield(); plant(pines, await bandPoints(rand, 60 * f, 9, 60, 5, taken), rand, 5.5, 8, y);
+  await maybeYield(); plant(dead, await bandPoints(rand, 25 * f, 9, 60, 3, taken), rand, 4, 7.5, y);
   const lk = { x: WATER.lake[0], z: WATER.lake[1] }, shore = (x, z) => lakeD(x, z) < (WATER.lake[2] * 1.2 + 8) + 30 && introSees(x, z); // 湖岸一圈（开场从湖面上空看过去）：细模
-  await maybeYield(); plant(pine, ringPoints(rand, 320 * f, 60, 200, 2.6, lk, taken, shore), rand, 4, 9.5, y);
-  await maybeYield(); plant(autumn, ringPoints(rand, 110 * f, 60, 200, 2.6, lk, taken, shore), rand, 4, 8.5, y);
+  await maybeYield(); plant(pine, await ringPoints(rand, 320 * f, 60, 200, 2.6, lk, taken, shore), rand, 4, 9.5, y);
+  await maybeYield(); plant(autumn, await ringPoints(rand, 110 * f, 60, 200, 2.6, lk, taken, shore), rand, 4, 8.5, y);
   FAR_DETAIL.push(...scene.children.slice(n0).filter((o) => o.isInstancedMesh));
   // 远处简化版：只种开场看得到或走路走得到的（范围从 260m 扩到 420m，补上湖西边那片空地；看不到的不种）
-  await maybeYield(); plant(simpleConifer(0xffffff), ringPoints(rand, 12000 * f, 65, 420, 2.2, center, taken, (x, z) => introSees(x, z) || walkSees(x, z)), rand, 6, 10, y);
+  await maybeYield(); plant(simpleConifer(0xffffff), await ringPoints(rand, 12000 * f, 65, 420, 2.2, center, taken, (x, z) => introSees(x, z) || walkSees(x, z)), rand, 6, 10, y);
   await plantUnderstory(center);
 }
 
 const bar = document.querySelector('#bar > div'), pct = document.getElementById('pct');
 let home = null;
+let sceneReady = false; // 预热完才开始画场景：加载页盖着时画了白画，还会在主线程同步编译着色器（冷启动时卡死 17s+，2026-10-31）
 
 // 加载进度：下载 0–55%，之后每阶段占一段（按 2026-10-19 桌面实测耗时比：解析 1.0s、拆分合并 2.1s、地面等 0.1s、种树 1.5s（种树邻近查询改网格后，原 3.4s）、预热 0.1s），
 // 阶段内按「预计耗时」指数逼近段尾（到不了、也不倒退），阶段真做完才跳到段尾；预计耗时按实测解析速度缩放（手机慢就整体拉长）
@@ -1102,7 +1110,7 @@ function T(name) { // 记一个阶段刚做完（name = 做完的阶段）
 }
 const yieldFrame = () => new Promise((r) => { let d = 0; const f = () => { if (!d) { d = 1; r(); } }; requestAnimationFrame(f); setTimeout(f, 60); }); // 让出主线程，进度条才能刷新
 let lastYield = performance.now();
-const maybeYield = async () => { const d = performance.now() - lastYield; if (d > 150) (window.__LB ||= []).push([Math.round(performance.now() - window.__T[0][1]), Math.round(d)]); /* 调试：连续不让出超 150ms 的块 */ if (d > 40) { await yieldFrame(); lastYield = performance.now(); } };
+const maybeYield = async () => { const d = performance.now() - lastYield; if (d > 150) (window.__LB ||= []).push([Math.round(performance.now() - window.__T[0][1]), Math.round(d), (new Error().stack.split('\n')[2] || '').replace(/.*index.html/, '')]); /* 调试：连续不让出超 150ms 的块 */ if (d > 40) { await yieldFrame(); lastYield = performance.now(); } };
 let lastTick = performance.now();
 function progTick() {
   requestAnimationFrame(progTick);
@@ -1174,9 +1182,9 @@ loader.load('cabin.glb', async (gltf) => {
   const peopleReady = loadPeople().catch(console.error); // 和种树一起加载，预热前要到齐（材质一起编译）
   await yieldFrame();
   // 树种好再揭开加载页、开始开场动画，免得飞行中树一棵棵冒出来
-  plantForest(center, ground.position.y).catch(console.error).then(clearOrbitView).then(() => peopleReady).finally(() => {
+  plantForest(center, ground.position.y).catch(console.error).then(clearOrbitView).then(() => peopleReady).finally(async () => {
     T('forest');
-    prewarm();
+    await prewarm(); sceneReady = true;
     T('prewarm');
     pct.textContent = '100%'; bar.style.width = '100%';
     const go = () => { document.getElementById('loader').classList.add('done'); startIntro(); startOpening(); resumeAsk(); if (!opening) { enterBtn.classList.remove('wait'); $('jBtn').classList.remove('wait'); } }; // 有开场字幕就等播完再出「进屋」「遗稿」
@@ -2826,7 +2834,7 @@ function drawHighlight() {
 }
 // 预热：屋里的物件在屋外被视锥剔除，第一次画到时才编译/上传（原来还有透射缓冲第一次创建）→ 第一次进屋中途卡一下。
 // 加载页揭开前从每个房间视角真实渲染一帧（隐藏的物件也临时显示，雨雪、雪板等第一次出现也不卡）
-function prewarm() {
+async function prewarm() {
   // Rhino 导出的灯罩玻璃、灯泡、水、火苗带 transmission：画面里只要有一个，three.js 每帧就把整个场景（含森林）多画一遍到透射缓冲 → 改成普通半透明
   scene.traverse((o) => {
     const m = o.material;
@@ -2834,6 +2842,7 @@ function prewarm() {
   });
   const hidden = [];
   scene.traverse((o) => { if (!o.visible && !o.isLight) { hidden.push(o); o.visible = true; } });
+  try { await renderer.compileAsync(scene, camera); } catch (e) { /* 不支持就靠下面逐个视角渲染时同步编译 */ } // 着色器并行编译（KHR_parallel_shader_compile），原来同步编译首次要卡 1.3s
   const p = camera.position.clone(), q = camera.quaternion.clone(), f = camera.fov;
   for (const r of ROOMS) {
     camera.position.set(...r.pos); camera.lookAt(...r.tgt); camera.fov = r.fov || INSIDE_FOV; camera.updateProjectionMatrix();
@@ -4085,7 +4094,7 @@ renderer.setAnimationLoop(() => {
   if (shadowDirty || sunD.dot(shadowSun) < 0.99999 || (Math.abs(roofSig - shadowRoof) > 0.002 && now - shadowAt > 500)) {
     renderer.shadowMap.needsUpdate = true; shadowSun.copy(sunD); shadowRoof = roofSig; shadowDirty = false; shadowAt = now;
   }
-  renderer.render(scene, camera);
+  if (sceneReady) renderer.render(scene, camera);
   if (fpsEl) fpsTick(now, renderer.info.render.triangles);
   if (held || (hand && hand.visible)) drawHeld();
   drawHighlight();
