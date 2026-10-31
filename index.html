@@ -3916,7 +3916,7 @@ const smoothstep = (a, b, x) => { const t = THREE.MathUtils.clamp((x - a) / (b -
 const DOCK_E = 14, DOCK_GAP = 4.5, DOCK_HI = 30, DOCK_LO = 2.6, DOCK_WALK = 0.9; // DOCK_WALK：实测沿路走的速度（一段段 walk 任务，比 WALK_SPEED 略慢）
 // 离小屋 230m 起往下降，70m 处到底（smootherstep；原来 140→70m，那时速度还有 20+m/s，竖直速度峰值 12.6m/s，用户说像掉下去）
 function dockH(d) { const k = THREE.MathUtils.clamp((230 - d) / 160, 0, 1); return DOCK_LO + (DOCK_HI - DOCK_LO) * (1 - k * k * k * (k * (k * 6 - 15) + 10)); }
-const dockStep = (d) => dockH(d) > DOCK_HI - 1 ? 40 : 5; // 引导线取点间距：还没开始降时 40m 一点（不跟小弯），降下来就 5m 一点贴着路中线
+const dockStep = (d) => dockH(d - 40) > DOCK_HI - 1 ? 40 : 5; // 看下一点的高度（只看当前点时最后一大步从 29m 跨到 22.8m，引导线折一下，竖直速度鼓包） // 引导线取点间距：还没开始降时 40m 一点（不跟小弯），降下来就 5m 一点贴着路中线
 function pathSide(d, side) { const L = pathCurve.getLength(), u = THREE.MathUtils.clamp(d / L, 0, 1), p = pathCurve.getPointAt(u), t = pathCurve.getTangentAt(u); return { x: p.x - t.z * side, z: p.z + t.x * side }; } // 卵石路上离起点 d 米、偏中线 side 米的点
 function startDockIntro() {
   const m = people.get('person_man'), w = people.get('person_woman'), gy = ground.position.y, [dx, dz] = WATER.dockDir, [kx, kz] = WATER.dock;
