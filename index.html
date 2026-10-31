@@ -938,12 +938,13 @@ const crownGrid = new Map(); // 已种下的细模树冠 [x, z, 半径]，8m 一
 function crownAdd(x, z, r) { const k = Math.floor(x / CELL) * 100003 + Math.floor(z / CELL), a = crownGrid.get(k); if (a) a.push([x, z, r]); else crownGrid.set(k, [[x, z, r]]); }
 // 这里的树冠最宽能到多少（m）：边缘不压卵石路、踪迹、看灯的视线；细模还不插进旁边的树冠（允许枝梢交错 15%）
 // 卵石路这一项（2026-10-31 改，用户：路边树离路太远）：走路的人只要求树冠边缘离路中心 ≥0.7m（枝梢可以伸到路边上方）；
-// 开场镜头在这段路的高度 dockH(s)，树冠（近似圆锥，0.12h 到树顶）在那个高度的半径离路中心 ≥1.45m（镜头偏离路中线实测 ≤0.74m）。没给 h 时照旧 1.6m
+// 开场镜头在这段路的高度 dockH(s)，树冠（近似圆锥，0.12h 到树顶）在那个高度的半径离路中心 ≥0.9m（镜头近裁剪面约 0.5m）。没给 h 时照旧 1.6m
 function pathRoom(x, z, h) {
   const pd = nearD(pathClear, x, z); if (!h || pd >= CELL) return pd - 1.6;
   let s = 0, b = 1e9; pathClear.forEach(([px, pz], i) => { const e = (px - x) ** 2 + (pz - z) ** 2; if (e < b) { b = e; s = i; } });
   const f = THREE.MathUtils.clamp((h - dockH(s * 0.933)) / (0.88 * h), 0, 1); // pathClear 每点约 0.933m（extendPath：0.311m × 3）
-  return Math.min(pd - 0.7, f ? (pd - 1.45) / f : Infinity);
+  const cm = s * 0.933 < 25 ? 1.45 : 0.9; // 10-31 第二轮：1.45 → 0.9（实测镜头离路中线只偏几厘米）；离小屋 25m 内是开场收尾、镜头会偏离路中线，仍 1.45（0.9 时实测余量只剩 0.18m）
+  return Math.min(pd - 0.7, f ? (pd - cm) / f : Infinity);
 }
 function crownRoom(x, z, mutual, h) {
   let m = Math.min(pathRoom(x, z, h), nearD(trailClear, x, z) - 1.0);
@@ -971,12 +972,13 @@ function plant(parts, pts, rand, hMin, hMax, y) {
   pts.forEach(([x, z], i) => {
     const ck = canopyK(x, z); // 单棵随机只占原范围的中间 60%，高低主要看成片的系数；宽只随系数开方变（矮林不显得扁、冒尖的树细高），路边照旧由 crownRoom 收窄
     let h = Math.min(27, (hMin + (hMax - hMin) * (0.2 + 0.6 * rand())) * TREE_K * ck), w = h / Math.sqrt(ck) * (0.7 + rand() * 0.6) * TREE_W; // 胖瘦差别大一点；最高 27m（开场在 30m 高飞）
-    // 树冠边缘离小屋中心至少 7m（院子角 5.7m + 屋檐余量），太胖就按比例缩小，缩太多就不种
+    // 树冠边缘离小屋中心至少 7m（院子角 5.7m + 屋檐余量）。放不下就不种（10-31 用户：小屋边全是小树，不要），按位置哈希留约 15% 等比缩成幼树点缀
     const room = Math.hypot(x - forestCenter.x, z - forestCenter.z) - 7, fit = room / (R * w);
-    if (fit < 1) { if (fit < 0.3 || h * fit < 3) { h = w = 0; } else { h *= fit; w *= fit; } } // 10-31：0.5 → 0.3，院子外一圈也能长小树
+    const young = hash2(Math.round(x * 8), Math.round(z * 8) + 3) < 0.15; // 按位置定、不用 rand()，随机序列不变
+    if (fit < 1) { if (young && fit >= 0.5 && h * fit >= 3) { h *= fit; w *= fit; } else h = w = 0; }
     // 路、踪迹、视线通道、旁边的树冠：只收窄不降高，收到一半还不够就不种（开场贴路 2.4m 高飞过、第一人称走在踪迹上，都不钻树冠）
-    // 10-31：离路 6m 内收到一半还不够的，整棵等比缩成小树（≥3m 高），路边是幼树；缩小后开场镜头那一项只会更宽松
-    if (w) { const k = crownRoom(x, z, mutual, h) / (R * w); if (k < 0.5) { if (k > 0 && h * k >= 3 && nearD(pathClear, x, z) < 6) { h *= k; w *= k; } else h = w = 0; } else if (k < 1) w *= k; }
+    // 10-31 第二轮（用户：路边树还离路远、小屋边全是小树）：离路 6m 内可以收窄到 35%（细高云杉，树干贴路）；还不够的，离小屋 30m 外才缩成幼树，30m 内不种
+    if (w) { const k = crownRoom(x, z, mutual, h) / (R * w), np = nearD(pathClear, x, z) < 6; if (k < (np ? 0.35 : 0.5)) { if (np && k > 0 && h * k >= 3 && room > 23) { h *= k; w *= k; } else h = w = 0; } else if (k < 1) w *= k; }
     if (w && mutual) crownAdd(x, z, R * w);
     m.compose(p.set(x, y + terrainH(x, z) - 0.2, z), q.setFromAxisAngle(up, rand() * Math.PI * 2), s.set(w, h, w)); // 坡上脚下沉 20cm，地面是折线网格
     if (h > 2 && room < 115) TREE_XZ.push(x, z); // 第一人称在屋外撞树干用（fpTrees）
@@ -1244,9 +1246,9 @@ async function plantForest(center, y) {
   const [pine, pines, autumn, dead] = await Promise.all(TREE_URLS.map(loadTree)); lastYield = performance.now(); // 等下载不算卡
   const rand = rng(7), f = lite ? 0.6 : 1, taken = [];
   forestCenter = center; setupTerrain(center); window.cabin.terrain = { terrain, terrainH, terrainSlope, THICKETS, SHRUB_XZ, TREE_XZ, STEEP, pathClear, trailClear }; // 调试 / navmap_out.py
-  await maybeYield(); plant(pine, await pathSidePoints(rand, 220 * f, 2.2, taken), rand, 3.5, 8.5, y);          // 路两边：先种，占好位置
+  await maybeYield(); plant(pine, await pathSidePoints(rand, 360 * f, 2.2, taken), rand, 3.5, 8.5, y);          // 路两边：先种，占好位置（10-31：220 → 360，贴路细高云杉多种）
   await maybeYield(); plant(pines, await pathSidePoints(rand, 40 * f, 4, taken), rand, 4.5, 7, y);
-  await maybeYield(); plant(autumn, await pathSidePoints(rand, 50 * f, 2.2, taken), rand, 3.5, 7.5, y);
+  await maybeYield(); plant(autumn, await pathSidePoints(rand, 80 * f, 2.2, taken), rand, 3.5, 7.5, y);
   await maybeYield(); plant(dead, await pathSidePoints(rand, 6 * f, 3, taken), rand, 3.5, 6, y);
   await maybeYield(); plant(pines, await ringPoints(rand, 8 * f, 7, 20, 5, center, taken), rand, 4, 6.5, y);    // 近处：稀疏，单棵和树丛混着（距离、树高单位 m）
   await maybeYield(); plant(pine, await ringPoints(rand, 26 * f, 7, 20, 3, center, taken), rand, 3, 8, y);
@@ -1256,9 +1258,9 @@ async function plantForest(center, y) {
   await maybeYield(); plant(autumn, await ringPoints(rand, 80 * f, 20, 65, 2.4, center, taken), rand, 4, 8.5, y);
   await maybeYield(); plant(dead, await ringPoints(rand, 25 * f, 20, 65, 3, center, taken), rand, 4, 7.5, y);  // 零星几棵枯树
   { const r2 = rng(71); // 小屋外一圈加密（10-31，用户：小屋旁树太少）：另用一个随机数，上面各组位置不变；路/踪迹/视线/首页视角照旧由 ringPoints、crownRoom、clearOrbitView 让开
-    await maybeYield(); plant(pine, await ringPoints(r2, 110 * f, 7.5, 28, 2.3, center, taken), r2, 3, 8, y); // 10-31 第二轮：9 → 7.5m 起、64 → 115 棵（离屋近的由 fit 缩成小树）；第三轮 → 约 165 棵、间距 2.6 → 2.3
+    await maybeYield(); plant(pine, await ringPoints(r2, 110 * f, 9, 30, 2.3, center, taken), r2, 3, 8, y); // 10-31 第二轮：9 → 7.5m 起、64 → 115 棵（离屋近的由 fit 缩成小树）；第三轮 → 约 165 棵、间距 2.6 → 2.3；第四轮从 9m 起（成年树树冠半径约 3m，再近放不下、不种）
     await maybeYield(); plant(pines, await ringPoints(r2, 14 * f, 9, 28, 4, center, taken), r2, 4, 6.5, y);
-    await maybeYield(); plant(autumn, await ringPoints(r2, 40 * f, 7.5, 28, 2.3, center, taken), r2, 3, 6.5, y); }
+    await maybeYield(); plant(autumn, await ringPoints(r2, 40 * f, 9, 30, 2.3, center, taken), r2, 3, 6.5, y); }
   const n0 = scene.children.length; // 下面这组远处细模（约 240 万面）收进 FAR_DETAIL：只在开场、或镜头离小屋 45m 外时显示（平时在屋子附近，面数同原来）
   await maybeYield(); plant(pine, await bandPoints(rand, 300 * f, 1.8, 12, 2.2, taken), rand, 3.5, 8.5, y);    // 路远段两边贴路一排（同 pathSidePoints；10-31 起点 2.8 → 1.8，原来实际被 5m 留空挡在 5m 外）
   await maybeYield(); plant(pine, await bandPoints(rand, 500 * f, 9, 60, 2.4, taken), rand, 4, 9.5, y);       // 开场沿路飞过的一带：细模（原来 65m 外全是简化圆锥）
