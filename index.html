@@ -480,7 +480,8 @@ function antiTile(sh, extra) {
     float mixT = smoothstep(-0.35, 0.35, sin(vGPos.x * 0.9 + 1.3) * sin(vGPos.y * 0.7) + 0.5 * sin((vGPos.x + vGPos.y) * 1.7));
     vec4 sampledDiffuseColor = mix(texture2D(map, vMapUv), texture2D(map, uvB), mixT);
     diffuseColor *= sampledDiffuseColor * (0.88 + 0.24 * (0.5 + 0.5 * sin(vGPos.x * 0.45) * sin(vGPos.y * 0.38 + 0.7)));
-    diffuseColor.rgb *= vec3(0.62, 0.66, 0.6); // 落叶调暗、少一点金黄，和暗橄榄草地接得上` + extra);
+    diffuseColor.rgb *= vec3(0.62, 0.66, 0.6); // 落叶调暗、少一点金黄，和暗橄榄草地接得上
+    { float al = dot(diffuseColor.rgb, vec3(0.3, 0.59, 0.11)); diffuseColor.rgb = mix(vec3(al), diffuseColor.rgb, 0.6) * 0.65; } // 10-31（用户：院子落叶又大又亮）：再去饱和四成、压暗 35%，和压暗的路面协调` + extra);
 }
 
 function matchGround(center) {
@@ -490,13 +491,13 @@ function matchGround(center) {
   const yb = new THREE.Box3().setFromObject(layers.get('base_box'));
   const yc = yb.getCenter(new THREE.Vector3()), yh = yb.getSize(new THREE.Vector3()).multiplyScalar(0.5);
   // 落叶 → 草地：按离院子方框边的距离算（不按离中心，否则院子四角外直接是草，接缝很硬）
-  // 院子边上全是落叶，约 4.5m 外全是草；噪声只在离开院子边以后才起作用
+  // 院子边上全是落叶，约 2m 外全是草（10-31 从 4.5m 收窄）；噪声只在离开院子边以后才起作用
   mat.onBeforeCompile = (sh) => {
     Object.assign(sh.uniforms, { uWShift: WS, uGrass: { value: grass }, uCenter: { value: new THREE.Vector2(yc.x, yc.z) }, uHalf: { value: new THREE.Vector2(yh.x, yh.z) } });
     antiTile(sh, `
       float nz = sin(vGPos.x * 0.37) * sin(vGPos.y * 0.29) + 0.6 * sin(vGPos.x * 0.83 + vGPos.y * 0.61);
       float dy = length(max(abs(vGPos - uCenter) - uHalf, 0.0));
-      float k = smoothstep(0.4, 3.5, dy + nz * 0.6 * smoothstep(0.0, 2.0, dy)); // 噪声小一点，四个角外的落叶范围差不多
+      float k = smoothstep(0.1, 1.8, dy + nz * 0.4 * smoothstep(0.0, 1.0, dy)); // 噪声小一点，四个角外的落叶范围差不多
       diffuseColor.rgb = mix(diffuseColor.rgb, texture2D(uGrass, vGPos / 8.0).rgb, k);
       // 草地整体再压暗 20%；离院子越远越暗（8m 起、60m 外只剩 55%），像林下见不到光；加 20m 级的大块明暗，远处不呆板
       float far = smoothstep(8.0, 60.0, dy);
