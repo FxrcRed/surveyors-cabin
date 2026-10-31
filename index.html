@@ -576,10 +576,13 @@ function extendPath() {
   const edge = (W) => [[W + 0.25, 0], [W - 0.15, 1]];
   // polygonOffset：路面压在落叶带上、落叶带压在地面上，远处不打架闪烁
   const pathMat = Object.assign(P.material.clone(), { vertexColors: true, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -4 });
+  // 路面压暗、去饱和（2026-10-31，用户：开场高空看是一条发白的亮带）；院子那段同样压，接头不跳。颜色是线性值
+  const PATH_TONE = `{ float pl = dot(diffuseColor.rgb, vec3(0.3, 0.59, 0.11)); diffuseColor.rgb = mix(vec3(pl), diffuseColor.rgb, 0.5) * vec3(0.5, 0.47, 0.42); }`;
   pathMat.onBeforeCompile = (sh) => {
     sh.uniforms.uWShift = WS;
-    wsPos(sh); sh.vertexShader = 'varying vec2 vEdgeP;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\nvEdgeP = (modelMatrix * vec4(position, 1.0)).xz + uWShift;');
+    wsPos(sh); sh.vertexShader = 'attribute float across;\nvarying float vAcross;\nvarying vec2 vEdgeP;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\nvEdgeP = (modelMatrix * vec4(position, 1.0)).xz + uWShift; vAcross = across;');
     sh.fragmentShader = `varying vec2 vEdgeP;
+varying float vAcross;
 float eh(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
 float en(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
   return mix(mix(eh(i), eh(i + vec2(1, 0)), f.x), mix(eh(i + vec2(0, 1)), eh(i + 1.0), f.x), f.y); }
@@ -587,12 +590,19 @@ float en(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
       + sh.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>
         float n = 0.6 * en(vEdgeP / 0.15) + 0.4 * en(vEdgeP / 0.6);
         if (vColor.a < 0.2 + 0.6 * n) discard;
-        diffuseColor.a = 1.0;`);
+        diffuseColor.a = 1.0;
+        ${PATH_TONE}
+        // 明暗变化：6m 级大块深浅；两道车辙/脚印（横向 0.3、0.7）偏暗，离院子 4–12m 渐出；两边 1/4 宽被泥土落叶按噪声侵入
+        float big = en(vEdgeP / 6.0 + 4.1), ruts = exp(-pow((abs(vAcross - 0.5) - 0.2) / 0.08, 2.0)) * smoothstep(4.0, 12.0, length(vEdgeP));
+        diffuseColor.rgb *= (0.8 + 0.4 * big) * (1.0 - 0.4 * ruts * (0.5 + 0.5 * en(vEdgeP / 0.9)));
+        float inv = smoothstep(0.28, 0.0, min(vAcross, 1.0 - vAcross)) * smoothstep(0.3, 0.75, 0.5 * en(vEdgeP / 0.5 + 9.0) + 0.5 * en(vEdgeP / 2.0));
+        diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.04, 0.032, 0.022) * (0.7 + 0.6 * n), inv);`);
     groundCover(sh);
   };
-  P.material.onBeforeCompile = groundCover; P.material.needsUpdate = true; // 院子里原有那段路
-  const path = new THREE.Mesh(ribbon(curve, pts, (i) => { const L = w / 2 * jag(i, 0), R = w / 2 * jag(i, 5);
-    return [...edge(L), ...edge(R).map(([d, a]) => [-d, a]).reverse()]; }, P.uv, P.y), pathMat);
+  P.material.onBeforeCompile = (sh) => { sh.fragmentShader = sh.fragmentShader.replace('#include <color_fragment>', '#include <color_fragment>\n' + PATH_TONE); groundCover(sh); }; P.material.needsUpdate = true; // 院子里原有那段路
+  const across = (g) => { g.setAttribute('across', new THREE.Float32BufferAttribute(Array.from({ length: g.attributes.position.count }, (_, k) => [0, 0.1, 0.9, 1][k % 4]), 1)); return g; }; // 每行 4 个点：左外、左内、右内、右外
+  const path = new THREE.Mesh(across(ribbon(curve, pts, (i) => { const L = w / 2 * jag(i, 0), R = w / 2 * jag(i, 5);
+    return [...edge(L), ...edge(R).map(([d, a]) => [-d, a]).reverse()]; }, P.uv, P.y)), pathMat);
   path.receiveShadow = true;
   scene.add(path);
 
@@ -705,8 +715,8 @@ float wH(vec2 p) { vec2 q = p + 3.0 * vec2(wNoise(p * 0.06 + uT * 0.03), wNoise(
   const xCurve = new THREE.CatmullRomCurve3([[0, 0], [0, 2], [1, 7], [3, 12], [2.5, 17], [0.5, 21]].map(([dx, dz]) => new THREE.Vector3(x0 + dx, 0, z0 + dz)));
   const xPts = xCurve.getSpacedPoints(Math.round(xCurve.getLength() / 0.311)), xN = xPts.length - 1;
   const xFade = (i) => { const t = i / xN; return 1 - Math.min(1, Math.max(0, (t - 0.25) / 0.7)); }; // 前四分之一实心，之后一路稀到消失
-  const xPath = new THREE.Mesh(ribbon(xCurve, xPts, (i) => { const L2 = w / 2 * jag(i, 1) * (0.5 + 0.5 * xFade(i)), R2 = w / 2 * jag(i, 6) * (0.5 + 0.5 * xFade(i)), f = xFade(i);
-    return [...edge(L2).map(([d, a]) => [d, a * f]), ...edge(R2).map(([d, a]) => [-d, a * f]).reverse()]; }, P.uv, P.y), pathMat);
+  const xPath = new THREE.Mesh(across(ribbon(xCurve, xPts, (i) => { const L2 = w / 2 * jag(i, 1) * (0.5 + 0.5 * xFade(i)), R2 = w / 2 * jag(i, 6) * (0.5 + 0.5 * xFade(i)), f = xFade(i);
+    return [...edge(L2).map(([d, a]) => [d, a * f]), ...edge(R2).map(([d, a]) => [-d, a * f]).reverse()]; }, P.uv, P.y)), pathMat);
   xPath.receiveShadow = true;
   x3.ground = [xRing, xPath]; x3.ground.forEach((m) => { m.visible = false; scene.add(m); });
   // ✕ 那间屋在踪迹老云杉旁边：X = 老云杉位置 − 那间屋院子里老云杉的位置（D3.spruceX），种树时留出这块空地
@@ -883,7 +893,7 @@ async function bandPoints(rand, n, d0, d1, gap, taken) {
     if (!(tries & 127)) await maybeYield();
     const i = 60 + Math.floor(rand() * (P.length - 62)), tx = P[i + 1][0] - P[i - 1][0], tz = P[i + 1][1] - P[i - 1][1], l = Math.hypot(tx, tz) || 1;
     const d = (rand() < 0.5 ? -1 : 1) * (d0 + (d1 - d0) * rand()), x = P[i][0] + (tz / l) * d, z = P[i][1] - (tx / l) * d;
-    if (nearAny(P, x, z, 5) || nearAny(taken, x, z, gap) || nearAny(trailClear, x, z, 2.6) || nearAny(WATER.river, x, z, 7) || lakeD(x, z) < (WATER.lake[2] * 1.2 + 8)) continue;
+    if (nearAny(P, x, z, Math.min(5, d0 - 0.1)) || nearAny(taken, x, z, gap) || nearAny(trailClear, x, z, 2.6) || nearAny(WATER.river, x, z, 7) || lakeD(x, z) < (WATER.lake[2] * 1.2 + 8)) continue;
     if (terrain.pits.some(([px, pz, pr]) => Math.hypot(x - px, z - pz) < pr * 1.6)) continue;
     pts.push([x, z]); takeAt(taken, x, z);
   }
@@ -897,9 +907,9 @@ async function pathSidePoints(rand, n, gap, taken) {
     if (!(tries & 127)) await maybeYield();
     const i = 1 + Math.floor(rand() * Math.min(P.length - 2, 130)); // 只在前 130m；再远是 bandPoints 那组（只在开场/走远时显示）
     const tx = P[i + 1][0] - P[i - 1][0], tz = P[i + 1][1] - P[i - 1][1], l = Math.hypot(tx, tz) || 1;
-    const d = (rand() < 0.5 ? -1 : 1) * (2.8 + 6.2 * rand() ** 1.5), along = (rand() - 0.5) * 3;
+    const d = (rand() < 0.5 ? -1 : 1) * (1.8 + 7.2 * rand() ** 1.5), along = (rand() - 0.5) * 3; // 10-31：2.8 → 1.8（树干离路缘 1m 起）
     const x = P[i][0] + (tz / l) * d + (tx / l) * along, z = P[i][1] - (tx / l) * d + (tz / l) * along;
-    if (nearAny(P, x, z, 2.6)) continue; // 弯道内侧别压到路
+    if (nearAny(P, x, z, 1.7)) continue; // 弯道内侧别压到路
     if (nearAny(taken, x, z, gap)) continue;
     pts.push([x, z]); takeAt(taken, x, z);
   }
@@ -918,8 +928,16 @@ const MARK_TREES = { blaze: [15, 6.5], spruce: [24, 11] }; // 刻「7」的云�
 const crownGrid = new Map(); // 已种下的细模树冠 [x, z, 半径]，8m 一格
 function crownAdd(x, z, r) { const k = Math.floor(x / CELL) * 100003 + Math.floor(z / CELL), a = crownGrid.get(k); if (a) a.push([x, z, r]); else crownGrid.set(k, [[x, z, r]]); }
 // 这里的树冠最宽能到多少（m）：边缘不压卵石路、踪迹、看灯的视线；细模还不插进旁边的树冠（允许枝梢交错 15%）
-function crownRoom(x, z, mutual) {
-  let m = Math.min(nearD(pathClear, x, z) - 1.6, nearD(trailClear, x, z) - 1.0);
+// 卵石路这一项（2026-10-31 改，用户：路边树离路太远）：走路的人只要求树冠边缘离路中心 ≥0.7m（枝梢可以伸到路边上方）；
+// 开场镜头在这段路的高度 dockH(s)，树冠（近似圆锥，0.12h 到树顶）在那个高度的半径离路中心 ≥1.45m（镜头偏离路中线实测 ≤0.74m）。没给 h 时照旧 1.6m
+function pathRoom(x, z, h) {
+  const pd = nearD(pathClear, x, z); if (!h || pd >= CELL) return pd - 1.6;
+  let s = 0, b = 1e9; pathClear.forEach(([px, pz], i) => { const e = (px - x) ** 2 + (pz - z) ** 2; if (e < b) { b = e; s = i; } });
+  const f = THREE.MathUtils.clamp((h - dockH(s * 0.933)) / (0.88 * h), 0, 1); // pathClear 每点约 0.933m（extendPath：0.311m × 3）
+  return Math.min(pd - 0.7, f ? (pd - 1.45) / f : Infinity);
+}
+function crownRoom(x, z, mutual, h) {
+  let m = Math.min(pathRoom(x, z, h), nearD(trailClear, x, z) - 1.0);
   for (const sg of SIGHT) m = Math.min(m, segD(x, z, sg) - 0.8);
   if (mutual) { const cx = Math.floor(x / CELL), cz = Math.floor(z / CELL);
     for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) for (const [px, pz, r] of crownGrid.get((cx + i) * 100003 + cz + j) || []) m = Math.min(m, Math.hypot(px - x, pz - z) / 0.85 - r); }
@@ -946,9 +964,10 @@ function plant(parts, pts, rand, hMin, hMax, y) {
     let h = Math.min(27, (hMin + (hMax - hMin) * (0.2 + 0.6 * rand())) * TREE_K * ck), w = h / Math.sqrt(ck) * (0.7 + rand() * 0.6) * TREE_W; // 胖瘦差别大一点；最高 27m（开场在 30m 高飞）
     // 树冠边缘离小屋中心至少 7m（院子角 5.7m + 屋檐余量），太胖就按比例缩小，缩太多就不种
     const room = Math.hypot(x - forestCenter.x, z - forestCenter.z) - 7, fit = room / (R * w);
-    if (fit < 1) { if (fit < 0.5) { h = w = 0; } else { h *= fit; w *= fit; } }
+    if (fit < 1) { if (fit < 0.3 || h * fit < 3) { h = w = 0; } else { h *= fit; w *= fit; } } // 10-31：0.5 → 0.3，院子外一圈也能长小树
     // 路、踪迹、视线通道、旁边的树冠：只收窄不降高，收到一半还不够就不种（开场贴路 2.4m 高飞过、第一人称走在踪迹上，都不钻树冠）
-    if (w) { const k = crownRoom(x, z, mutual) / (R * w); if (k < 0.5) h = w = 0; else if (k < 1) w *= k; }
+    // 10-31：离路 6m 内收到一半还不够的，整棵等比缩成小树（≥3m 高），路边是幼树；缩小后开场镜头那一项只会更宽松
+    if (w) { const k = crownRoom(x, z, mutual, h) / (R * w); if (k < 0.5) { if (k > 0 && h * k >= 3 && nearD(pathClear, x, z) < 6) { h *= k; w *= k; } else h = w = 0; } else if (k < 1) w *= k; }
     if (w && mutual) crownAdd(x, z, R * w);
     m.compose(p.set(x, y + terrainH(x, z) - 0.2, z), q.setFromAxisAngle(up, rand() * Math.PI * 2), s.set(w, h, w)); // 坡上脚下沉 20cm，地面是折线网格
     if (h > 2 && room < 115) TREE_XZ.push(x, z); // 第一人称在屋外撞树干用（fpTrees）
@@ -1096,14 +1115,14 @@ function underOk(x, z, pathD) { // 灌木/草不压路、踪迹、看灯的视�
     && lakeD(x, z) >= (WATER.lake[2] * 1.2 + 4) && Math.hypot(x, z) > 9 && Math.hypot(x - XSHIFT.x, z - XSHIFT.y) > 9
     && SIGHT.every((sg) => segD(x, z, sg) > 1.2) && !terrain.pits.some(([px, pz, pr]) => Math.hypot(x - px, z - pz) < pr * 1.3);
 }
-async function roadsidePoints(rand, n, d0, d1, gap, taken, iMax = 130) { // 沿路两边（前 iMax 个点，约 iMax m）离路中心 d0–d1 米
+async function roadsidePoints(rand, n, d0, d1, gap, taken, iMax = 130, keep) { // 沿路两边（前 iMax 个点，约 iMax m）离路中心 d0–d1 米；keep(x, z) 额外筛选
   const pts = [], P = pathClear;
   for (let t = 0; pts.length < n && t < n * 30 && P.length > 2; t++) {
     if (!(t & 127)) await maybeYield();
     const i = 1 + Math.floor(rand() * Math.min(P.length - 2, iMax));
     const tx = P[i + 1][0] - P[i - 1][0], tz = P[i + 1][1] - P[i - 1][1], l = Math.hypot(tx, tz) || 1, d = (rand() < 0.5 ? -1 : 1) * (d0 + (d1 - d0) * rand()), al = (rand() - 0.5) * 3;
     const x = P[i][0] + (tz / l) * d + (tx / l) * al, z = P[i][1] - (tx / l) * d + (tz / l) * al;
-    if (underOk(x, z, d0 - 0.2) && !nearAny(taken, x, z, gap)) { pts.push([x, z]); takeAt(taken, x, z); }
+    if (underOk(x, z, d0 - 0.2) && !nearAny(taken, x, z, gap) && (!keep || keep(x, z))) { pts.push([x, z]); takeAt(taken, x, z); }
   }
   return pts;
 }
@@ -1128,9 +1147,10 @@ async function scatterPoints(rand, n, r0, r1, gap, center, taken) {
 async function plantUnderstory(center) {
   const [b1, b3, grass] = await Promise.all([...BUSH_URLS, GRASS_URL].map(loadPlant)); lastYield = performance.now(); // 等下载不算卡
   const rand = rng(53), f = lite ? 0.6 : 1, taken = [], gtaken = [];
-  await maybeYield(); // 路两边：灌木 3–6m 成排但留缝，草紧贴 2.4–5m
-  plantUnder(b1, await roadsidePoints(rand, 130 * f, 3, 6, 1.7, taken), rand, 0.9, 1.7, 0.25, true);
-  plantUnder(b3, await roadsidePoints(rand, 100 * f, 3, 6.5, 1.7, taken), rand, 0.8, 1.5, 0.25, true);
+  await maybeYield(); // 路两边：灌木按 18m 级噪声成团（10-31，用户：原来 3–6m 均匀一排像绿化带），团里密、团外空，有的贴路缘（中心 ≥2.2m：再近灌木的碰撞半径会盖住路，navmap 测出路点走不到）有的离路 9m；大小差三倍；草紧贴 2.4–5m
+  const clump = (x, z) => vnoise(x / 18 + 5.3, z / 18 - 2.1) > 0.58 || vnoise(x / 5 - 1.7, z / 5 + 8.2) > 0.9;
+  plantUnder(b1, await roadsidePoints(rand, 130 * f, 2.2, 9, 1.2, taken, 130, clump), rand, 0.5, 1.9, 0.25, true);
+  plantUnder(b3, await roadsidePoints(rand, 100 * f, 2.2, 9, 1.2, taken, 130, clump), rand, 0.45, 1.7, 0.25, true);
   plantUnder(grass, await roadsidePoints(rand, 330 * f, 2.4, 5, 1.0, gtaken), rand, 0.35, 0.7, 0.03, false);
   await maybeYield(); // 密灌丛：灌木间距 1.0m、个头大，挤成一堵墙；脚下铺草
   const bt = [], gt = [];
@@ -1206,11 +1226,11 @@ async function plantForest(center, y) {
   await maybeYield(); plant(autumn, await ringPoints(rand, 80 * f, 20, 65, 2.4, center, taken), rand, 4, 8.5, y);
   await maybeYield(); plant(dead, await ringPoints(rand, 25 * f, 20, 65, 3, center, taken), rand, 4, 7.5, y);  // 零星几棵枯树
   { const r2 = rng(71); // 小屋外一圈加密（10-31，用户：小屋旁树太少）：另用一个随机数，上面各组位置不变；路/踪迹/视线/首页视角照旧由 ringPoints、crownRoom、clearOrbitView 让开
-    await maybeYield(); plant(pine, await ringPoints(r2, 40 * f, 9, 28, 3, center, taken), r2, 3, 8, y);
-    await maybeYield(); plant(pines, await ringPoints(r2, 10 * f, 10, 28, 4, center, taken), r2, 4, 6.5, y);
-    await maybeYield(); plant(autumn, await ringPoints(r2, 14 * f, 9, 28, 3, center, taken), r2, 3, 6.5, y); }
+    await maybeYield(); plant(pine, await ringPoints(r2, 75 * f, 7.5, 28, 2.6, center, taken), r2, 3, 8, y); // 10-31 第二轮：9 → 7.5m 起、64 → 115 棵（离屋近的由 fit 缩成小树）
+    await maybeYield(); plant(pines, await ringPoints(r2, 14 * f, 9, 28, 4, center, taken), r2, 4, 6.5, y);
+    await maybeYield(); plant(autumn, await ringPoints(r2, 26 * f, 7.5, 28, 2.6, center, taken), r2, 3, 6.5, y); }
   const n0 = scene.children.length; // 下面这组远处细模（约 240 万面）收进 FAR_DETAIL：只在开场、或镜头离小屋 45m 外时显示（平时在屋子附近，面数同原来）
-  await maybeYield(); plant(pine, await bandPoints(rand, 300 * f, 2.8, 12, 2.2, taken), rand, 3.5, 8.5, y);    // 路远段两边贴路一排（同 pathSidePoints）
+  await maybeYield(); plant(pine, await bandPoints(rand, 300 * f, 1.8, 12, 2.2, taken), rand, 3.5, 8.5, y);    // 路远段两边贴路一排（同 pathSidePoints；10-31 起点 2.8 → 1.8，原来实际被 5m 留空挡在 5m 外）
   await maybeYield(); plant(pine, await bandPoints(rand, 500 * f, 9, 60, 2.4, taken), rand, 4, 9.5, y);       // 开场沿路飞过的一带：细模（原来 65m 外全是简化圆锥）
   await maybeYield(); plant(autumn, await bandPoints(rand, 180 * f, 9, 60, 2.4, taken), rand, 4, 8.5, y);
   await maybeYield(); plant(pines, await bandPoints(rand, 60 * f, 9, 60, 5, taken), rand, 5.5, 8, y);
