@@ -979,9 +979,8 @@ async function cullHidden(sets, y) {
   const base = sets.map((set) => { const b = total; total += set[0].count; for (const o of set) use(o, mat(b)); return b; });
   const seen = new Uint8Array(total + 1), cam = new THREE.PerspectiveCamera(70, W / H, 0.5, 450); cam.layers.set(LAY); // 视场比开场（58–62°、16:9）宽一圈，容得下引导线日后小改和宽屏
   const views = [], [dx, dz] = WATER.dockDir, [kx, kz] = WATER.dock, L = pathCurve.getLength(), gy = y, c = forestCenter;
-  const hOf = (d) => { const k = THREE.MathUtils.clamp((140 - d) / 70, 0, 1); return DOCK_LO + (DOCK_HI - DOCK_LO) * (1 - k * k * k * (k * (k * 6 - 15) + 10)); };
   const pts = [110, 55].map((k) => new THREE.Vector3(kx + dx * k, gy + DOCK_HI, kz + dz * k));
-  for (let d = L - 5; d > DOCK_E; d -= d > 150 ? 40 : 5) { const p = pathCurve.getPointAt(d / L); pts.push(new THREE.Vector3(p.x, gy + hOf(d), p.z)); }
+  for (let d = L - 5; d > DOCK_E; d -= dockStep(d)) { const p = pathCurve.getPointAt(d / L); pts.push(new THREE.Vector3(p.x, gy + dockH(d), p.z)); }
   const guide = new THREE.CatmullRomCurve3(pts, false, 'centripetal'), Lg = guide.getLength();
   for (let s = 0; s <= Lg; s += 6) { const u = s / Lg, p = guide.getPointAt(u), h = (p.y - gy - DOCK_LO) / (DOCK_HI - DOCK_LO), ahead = THREE.MathUtils.lerp(14, 60, h);
     const look = guide.getPointAt(Math.min(1, u + ahead / Lg)); look.y = p.y - ahead * THREE.MathUtils.lerp(0.04, 0.32, h); if (u + ahead / Lg > 1) look.set(c.x, gy + 1.5, c.z); views.push([p, look, 450, 1]); }
@@ -3915,19 +3914,22 @@ const smoothstep = (a, b, x) => { const t = THREE.MathUtils.clamp((x - a) / (b -
 // → 绕过 S 弯看到前面一前一后走着的两人 → 减速到和走路一样（1m/s）停在稽查身后 → 跟着他走、水平先到高度后到，落进他的眼睛（同 sliceEye），交给 sliceStart。
 // 两人从开场一开始就在林子里沿路走（不在码头上）；起点按镜头到 DOCK_E 的时间倒推，保证镜头追上时正好在他身后 DOCK_GAP 米。
 const DOCK_E = 14, DOCK_GAP = 4.5, DOCK_HI = 30, DOCK_LO = 2.6, DOCK_WALK = 0.9; // DOCK_WALK：实测沿路走的速度（一段段 walk 任务，比 WALK_SPEED 略慢）
+// 离小屋 230m 起往下降，70m 处到底（smootherstep；原来 140→70m，那时速度还有 20+m/s，竖直速度峰值 12.6m/s，用户说像掉下去）
+function dockH(d) { const k = THREE.MathUtils.clamp((230 - d) / 160, 0, 1); return DOCK_LO + (DOCK_HI - DOCK_LO) * (1 - k * k * k * (k * (k * 6 - 15) + 10)); }
+const dockStep = (d) => dockH(d) > DOCK_HI - 1 ? 40 : 5; // 引导线取点间距：还没开始降时 40m 一点（不跟小弯），降下来就 5m 一点贴着路中线
 function pathSide(d, side) { const L = pathCurve.getLength(), u = THREE.MathUtils.clamp(d / L, 0, 1), p = pathCurve.getPointAt(u), t = pathCurve.getTangentAt(u); return { x: p.x - t.z * side, z: p.z + t.x * side }; } // 卵石路上离起点 d 米、偏中线 side 米的点
 function startDockIntro() {
   const m = people.get('person_man'), w = people.get('person_woman'), gy = ground.position.y, [dx, dz] = WATER.dockDir, [kx, kz] = WATER.dock;
-  const L = pathCurve.getLength(), hOf = (d) => { const k = THREE.MathUtils.clamp((140 - d) / 70, 0, 1); return DOCK_LO + (DOCK_HI - DOCK_LO) * (1 - k * k * k * (k * (k * 6 - 15) + 10)); }; // 离小屋 140m 起往下降，70m 处到底
+  const L = pathCurve.getLength();
   const pts = [], dsv = [];
   for (const k of [110, 55]) pts.push(new THREE.Vector3(kx + dx * k, gy + DOCK_HI, kz + dz * k)); // 湖面上空，朝码头
-  for (let d = L - 5; d > DOCK_E; d -= d > 150 ? 40 : 5) { const p = pathCurve.getPointAt(d / L); pts.push(new THREE.Vector3(p.x, gy + hOf(d), p.z)); } // 高处 40m 一点（不跟小弯），低处 5m 一点（贴着路中线）
+  for (let d = L - 5; d > DOCK_E; d -= dockStep(d)) { const p = pathCurve.getPointAt(d / L); pts.push(new THREE.Vector3(p.x, gy + dockH(d), p.z)); } // 高处 40m 一点（不跟小弯），低处 5m 一点（贴着路中线）
   const pe = pathCurve.getPointAt(DOCK_E / L); pts.push(new THREE.Vector3(pe.x, gy + DOCK_LO, pe.z));
   const guide = new THREE.CatmullRomCurve3(pts, false, 'centripetal'), Lg = guide.getLength();
   // 速度表：起步 6m/s 加速到高空 28m/s，降下来时按高度减到 7m/s，最后 18m 减到走路速度（接跟随段不顿）
   const N = 1200, S = [0], P = [];
   const vAt = (f, y) => { const s = f * Lg, up = Math.min(1, s / 50), h = (y - gy - DOCK_LO) / (DOCK_HI - DOCK_LO), end = THREE.MathUtils.clamp((Lg - s) / 18, 0, 1);
-    const cruise = 7 + 21 * Math.pow(Math.max(0, h), 0.8); return Math.max(DOCK_WALK, (6 + (cruise - 6) * up) * (end * end * (3 - 2 * end)) + DOCK_WALK * (1 - end)); };
+    const cruise = 7 + 21 * Math.pow(Math.max(0, h), 1.3); return Math.max(DOCK_WALK, (6 + (cruise - 6) * up) * (end * end * (3 - 2 * end)) + DOCK_WALK * (1 - end)); };
   for (let i = 0; i <= N; i++) { const p = guide.getPointAt(i / N); P.push(p); if (i) S.push(S[i - 1] + p.distanceTo(P[i - 1]) / ((vAt(i / N, p.y) + vAt((i - 1) / N, P[i - 1].y)) / 2)); }
   const TE = S[N], D0 = DOCK_E - DOCK_GAP + TE * DOCK_WALK;
   for (const q of [m, w]) q.roam = q.next = 1e9;
