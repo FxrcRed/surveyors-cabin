@@ -4248,7 +4248,7 @@ renderer.setAnimationLoop(() => {
   updateSky(dt);
   // 拉远时雾也往后退，不然小屋会被雾吞掉；森林种到 260m，再远就淡进天空
   const camD = camera.position.distanceTo(controls.target);
-  scene.fog.near = Math.max(30, camD * 0.8); scene.fog.far = Math.min(Math.max(160, camD * 1.6), 300);
+  scene.fog.far = Math.min(Math.max(160, camD * 1.6), 300); scene.fog.near = Math.min(Math.max(30, camD * 0.8), scene.fog.far * 0.8); // near 不超过 far：开场起点离小屋约 388m，原来 near 310 > far 300，雾反过来盖满近处（开头几帧下半一片米色）
   const wc = wx.cur; // 天气的雾：按 fogK 混过去；far 至少比相机距离远一截，拉远也看得到小屋
   scene.fog.near += (wc.near - scene.fog.near) * wc.fogK;
   scene.fog.far += (Math.max(wc.far, camD + wc.far * 0.5) - scene.fog.far) * wc.fogK;
