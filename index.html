@@ -501,8 +501,14 @@ function matchGround(center) {
       // 草地整体再压暗 20%；离院子越远越暗（8m 起、60m 外只剩 55%），像林下见不到光；加 20m 级的大块明暗，远处不呆板
       float far = smoothstep(8.0, 60.0, dy);
       float blot = 0.88 + 0.12 * sin(vGPos.x * 0.07 + 1.3) * sin(vGPos.y * 0.09 + 0.4);
-      diffuseColor.rgb *= mix(1.0, 0.8, k) * mix(1.0, 0.55 * blot, far);`);
-    sh.fragmentShader = 'uniform sampler2D uGrass;\nuniform vec2 uCenter;\nuniform vec2 uHalf;\n' + sh.fragmentShader;
+      diffuseColor.rgb *= mix(1.0, 0.8, k) * mix(1.0, 0.55 * blot, far);
+      // 湖岸湿泥带（10-31）：岸线外 ~6m 由湿到干（宽度随噪声起伏），越近水越深越亮滑；岸线内是水下泥底（近岸水半透明，看得到）
+      float lk = shoreK(vGPos - uLake.xy, uLake), lw = 1.0 - smoothstep(0.995, 1.06 + 0.04 * nz, lk);
+      float gl = dot(diffuseColor.rgb, vec3(0.3, 0.59, 0.11)); // 按原地面亮度换成褐色再压暗（湖边地面已被上面压到 55%，给绝对色会比草地还亮）
+      diffuseColor.rgb = mix(diffuseColor.rgb, gl * vec3(0.95, 0.75, 0.5) * mix(0.75, 0.45, smoothstep(1.03, 0.99, lk)), lw);`);
+    sh.uniforms.uLake = { value: new THREE.Vector3(...(WATER.lake || [1e6, 1e6, 1])) };
+    sh.fragmentShader = 'uniform sampler2D uGrass;\nuniform vec2 uCenter;\nuniform vec2 uHalf;\nuniform vec3 uLake;\n' + SHORE_GLSL + sh.fragmentShader
+      .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\n  roughnessFactor = mix(roughnessFactor, 0.45, lw); // 湿泥反一点光');
     groundCover(sh);
   };
   ground.material = mat;
@@ -540,6 +546,11 @@ function grassTexture() { // 程序生成的草地贴图（可平铺，8m 一块
 // 小路从院子边沿 +z 方向弯弯曲曲伸进林子，同一卵石贴图；返回路中心线上的点，种树时避开
 const pathClear = [], trailClear = [], WATER = { lake: null, river: [] }; // WATER.lake = [x, z, 半径]；river = 河中心线点（种树避开）
 const lakeD = (x, z) => WATER.lake ? Math.hypot((x - WATER.lake[0]) / 1.35, (z - WATER.lake[1]) / 0.85) : 1e9; // 到湖心的「椭圆距离」，和半径 WATER.lake[2] 同单位；湖岸起伏 ±19%，留空按 1.2r + 余量算（原来 1.6r 是小湖时定的，大湖会空出 50m 一圈）
+// 岸线：角度 a 方向「岸 / 名义半径」的倍数。两层低频大起伏 + 两层高频小湾小岬（10-31 加，原来只有前两项，岸是光滑大弧）；GLSL 版给水面、地面着色器用
+const shoreR = (a) => 1 + 0.12 * Math.sin(a * 3 + 1) + 0.07 * Math.sin(a * 5) + 0.03 * Math.sin(a * 13 + 2) + 0.018 * Math.sin(a * 23 + 4.1);
+const SHORE_GLSL = `float shoreK(vec2 d, vec3 L) { float u = d.x / 1.35, v = -d.y / 0.85, a = atan(v, u);
+  return length(vec2(u, v)) / (L.z * (1.0 + 0.12 * sin(a * 3.0 + 1.0) + 0.07 * sin(a * 5.0) + 0.03 * sin(a * 13.0 + 2.0) + 0.018 * sin(a * 23.0 + 4.1))); }
+`;
 let pathCurve = null, trailCurve = null;
 const OUTDOOR = [], XSHIFT = new THREE.Vector2(); // 走到 ✕ 时要一起平移的屋外物件；XSHIFT = ✕ 那间屋在自家坐标里的位置
 function extendPath() {
@@ -609,7 +620,7 @@ float ln(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
   scene.add(leaves);
 
   // 湖 + 河：平面就够（雾里看个形状）；路的尽头伸进湖边
-  const water = new THREE.MeshStandardMaterial({ color: '#3d4b52', roughness: 0.12, metalness: 0.2, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -6 });
+  const water = new THREE.MeshStandardMaterial({ color: '#3d4b52', roughness: 0.12, metalness: 0.2, transparent: true /* 近岸半透明露出泥底 */, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -6 });
   const [lx, lz, lr] = WATER.lake, sh = new THREE.Shape();
   // 水面（2026-10-31，用户：做精致、波纹别规律）：不加实时反射（整个场景多画一遍，手机扛不住），只在着色器里扰动法线 + 斜看混雾色当天空反光 + 近岸变浅。
   // 波纹 = 三层值噪声、各自往不同方向漂，坐标先用低频噪声扭一下（不会排成一排排）；再用一层极慢的大尺度噪声决定哪片起风哪片平静
@@ -618,7 +629,7 @@ float ln(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
     Object.assign(s.uniforms, water.userData.u);
     s.vertexShader = 'varying vec3 vWP;\n' + s.vertexShader.replace('#include <project_vertex>', '#include <project_vertex>\n  vWP = (modelMatrix * vec4(transformed, 1.0)).xyz;');
     s.fragmentShader = `varying vec3 vWP; uniform float uT; uniform vec3 uLake;
-float wHash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
+${SHORE_GLSL}float wHash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
 float wNoise(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
   return mix(mix(wHash(i), wHash(i + vec2(1, 0)), f.x), mix(wHash(i + vec2(0, 1)), wHash(i + vec2(1, 1)), f.x), f.y); }
 float wH(vec2 p) { vec2 q = p + 3.0 * vec2(wNoise(p * 0.06 + uT * 0.03), wNoise(p * 0.06 + 7.3 - uT * 0.025));
@@ -628,18 +639,19 @@ float wH(vec2 p) { vec2 q = p + 3.0 * vec2(wNoise(p * 0.06 + uT * 0.03), wNoise(
   float wAmp = mix(0.12, 1.0, smoothstep(0.3, 0.75, wNoise(vWP.xz * 0.012 + vec2(uT * 0.006, -uT * 0.004))));
   float h0 = wH(vWP.xz), hx = wH(vWP.xz + vec2(0.15, 0.0)), hz = wH(vWP.xz + vec2(0.0, 0.15));
   normal = normalize((viewMatrix * vec4(normalize(vec3(-(hx - h0) / 0.15 * wAmp, 1.0, -(hz - h0) / 0.15 * wAmp)), 0.0)).xyz);`)
-      .replace('#include <fog_fragment>', `{ vec2 d = vWP.xz - uLake.xy; float u = d.x / 1.35, v = -d.y / 0.85, a = atan(v, u);
-    float k = length(vec2(u, v)) / (uLake.z * (1.0 + 0.12 * sin(a * 3.0 + 1.0) + 0.07 * sin(a * 5.0))), inL = 1.0 - step(1.08, k); // 只对湖：k = 离湖心 / 那个方向的岸
+      .replace('#include <fog_fragment>', `{ float k = shoreK(vWP.xz - uLake.xy, uLake), inL = 1.0 - step(1.08, k); // 只对湖：k = 离湖心 / 那个方向的岸
     gl_FragColor.rgb *= mix(1.0, 0.78, inL * (1.0 - smoothstep(0.25, 0.75, k))); // 湖心深一点
-    gl_FragColor.rgb = mix(gl_FragColor.rgb, vec3(0.36, 0.40, 0.33), inL * smoothstep(0.84, 1.0, k) * 0.6); // 近岸浅水，泛泥绿
+    gl_FragColor.rgb = mix(gl_FragColor.rgb, vec3(0.045, 0.05, 0.032), inL * smoothstep(0.84, 1.0, k) * 0.6); // 近岸浅水，泛泥绿（线性值；原 0.36/0.40/0.33 显示出来是一圈灰白）
+    gl_FragColor.a = mix(1.0, 0.4, inL * smoothstep(0.93, 0.995, k)); // 最外 ~6m 变透，看得到水下泥底（地面着色器把岸线内外涂成湿泥）
+    gl_FragColor.rgb += 0.035 * inL * smoothstep(0.985, 0.997, k) * (1.0 - smoothstep(0.997, 1.0, k)); // 水线一条细亮边（水膜反光）
     float fr = pow(1.0 - clamp(dot(normal, normalize(vViewPosition)), 0.0, 1.0), 4.0);
 #ifdef USE_FOG
-    gl_FragColor.rgb = mix(gl_FragColor.rgb, fogColor, fr * 0.6); // 斜看映出天色
+    gl_FragColor.rgb = mix(gl_FragColor.rgb, mix(fogColor, vec3(0.018, 0.022, 0.014), inL * smoothstep(0.82, 0.97, k)), fr * 0.6); // 斜看映出天色；近岸映的是岸上那排深色树林（假倒影，10-31；原来近岸一圈灰白）
 #endif
   }
 #include <fog_fragment>`);
   };
-  for (let i = 0; i <= 48; i++) { const a = i / 48 * Math.PI * 2, r = lr * (1 + 0.12 * Math.sin(a * 3 + 1) + 0.07 * Math.sin(a * 5)); sh[i ? 'lineTo' : 'moveTo'](Math.cos(a) * r * 1.35, Math.sin(a) * r * 0.85); }
+  for (let i = 0; i <= 240; i++) { const a = i / 240 * Math.PI * 2, r = lr * shoreR(a); sh[i ? 'lineTo' : 'moveTo'](Math.cos(a) * r * 1.35, Math.sin(a) * r * 0.85); }
   const lake = new THREE.Mesh(new THREE.ShapeGeometry(sh).rotateX(-Math.PI / 2), water);
   lake.position.set(lx, P.y + 0.01, lz); lake.name = 'lake'; scene.add(lake);
   // 浮冰（2026-10-31）：只在暴雪天出现；3 种不规则多边形冰片（挤出 0.18m），每块绕自己的起点慢慢漂、慢慢转。挂在湖下面，湖跟着世界平移
@@ -648,7 +660,7 @@ float wH(vec2 p) { vec2 q = p + 3.0 * vec2(wNoise(p * 0.06 + uT * 0.03), wNoise(
       for (let i = 0; i < n; i++) { const a = (i + (rand() - 0.5) * 0.6) / n * Math.PI * 2, r = 0.6 + 0.4 * rand(); sp[i ? 'lineTo' : 'moveTo'](Math.cos(a) * r, Math.sin(a) * r); }
       ims.push(new THREE.InstancedMesh(new THREE.ExtrudeGeometry(sp, { depth: 0.18, bevelEnabled: false }).rotateX(-Math.PI / 2), mat, 24)); }
     const fl = [];
-    for (let i = 0; i < 72; i++) { const a = rand() * Math.PI * 2, k = 0.15 + 0.78 * Math.sqrt(rand()), r = lr * k * (1 + 0.12 * Math.sin(a * 3 + 1) + 0.07 * Math.sin(a * 5));
+    for (let i = 0; i < 72; i++) { const a = rand() * Math.PI * 2, k = 0.15 + 0.78 * Math.sqrt(rand()), r = lr * k * shoreR(a);
       fl.push({ im: ims[i % 3], j: Math.floor(i / 3), x: Math.cos(a) * r * 1.35, z: -Math.sin(a) * r * 0.85, s: 0.8 + 3 * rand() ** 2, sx: 0.6 + 0.8 * rand(), yaw: rand() * 6.28, R: 0.8 + 2.5 * rand(), w: (rand() < 0.5 ? -1 : 1) * (0.004 + 0.01 * rand()), ph: rand() * 6.28 }); }
     for (const im of ims) { im.visible = false; im.frustumCulled = false; im.receiveShadow = true; im.name = 'ice'; lake.add(im); }
     WATER.ice = { ims, fl, k: 0, o: new THREE.Object3D() }; }
@@ -661,7 +673,7 @@ float wH(vec2 p) { vec2 q = p + 3.0 * vec2(wNoise(p * 0.06 + uT * 0.03), wNoise(
   // 码头 + 船（2026-10-30，用户：两人坐船来）：路尽头 (124,244) 朝湖心走，找到岸线，码头从岸上 3m 伸进水 11m；船泊在码头末端右侧。全用方块和一个挤出的船壳，不下载模型
   {
     const p0 = new THREE.Vector2(x0 + 124, z0 + 244), d = new THREE.Vector2(lx - p0.x, lz - p0.y).normalize(), nrm = new THREE.Vector2(-d.y, d.x);
-    const inLake = (x, z) => { const u = (x - lx) / 1.35, v = -(z - lz) / 0.85, a = Math.atan2(v, u); return Math.hypot(u, v) < lr * (1 + 0.12 * Math.sin(a * 3 + 1) + 0.07 * Math.sin(a * 5)); };
+    const inLake = (x, z) => { const u = (x - lx) / 1.35, v = -(z - lz) / 0.85, a = Math.atan2(v, u); return Math.hypot(u, v) < lr * shoreR(a); };
     let ts = 0; while (ts < 80 && !inLake(p0.x + d.x * ts, p0.y + d.y * ts)) ts += 0.25; // 岸线离路尽头的距离
     const wood = new THREE.MeshStandardMaterial({ color: '#6a4a2c', roughness: 0.9, flatShading: true }), dark = new THREE.MeshStandardMaterial({ color: '#4a3320', roughness: 0.9, flatShading: true });
     const wy = P.y + 0.01, dock = new THREE.Group(); dock.name = 'dock';
@@ -987,7 +999,8 @@ function fpShrubs(o) { // 灌木也是 InstancedMesh：和 fpTrees 一样按位�
   }
 }
 const STEEP = 0.5; // 坡度（m/m）超过这个走不上去（洼地的壁）
-function plantUnder(parts, pts, rand, hMin, hMax, sink, block) { // 灌木/草：保持模型原有长宽比（只有 ±12% 的胖瘦），不拉高
+const SHORE_GRASS = [[0x22301d, 0.35], [0x2b3b23, 0.35], [0x34452a, 0.2], [0x414a2e, 0.1]]; // 岸边草（10-31）：比 BUSHES 深、偏绿；原来混着黄褐两档，阴天看像枯稻草
+function plantUnder(parts, pts, rand, hMin, hMax, sink, block, pal = BUSHES) { // 灌木/草：保持模型原有长宽比（只有 ±12% 的胖瘦），不拉高
   const tint = new THREE.Color(), m = new THREE.Matrix4(), q = new THREE.Quaternion(), s = new THREE.Vector3(), p = new THREE.Vector3(), up = new THREE.Vector3(0, 1, 0);
   const ims = parts.map(({ geometry, material }) => new THREE.InstancedMesh(geometry, material, pts.length)), asp = (parts.radius || 0.5) * 2; // 宽 / 高
   pts.forEach(([x, z], i) => {
@@ -995,7 +1008,7 @@ function plantUnder(parts, pts, rand, hMin, hMax, sink, block) { // 灌木/草�
     m.compose(p.set(x, terrainH(x, z) - sink, z), q.setFromAxisAngle(up, rand() * Math.PI * 2), s.set(w, h, w));
     if (block && w * asp * 0.5 > 0.4) SHRUB_XZ.push(x, z, w * asp * 0.4);
     ims.forEach((im) => im.setMatrixAt(i, m));
-    let u = rand(), c = BUSHES.find(([, k]) => (u -= k) < 0) || BUSHES[0];
+    let u = rand(), c = pal.find(([, k]) => (u -= k) < 0) || pal[0];
     tint.set(c[0]).multiplyScalar(0.9 + 0.2 * rand()); ims.forEach((im) => im.setColorAt(i, tint));
   });
   ims.forEach((im) => { im.computeBoundingSphere(); im.name = 'forest'; scene.add(im); OUTDOOR.push(im); });
@@ -1056,31 +1069,35 @@ async function plantUnderstory(center) {
 // 只种开场看得到的一段岸（introSees），离卵石路/码头 3m 外。s = 沿那个方向「离湖心 / 岸线」的倍数：<1 在水里
 async function plantShore(rand, f, b1, b3, grass, taken, gtaken) { // 2026-10-31 用户：岸边太稀 → 芦苇 ×1.5、石头 ×3（加小卵石）、灌木 ×1.7、草 ×3
   const [lx, lz, lr] = WATER.lake, gy = ground.position.y;
-  const at = (s) => { for (let t = 0; t < 30; t++) { const a = rand() * Math.PI * 2, r = lr * (1 + 0.12 * Math.sin(a * 3 + 1) + 0.07 * Math.sin(a * 5)) * s(), x = lx + Math.cos(a) * r * 1.35, z = lz - Math.sin(a) * r * 0.85;
-    if (introSees(x, z) && !nearAny(pathClear, x, z, 3)) return [x, z]; } return null; };
+  const pos = (a, s) => { const r = lr * shoreR(a) * s; return [lx + Math.cos(a) * r * 1.35, lz - Math.sin(a) * r * 0.85]; }, okP = (p) => introSees(p[0], p[1]) && !nearAny(pathClear, p[0], p[1], 3);
+  const at = (s) => { for (let t = 0; t < 30; t++) { const p = pos(rand() * Math.PI * 2, s()); if (okP(p)) return p; } return null; };
+  // 成片（10-31，查资料：挺水植物按水深成片长，不是均匀一圈）：n 段岸，每段 [中心角, 半宽角]，半宽 m0–m1 米
+  const patches = (n, m0, m1) => { const out = []; for (let t = 0; t < n * 20 && out.length < n; t++) { const a = rand() * Math.PI * 2; if (okP(pos(a, 1))) out.push([a, (m0 + rand() * (m1 - m0)) / (lr * 1.1)]); } return out; };
+  const inPatch = (ps, s) => { for (let t = 0; t < 10 && ps.length; t++) { const [a0, w] = ps[Math.floor(rand() * ps.length)], p = pos(a0 + (rand() + rand() - 1) * w, s()); if (okP(p)) return p; } return null; };
   const grp = new THREE.Group(); grp.name = 'shore'; const o = new THREE.Object3D(), col = new THREE.Color();
-  // 芦苇：一根三棱细锥，一丛 4–7 根，往外歪；岸线内外各一点（水里那几根更显眼）
+  // 芦苇：一根三棱细锥，一丛 7–11 根，往外歪；集中在 40 片浅水里（岸线往里 0–6m），片与片之间空着
   const reedG = new THREE.ConeGeometry(0.045, 1, 3).translate(0, 0.5, 0), clumps = Math.round(480 * f), reeds = new THREE.InstancedMesh(reedG, new THREE.MeshStandardMaterial({ roughness: 0.9, flatShading: true }), clumps * 11);
-  let n = 0;
-  for (let c = 0; c < clumps; c++) { const p = at(() => 0.96 + rand() * 0.09); if (!p) continue; const k = 7 + Math.floor(rand() * 5);
+  let n = 0; const reedP = patches(40, 5, 18);
+  for (let c = 0; c < clumps; c++) { const p = inPatch(reedP, () => 0.94 + rand() * 0.075); if (!p) continue; const k = 7 + Math.floor(rand() * 5);
     for (let i = 0; i < k; i++) { const x = p[0] + (rand() - 0.5) * 0.6, z = p[1] + (rand() - 0.5) * 0.6, h = 0.7 + rand() * 0.9;
       o.position.set(x, gy - 0.05, z); o.rotation.set((rand() - 0.5) * 0.35, rand() * 6.28, (rand() - 0.5) * 0.35); o.scale.set(1, h, 1); o.updateMatrix(); reeds.setMatrixAt(n, o.matrix);
-      reeds.setColorAt(n++, col.setHSL(0.16 + rand() * 0.06, 0.25 + rand() * 0.12, 0.16 + rand() * 0.10)); } }
+      reeds.setColorAt(n++, col.setHSL(0.17 + rand() * 0.07, 0.3 + rand() * 0.15, 0.2 + rand() * 0.12, THREE.SRGBColorSpace)); } } // 10-31 按 sRGB 给、偏绿（原来按线性空间给，显示成浅黄白）
   reeds.count = n; grp.add(reeds);
   // 石头：二十面体顶点打乱一次，压扁，半埋；有的在水里露个头
   const rockG = new THREE.IcosahedronGeometry(1, 0), rp = rockG.attributes.position;
   for (let i = 0; i < rp.count; i++) { const v = new THREE.Vector3().fromBufferAttribute(rp, i), j = 0.75 + 0.5 * wHash01(v.x * 7.1 + v.y * 3.3 + v.z * 5.7); rp.setXYZ(i, v.x * j, v.y * j, v.z * j); }
   rockG.computeVertexNormals(); const nr = Math.round(450 * f), rocks = new THREE.InstancedMesh(rockG, new THREE.MeshStandardMaterial({ roughness: 0.95, flatShading: true }), nr); n = 0;
-  for (let i = 0; i < nr; i++) { const p = at(() => 0.97 + rand() * 0.13); if (!p) continue; const sz = rand() < 0.4 ? 0.08 + rand() * 0.12 : 0.25 + rand() ** 2 * 0.9; // 四成是小卵石
+  const rockP = patches(18, 2, 6); // 四成石头挤在 18 处石岬，伸进水里
+  for (let i = 0; i < nr; i++) { const p = i % 5 < 2 ? inPatch(rockP, () => 0.95 + rand() * 0.08) : at(() => 0.97 + rand() * 0.13); if (!p) continue; const sz = rand() < 0.4 ? 0.08 + rand() * 0.12 : 0.25 + rand() ** 2 * 0.9; // 四成是小卵石
     o.position.set(p[0], gy - sz * 0.35, p[1]); o.rotation.set(rand() * 3, rand() * 6.28, rand() * 3); o.scale.set(sz * (0.9 + rand() * 0.6), sz * (0.45 + rand() * 0.3), sz * (0.9 + rand() * 0.6)); o.updateMatrix(); rocks.setMatrixAt(n, o.matrix);
-    rocks.setColorAt(n++, col.setHSL(0.08 + rand() * 0.05, 0.06 + rand() * 0.06, 0.13 + rand() * 0.09)); }
+    rocks.setColorAt(n++, col.setHSL(0.08 + rand() * 0.05, 0.06 + rand() * 0.06, 0.22 + rand() * 0.12, THREE.SRGBColorSpace)); } // 10-31：setHSL 默认按线性空间，原 L 0.13–0.22 实际显示成 sRGB 0.4–0.5，晴天发白；改按 sRGB 给
   rocks.count = n; rocks.receiveShadow = true; grp.add(rocks); await maybeYield();
   scene.add(grp); OUTDOOR.push(grp);
   // 岸上一圈灌木和草（同林下那套模型）
   const pts = (m, s0, s1, tk = taken, gap = 1.6) => { const out = []; for (let i = 0; i < m; i++) { const p = at(() => s0 + rand() * (s1 - s0)); if (p && !nearAny(tk, p[0], p[1], gap)) { out.push(p); takeAt(tk, ...p); } } return out; };
   plantUnder(b1, pts(Math.round(150 * f), 1.06, 1.4), rand, 0.8, 1.6, 0.25, true);
   plantUnder(b3, pts(Math.round(130 * f), 1.05, 1.4), rand, 0.7, 1.4, 0.25, true);
-  plantUnder(grass, pts(Math.round(1100 * f), 1.02, 1.4, gtaken, 0.9), rand, 0.35, 0.7, 0.03, false);
+  plantUnder(grass, pts(Math.round(1100 * f), 1.02, 1.4, gtaken, 0.9), rand, 0.35, 0.7, 0.03, false, SHORE_GRASS);
 }
 function wHash01(v) { const s = Math.sin(v * 12.9898) * 43758.5453; return s - Math.floor(s); }
 
