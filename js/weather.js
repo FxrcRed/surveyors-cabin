@@ -579,5 +579,7 @@ function updateRoofWeather(dt) {
 }
 
 
+{ const q = (location.search.match(/[?&]wx=(\w+)/) || [])[1], w = WEATHERS.find((e) => e[0] === q); if (w) { setWeather(q, true); if (w[1].snow) cover.uSnow.value = 1; } } // 试玩 / 无头测试：?wx=Blizzard 定天气，下雪类直接满地积雪
+
 share({ applyWeather: () => applyWeather }); // time-of-day.js 用
 export { applyWeather, wsPos, WS, groundCover, cover, precipHole, setupRoofWeather, wx, roofWx, setWeather, wxTimer, slideSnow, updatePrecip, updateRoofWeather };

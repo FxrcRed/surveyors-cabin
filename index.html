@@ -2349,15 +2349,13 @@ function day2Setup() {
   // 脚印：出门沿卵石路走几步，拐进林间踪迹，一直到雾里（和你的一样大；只出不进）
   { const pl = pathCurve.getLength(), tl = trailCurve.getLength(), at = (c, l, s) => c.getPointAt(Math.min(1, s / l));
     const route = new THREE.CatmullRomCurve3([new THREE.Vector3(D2.door[0], 0, D2.door[1]), at(pathCurve, pl, 0), at(pathCurve, pl, 2.5), ...[5, 9, 14, 20, 27, 34, 42, 50].map((s) => at(trailCurve, tl, s))]);
-    const n = Math.floor(route.getLength() / 0.38), pm = d2Canvas(32, 64, (x, w, h) => { x.fillStyle = '#fff'; x.beginPath(); x.ellipse(16, 22, 11, 19, 0, 0, 7); x.fill(); x.beginPath(); x.ellipse(16, 52, 8, 10, 0, 0, 7); x.fill(); });
-    const im = new THREE.InstancedMesh(new THREE.PlaneGeometry(0.13, 0.3).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ color: '#3a3128', alphaMap: pm, transparent: true, opacity: 0.6, depthWrite: false, roughness: 1, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -8 }), n);
+    const n = Math.floor(route.getLength() / 0.38), pp = printPool();
+    const im = new THREE.InstancedMesh(pp.im.geometry, pp.im.material, n);
     const o = new THREE.Object3D();
     for (let i = 0; i < n; i++) { const u = (i + 0.5) / n, p = route.getPointAt(u), t = route.getTangentAt(u), side = i % 2 ? 1 : -1;
       o.position.set(p.x - t.z * 0.11 * side, ground.position.y + 0.02, p.z + t.x * 0.11 * side); o.rotation.set(0, Math.atan2(-t.x, -t.z), 0); o.updateMatrix(); im.setMatrixAt(i, o.matrix); }
     im.name = 'd2_prints'; im.renderOrder = 2; scene.add(im); OUTDOOR.push(im); d2.prints = im;
-    // 玩家自己的脚印：同一套几何和材质（大小一致才能比），固定 200 个循环复用，走路时 stepPrint 往里写
-    const pool = new THREE.InstancedMesh(im.geometry, im.material, 200); pool.count = 0; pool.frustumCulled = false; pool.name = 'fp_prints'; pool.renderOrder = 2;
-    scene.add(pool); OUTDOOR.push(pool); d2.pool = { im: pool, i: 0, n: 0, side: 1, o: new THREE.Object3D() }; }
+  }
   if (game.day >= 3) day3Setup(); // 小路尽头的老云杉、✕ 那边的灯
 }
 function pathNear(x, z) { // 离小路最近的采样点：{ d 离路中心, s 沿路米数 }
@@ -2856,6 +2854,7 @@ function drawHighlight() {
 // 预热：屋里的物件在屋外被视锥剔除，第一次画到时才编译/上传（原来还有透射缓冲第一次创建）→ 第一次进屋中途卡一下。
 // 加载页揭开前从每个房间视角真实渲染一帧（隐藏的物件也临时显示，雨雪、雪板等第一次出现也不卡）
 async function prewarm() {
+  printPool(); // 脚印材质一起预编译（第一次下雪走路时才建会卡一下）
   // Rhino 导出的灯罩玻璃、灯泡、水、火苗带 transmission：画面里只要有一个，three.js 每帧就把整个场景（含森林）多画一遍到透射缓冲 → 改成普通半透明
   scene.traverse((o) => {
     const m = o.material;
@@ -3425,14 +3424,22 @@ function fpClimb(r, dt, f, run) {
   if (r.position.y <= g && f <= 0) { r.position.y = g; fp.climb = null; }
   else if (r.position.y >= LADDER.top - 0.25 && f > 0 && !C.lock && gateOpen()) fp.climb = { ph: 'board', t: 0, y0: r.position.y };
 }
-function stepPrint(r, moving) { r = r.position; // 野外雪地上每走 0.7m 留一个脚印，左右交替、朝走向
-  const P = d2.pool; if (!P || !moving || !outdoors(r) || cover.uSnow.value < 0.5) return;
-  if (!fp.lp) { fp.lp = r.clone(); return; }
-  const dx = r.x - fp.lp.x, dz = r.z - fp.lp.z, d = Math.hypot(dx, dz);
+// 雪地脚印池（玩家、稽查、书记员共用；第 2 天「只出不进」那串 d2_prints 用同一套几何和材质，大小一致才能比）：固定 400 个循环复用（2026-10-31 起第 1 天下雪时两人走路也留）
+function printPool() {
+  if (d2.pool) return d2.pool;
+  const pm = d2Canvas(32, 64, (x) => { x.fillStyle = '#fff'; x.beginPath(); x.ellipse(16, 22, 11, 19, 0, 0, 7); x.fill(); x.beginPath(); x.ellipse(16, 52, 8, 10, 0, 0, 7); x.fill(); });
+  const im = new THREE.InstancedMesh(new THREE.PlaneGeometry(0.13, 0.3).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ color: '#3a3128', alphaMap: pm, transparent: true, opacity: 0.6, depthWrite: false, roughness: 1, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -8 }), 400);
+  im.count = 0; im.frustumCulled = false; im.name = 'fp_prints'; im.renderOrder = 2; scene.add(im); OUTDOOR.push(im);
+  return (d2.pool = { im, i: 0, n: 0, o: new THREE.Object3D() });
+}
+function stepPrint(r, moving, st = fp) { r = r.position; // 野外雪地上每走 0.7m 留一个脚印，左右交替、朝走向；st 记各人上一步（lp）和左右脚（side）
+  if (!moving || !outdoors(r) || cover.uSnow.value < 0.5) return;
+  if (!st.lp) { st.lp = r.clone(); st.side = 1; return; }
+  const dx = r.x - st.lp.x, dz = r.z - st.lp.z, d = Math.hypot(dx, dz);
   if (d < 0.7) return;
-  const tx = dx / d, tz = dz / d, o = P.o; fp.lp.copy(r); P.side = -P.side;
-  o.position.set(r.x - tz * 0.11 * P.side, r.y + 0.02, r.z + tx * 0.11 * P.side); o.rotation.set(0, Math.atan2(-tx, -tz), 0); o.updateMatrix();
-  P.im.setMatrixAt(P.i, o.matrix); P.i = (P.i + 1) % 200; P.im.count = P.n = Math.min(200, P.n + 1); P.im.instanceMatrix.needsUpdate = true;
+  const P = printPool(), tx = dx / d, tz = dz / d, o = P.o; st.lp.copy(r); st.side = -st.side;
+  o.position.set(r.x - tz * 0.11 * st.side, r.y + 0.02, r.z + tx * 0.11 * st.side); o.rotation.set(0, Math.atan2(-tx, -tz), 0); o.updateMatrix();
+  P.im.setMatrixAt(P.i, o.matrix); P.i = (P.i + 1) % 400; P.im.count = P.n = Math.min(400, P.n + 1); P.im.instanceMatrix.needsUpdate = true;
 }
 function updateFP(dt) {
   const p = fp.p, r = p.root, s = r.scale.x, k = fp.keys;
@@ -4054,6 +4061,7 @@ renderer.setAnimationLoop(() => {
   adaptRes(now, dt);
   updatePeople(dt);
   if (WATER.mat) WATER.mat.userData.u.uT.value = now / 1000;
+  for (const n of ['person_man', 'person_woman']) { const q = people.get(n); if (q && !(fp && fp.p === q)) stepPrint(q.root, true, q); } // 稽查、书记员在雪地上走也留脚印（玩家自己的在 updateFP）
   if (FAR_DETAIL.length) { const v = !!intro || Math.hypot(camera.position.x, camera.position.z) > 45; if (FAR_DETAIL[0].visible !== v) { for (const o of FAR_DETAIL) o.visible = v; for (const o of NEAR_CONES) o.visible = !v; shadowDirty = true; } } // 远处细模：开场或走远时才画
   if (intro) updateIntro(now);
   else if (fly) {
