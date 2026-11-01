@@ -12,8 +12,8 @@ import { shared, share } from './state.js';
 const PEOPLE = [
   // 起居室长沙发右边那块坐垫（x -0.14…0.52，坐面 y 0.69，面朝北边的炉子）；坐姿骨盆在脚后 0.34m、离脚底 0.58m（×scale）
   // scale：原模型连头发 1.81m，偏高偏壮；缩到 0.94 ≈ 1.70m（门 1.97m、阁楼下净高 2.0m）
-  { id: 'person_man', url: 'characters/man.glb', pos: [0.19, 0.25, 0.07], standY: 0.26, yaw: Math.PI, scale: 0.94, mode: 'sit', seat: 'living_sofa',
-    hand: 'characters/hand.glb', handMat: { HandSkin: 'MI_Superhero_Male', HandSleeve: 'M_Shirt' } },
+  { id: 'person_man', url: 'characters/man.glb', pos: [0.19, 0.247, 0.07], standY: 0.26, yaw: Math.PI, scale: 0.94, mode: 'sit', seat: 'living_sofa', sitUp: 0.52, // 2026-11-01 换成 Rhino 里的 Male_Peasant：原来自做衬衫下摆垂到骨盆下 8.7cm，新裤子只到 7.7cm，坐低 0.9cm；pos.y = 0.736 − 0.52×0.94
+    hand: 'characters/hand.glb', handMat: { HandSkin: 'MI_Regular_Male', HandSleeve: 'MI_Peasant' } },
   // 女调查员：Rhino 模型里的 Female_Peasant（服装 + 女性基础人物的头 + Hair_Buns 盘发），Rhino 里 1.60m、scale 0.896。
   // 打开页面随机二选一：阁楼摇椅上看书（Sitting_Read_Loop + Book），或书桌前写笔记（Sitting_Write_Loop + Notebook、Pen）；这两个动作是 Blender 里用 IK 在坐姿上摆的。
   // 她的坐姿骨盆在脚后 0.324、坐面比根节点高 0.444（未缩放，男的是 0.34 / 0.468）。调试：网址带 ?woman=read / ?woman=desk 固定一种。
