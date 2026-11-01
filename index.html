@@ -31,6 +31,8 @@
   #title { --t: 0; position: fixed; top: 18px; left: 16px; right: 16px; z-index: 5; pointer-events: none; text-align: center;
     color: rgb(calc(30 + 220 * var(--t)), calc(26 + 220 * var(--t)), calc(22 + 220 * var(--t)));
     text-shadow: 0 0 6px rgba(calc(255 - 255 * var(--t)), calc(255 - 255 * var(--t)), calc(255 - 255 * var(--t)), .35); }
+  #title { transition: opacity 1.2s; }
+  body:has(#fpHud:not([hidden])) #title { opacity: 0; } /* 第一人称里标题淡出：一直压在画面上方（11-01 评审 #7） */
   #title h1 { margin: 0; font-family: "IM Fell English SC", "IM Fell English", Georgia, serif; font-weight: normal; font-size: var(--fs-xl); letter-spacing: 3px; }
   /* 标题中英都显示：英文主标题，下面一行中文（不随语言切换） */
   html #title h1 .en, html #title h1 .zh { display: block !important; }
@@ -245,7 +247,7 @@
   #wxPanel[hidden] { display: none; }
   #wxPanel button { padding: 5px 2px; font-size: var(--fs-xs); }
   #wxPanel button.on { background: rgba(232,200,154,.3); border-color: #e8c89a; }
-  @media (max-width: 600px) { #subs, #note, #roomNote, #quest:not(.end) { bottom: 140px; font-size: var(--fs-s); } #quest.end { bottom: 140px; } #fpHud .help { bottom: 56px; } #fpHud .help { width: calc(100vw - 32px); box-sizing: border-box; white-space: normal; } #prog { bottom: 116px; } #opening .box { font-size: var(--fs-s); } }
+  @media (max-width: 600px) { #subs, #note, #roomNote, #quest:not(.end) { bottom: 140px; font-size: var(--fs-s); } #quest.end { bottom: 140px; } #fpHud .help { bottom: 78px; } #fpHud .help { width: calc(100vw - 32px); box-sizing: border-box; white-space: normal; } #prog { bottom: 116px; } #opening .box { font-size: var(--fs-s); } }
   @media (max-width: 600px) { body:has(#card:not([hidden])) :is(#quest, #prog) { opacity: 0; } }
   @media (max-width: 600px) { #card { left: 16px; top: 50%; transform: translateY(-50%); width: calc(100vw - 32px); max-height: calc(100vh - 160px); } #rooms { right: 8px; gap: 2px; } #rooms button { font-size: var(--fs-s); padding: 2px 6px; } #rooms button .zh { font-size: var(--fs-xs); } #rooms.bottom { gap: 0 4px; } #skyPresets { grid-template-columns: repeat(3, 1fr); } #skyL .btns { flex-direction: column; align-items: flex-start; gap: 0; } #skyName { display: none; } }
 </style>
@@ -3108,11 +3110,11 @@ function select(name, direct) {
   cardData = { t: title, a: area, lead: desc, story: STORY[title + '|' + area], zt: zh?.[0], zs: zh?.[1] };
   const g = gameSeen(name); // 游戏线索：有的换成信 / 日志 / 调查记录的卡片
   hintClick(); // 卡关提示：没进展的点击计数
-  if (g) cardData = { t: g[0], a: g[1], zt: g[2], story: g[3], zs: g[4], lead: g[5], paper: isPaper(g) };
-  $('focus').hidden = false;
+  if (g) cardData = { t: g[0], a: g[1], zt: g[2], story: g[3], zs: g[4], lead: g[5], paper: isPaper(g), open: isPaper(g) }; // 纸上的字一打开就展开（原来要再点「走近看」，新玩家多半直接关掉：11-01 评审 #6）
+  $('focus').hidden = !!(cardData.paper || fp); // 第一人称里人自己能走近，「走近看」会切去看房子模式（评审 #9）
   card.classList.toggle('clue', !!(g && gameSeen.got));
   if (g || gameSeen.got || people.has(name) || isClue(name)) { showNote(null); cardOpen(); } // 线索、人物：卡片居中，只能点 × / Esc 关
-  else { const d = cardData; showNote({ t: d.t, zt: d.zt, text: d.story || d.lead || '', ztext: d.zs || LEAD_ZH[d.lead] || '' }); } // 普通物件：不强制读；有故事只放故事（短说明多半是故事第一句的缩写）
+  else { const d = cardData, s = !fp || !d.lead; showNote({ t: d.t, zt: d.zt, text: (s && d.story) || d.lead || '', ztext: (s && d.zs) || LEAD_ZH[d.lead] || '' }); } // 第一人称只给一句说明：整段故事压在准星和要找的东西上（11-01 评审 #7 #8） // 普通物件：不强制读；有故事只放故事（短说明多半是故事第一句的缩写）
 }
 // 普通物件的说明：画面中下方，和开场字幕同款，按字数停一会儿自己淡掉；null = 收起
 function showNote(d) {
