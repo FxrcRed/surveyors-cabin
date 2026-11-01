@@ -2368,11 +2368,17 @@ function renderJournal() { // 开场一直在；找到工作日志才有序章�
     if (!f.has('ended')) add('p', zh ? '还有一些纸页没找到。' : 'Some pages are still to be found.', 'coda');
   }
 }
+function pickPad(geo) { const m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ visible: false })); m.userData.pad = true; return m; } // 看不见的点选块：不描边、不挡第一人称
+function coatPad() { // 衣帽架（第 1 天、✕ 那间都是线索）只有一根细横杆能点中，大衣拿走后几乎点不到：大衣挂的那块加一块点选块；左边 x<0 留给提灯
+  const g = layers.get('entry_coat_rail'); if (!g || g.getObjectByName('coat_pad')) return;
+  const m = pickPad(new THREE.BoxGeometry(0.62, 0.76, 0.15)); m.name = 'coat_pad'; m.position.set(0.31, 1.38, 0.875); g.add(m); meshes.push(m);
+}
 function gameInit() { // 模型和开关都建好后调（loadPeople 之前）：冷炉子、炉膛里的信、时刻、Journal、任务提示
   const f = toggles.get('stove_fire');
   if (f && !game.found.has('fire')) { f.on = false; f.k = 0; for (const q of f.parts) q(0); fire.smoke = 0; }
   if (!game.found.has('letter')) makeLetter();
   document.fonts.load('18px "IM Fell English SC"').then(makeBook, makeBook); // 书架上那本工作日志（js/props3d.js；等字体好了再画书脊和封面的字）
+  coatPad();
   if (game.day === 1 && !game.night) makePage(); // 天黑后（她坐下写了）那页纸就不在了
   notes1Text();
   sky.goal = null; sky.play = false; sky.bearing = skyEl.bearing.value = game.day === 1 ? 335 : 55; /* 第 1 天：太阳转到小屋前方（15:30 方位约 21°），正面受光、山墙檐口影子落在前墙上；55 时下午太阳在侧面、前墙背光，黄昏时逆光 */ sky.indoorK = game.day === 1 ? 0.3 : 1; /* 第 1 天屋里不靠天光：灯没开前是暗的 */ sky.hour = game.night && game.day > 1 ? 21 : game.day >= 3 ? 9.5 : game.day >= 2 ? (DAY2_NEED.every((k) => game.found.has(k)) ? 17.5 : 9.5) : game.night ? 18.3 : 15.5; // 第 1 天下午到，找齐线索后转黄昏（用户 2026-10-31：17 点太暗，改回下午）
@@ -2531,7 +2537,7 @@ function day2Setup() {
   const lamp = new THREE.Group();
   const glow = d2Canvas(64, 64, (x) => { const gr = x.createRadialGradient(32, 32, 0, 32, 32, 32); gr.addColorStop(0, 'rgba(255,226,170,1)'); gr.addColorStop(0.12, 'rgba(255,196,110,.9)'); gr.addColorStop(0.4, 'rgba(240,150,60,.3)'); gr.addColorStop(1, 'rgba(230,140,60,0)'); x.fillStyle = gr; x.fillRect(0, 0, 64, 64); });
   const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: glow, fog: false, depthTest: false, transparent: true, depthWrite: false })); sp.scale.set(9, 9, 1); sp.renderOrder = 10; lamp.add(sp); // 原 7：远处林缝里太小
-  lamp.add(new THREE.Mesh(new THREE.SphereGeometry(1.8, 8, 6), new THREE.MeshBasicMaterial({ visible: false })));
+  lamp.add(pickPad(new THREE.SphereGeometry(3.5, 8, 6))); // 原 1.8：光晕 9m 宽，瞄光晕边上点不中（11-01 评审 #11）
   d2Add('d2_lamp', lamp, D2.lamp[0], D2.lamp[2]); lamp.position.y = gy + D2.lamp[1]; lamp.visible = false; d2.lamp = lamp; d2.glow = sp;
   // 脚印：出门沿卵石路走几步，拐进林间踪迹，一直到雾里（和你的一样大；只出不进）
   { const pl = pathCurve.getLength(), tl = trailCurve.getLength(), at = (c, l, s) => c.getPointAt(Math.min(1, s / l));
@@ -2700,7 +2706,7 @@ function day3Setup() { // 小路尽头的老云杉 + 裂口 + 焦黑松针；✕
   const [p] = pathAt(D3.s);
   x3.spruce = d2Add('d3_spruce', g, p.x, p.z); x3.home = [p.x, p.z];
   const lamp = new THREE.Group(), sp = new THREE.Sprite(d2.glow.material.clone()); sp.scale.set(5, 5, 1); sp.renderOrder = 10; lamp.add(sp);
-  lamp.add(new THREE.Mesh(new THREE.SphereGeometry(1.8, 8, 6), new THREE.MeshBasicMaterial({ visible: false })));
+  lamp.add(pickPad(new THREE.SphereGeometry(2.5, 8, 6)));
   x3.light = d2Add('x_light', lamp, D3.light[0], D3.light[2]); lamp.position.y = ground.position.y + D3.light[1]; lamp.visible = false;
   // ✕ 那间屋的门廊灯：屋子还没「到」之前，雾里先亮这一团光晕（不吃雾），跟着世界一起平移
   const pl = layers.get('entry_porch_lamp'), pc = pl ? new THREE.Box3().setFromObject(pl).getCenter(new THREE.Vector3()) : new THREE.Vector3(0, ground.position.y + 2.2, 3.4);
@@ -3016,7 +3022,7 @@ function setHL(name, on) { // 把这个图层的网格加进/移出高亮 layer
   // 折叠门：B 板的转轴组挂在 A 的转轴组下（和 A 图层是兄弟，不在 A 图层里），只描 A 就只亮半扇 → 两扇一起描
   for (const n of name === 'toilet_door_A' ? [name, 'toilet_door_B'] : [name]) {
     const g = n && layers.get(n);
-    if (g) g.traverse((o) => { if (o.isMesh) on ? o.layers.enable(HL_LAYER) : o.layers.disable(HL_LAYER); });
+    if (g) g.traverse((o) => { if (o.isMesh && !o.userData.pad) on ? o.layers.enable(HL_LAYER) : o.layers.disable(HL_LAYER); }); // pad：看不见的大点选块，不描边
   }
 }
 function drawHighlight() {
@@ -3259,7 +3265,7 @@ const fpHint = fpHud.querySelector('.hint');
 // 不挡路的：墙上的挂件（贴着墙，墙本身会挡）、门帘、挂着的大衣、卫生纸架、毛巾架、地毯、正端在手里的东西
 const FP_SOFT = /^(wall_|take_|sink_water_bucket_dipper$|entry_(tp_holder|towel_rack|cleaning_tools|noren|coat$|coat_rail_keys|lantern|doormat)|loft_hanging_towel|dining_stool_1$|.*_rug$)/; // dining_stool_1：和梯子夹出玄关进屋唯一的口，只剩 0.2m 能过（11-01 评审：玄关走不出去）
 function fpSolid() { // 碰撞用的网格：显示着的、不是自己的胶囊
-  return meshes.filter((m) => m !== fp.p.hit && isShown(m) && !FP_SOFT.test(m.parent.name) && !(held && m.parent === held.g));
+  return meshes.filter((m) => m !== fp.p.hit && !m.userData.pad && isShown(m) && !FP_SOFT.test(m.parent.name) && !(held && m.parent === held.g));
 }
 // —— 拿取（2026-10-20 改）：准星对着墙上的枪、斧头、雪鞋、锅、刀、勺子（伸手够得着，REACH 内）按 E 拿下来握在右手里；
 // 手里有东西时：对着它原来的位置按 E 放回原处，对着别处按 E 往前丢在地上（落在那里的地面/家具面上，平躺），地上的可以再捡起来。按住右键拿到眼前翻看（手放下去）。
