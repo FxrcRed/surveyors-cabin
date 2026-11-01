@@ -2053,7 +2053,7 @@ const QUEST = { // 屏幕上那一行任务提示：[英, 中]
   look: ['Where did he go?', '他往哪儿去了？'],
   dusk: ['Night is coming on.', '天快黑了。'],
   night: ['Night. The clerk is writing up the day at the desk — go and see what she has written.', '天黑了。书记员在书桌前写今天的调查记录，去看看她写了什么。'],
-  end: ['Day the Second — to be continued.', '第 2 天 · 待续'],
+  end: ['The first day is done.', '第一天结束了。'],
 };
 const CLERK_SAYS = ['The clerk: "This house is newer than the reports made it."', '书记员：“这屋子比报告里写的新。”'];
 // 换掉的卡片：[标题, 区域, 中文标题, 英, 中, 说明]
@@ -2410,15 +2410,15 @@ const DAY2_TEXT = { // Journal「第二天」：键 → [英标题, 中标题, �
 };
 Object.assign(QUEST, {
   out: ['The fog is down. He left his marks along the path — go and find them.', '起雾了。他在小路边留了记号，出去找找。'],
-  dusk2: ['Dusk is coming on. Make your way back to the cabin.', '天要黑了，往小屋走吧。'],
+  dusk2: ['Dusk is coming on. Look about you — is there a light anywhere in the woods?', '天要黑了。四下看看，林子里有没有亮光。'], // 原来写「往小屋走吧」，玩家进了屋就看不到灯（11-01 评审 #4）
   home2: ['Go back inside.', '回屋里去。'],
   end2: ['The second day is done.', '第二天结束了。'],
 });
 const D2_SAYS = {
   morning: ['Morning. In the night the fog came down over the woods.', '早上。夜里起了雾，把林子盖住了。'],
   clerk: ['The clerk: "He wrote that in fog you find the way by his marks."', '书记员：“他写过，雾里认路靠记号。”'],
-  lost: ['The fog turned you round. You are back at the cabin door.', '雾里绕了一圈，又回到了小屋门口。'],
-  dusk: ['The light is going. Best make for the cabin.', '天色暗下来了，该往回走了。'],
+  lost: ['The fog turned you round. You are back at the cabin door. Something stood by the path, and you did not stop for it.', '雾里绕了一圈，又回到了小屋门口。路边好像有什么，你没停下来。'],
+  dusk: ['The light is going.', '天色暗下来了。'],
   lamp: ['The clerk: "Look — east of north. A light."', '书记员：“你看——北偏东，有一盏灯。”'],
 };
 Object.assign(HINTS, {
