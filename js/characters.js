@@ -97,18 +97,23 @@ function seatPose(p, name, k = 0) { // 坐在这个座位上时根节点的位�
   const S = SEATS[name], s = p.root.scale.x, pl = S.pull || [0, 0], bk = (p.sitBack ?? 0.34) * s;
   return { x: S.pelvis[0] + pl[0] * k + Math.sin(S.yaw) * bk, z: S.pelvis[1] + pl[1] * k + Math.cos(S.yaw) * bk, y: S.y - (p.sitUp ?? 0.517) * s };
 }
+function seatFront(p, name) { // 坐下前站的地方：坐姿根节点再往座位朝向前挪 0.22m（站在坐姿位置转身，小腿插在坐垫里），Sitting_Enter 前段挪回坐姿位置
+  const S = SEATS[name], a = seatPose(p, name, S.pull ? 1 : 0), f = 0.22 * p.root.scale.x;
+  return { x: a.x + Math.sin(S.yaw) * f, z: a.z + Math.cos(S.yaw) * f, a };
+}
 const seatTaken = (name, me) => [...people.values()].some((q) => q !== me && (q.seat === name || q.claim === name || (q.home === name && !q.player))); // 坐着的、正要去坐的、她的「家」座位（她出门时老人也别去坐，免得回来坐到人身上）
 // 走路路线：节点 + 连通边，BFS 找最短的节点序列（屋里家具多，直线会穿过茶几、沙发、隔墙）。坐标 x 东、z 南。
 // 起居室在隔墙（z 0.75）北边，东边过道 x 0.77–1.74 连到南边门厅，门厅西头的折叠门（x -0.6，z 0.83–1.5）进卫生间。
 // 梯子放下（k=1）时斜着占住过道西半边 z 0.93–1.31（底脚到 x 1.19），过道 ↔ 门厅从它南边绕（hall3）。
+// sofa 是老人坐着时脚的位置，只当回沙发的终点；东西两半屋子之间走沙发前的 sofaF（2026-11-01 美术评审：原来从 sofa 过，她会穿过坐着的老人）。
 // L_ 开头的是阁楼（地板 loft_deck y 2.29；屋脊在 x=0，x 0.3 处净空 1.7m，往西越来越矮）；两层之间只有梯子：ladder（地上站点）↔ L_land（阁楼口），见 CLIMB。
 const NAV = {
-  sofa: [0.19, 0.07], ne: [0.55, -0.15], hall: [1.05, -0.15], hall2: [1.42, 1.25], hall3: [0.95, 1.5], stove: [1.2, -0.72],
+  sofa: [0.19, 0.07], sofaF: [0.19, -0.22], ne: [0.55, -0.15], hall: [1.05, -0.15], hall2: [1.42, 1.25], hall3: [0.95, 1.5], stove: [1.2, -0.72],
   entry: [0.3, 1.3], entryW: [-0.4, 1.2], wcIn: [-0.85, 1.15], wc: [-1.0, 1.25], sw: [-0.75, -0.18], desk: [-0.83, -0.62],
   books: [-0.55, -1.3], dish: [0.2, -1.25], ladder: [1.40, 1.12], push0: [0.82, 0.02],
   L_land: [0.30, 1.12], L_mid: [0.25, 0.45], L_rail: [0.35, -0.6], L_bed: [0.35, -1.1], L_hooks: [0.0, 1.30], L_rocker: [0.0, 0.85],
 };
-const NAV_EDGES = [['sofa', 'ne'], ['sofa', 'sw'], ['sofa', 'stove'], ['ne', 'hall'], ['ne', 'stove'], ['hall', 'stove'], ['hall', 'hall2'], ['hall2', 'hall3'], ['hall3', 'entry'],
+const NAV_EDGES = [['sofa', 'sofaF'], ['sofaF', 'ne'], ['sofaF', 'sw'], ['sofaF', 'stove'], ['ne', 'hall'], ['ne', 'stove'], ['hall', 'stove'], ['hall', 'hall2'], ['hall2', 'hall3'], ['hall3', 'entry'],
   ['entry', 'entryW'], ['entryW', 'wcIn'], ['wcIn', 'wc'], ['sw', 'desk'], ['desk', 'books'], ['sw', 'books'], ['ne', 'dish'], ['hall', 'ladder'], ['hall2', 'ladder'], ['ne', 'push0'],
   ['L_land', 'L_mid'], ['L_mid', 'L_rail'], ['L_rail', 'L_bed'], ['L_land', 'L_hooks'], ['L_land', 'L_rocker'], ['L_mid', 'L_rocker'], ['L_hooks', 'L_rocker']];
 function navPath(from, to) { // 节点名 → 节点名，返回途经的坐标（不含起点）
@@ -124,10 +129,10 @@ function nearNode(x, z, loft = false) { // 同一层里最近的节点（push0 �
   return best;
 }
 function sitTasks(p, name) { // 走到座位前 → （拉椅子）→ 转身 → 坐下 →（推回去）
-  const S = SEATS[name], a = seatPose(p, name, S.pull ? 1 : 0), t = [];
+  const S = SEATS[name], F = seatFront(p, name), t = [];
   if (S.pull) t.push(['walk', ...S.out], ['face', S.pelvis[0], S.pelvis[1]], ['shut', name], ['chair', name, 1]);
   else if (S.shut) t.push(['shut', name]);
-  t.push(['walk', a.x, a.z], ['turn', S.yaw], ['seat', name], ['anim', 'Sitting_Enter']);
+  t.push(['walk', F.x, F.z], ['turn', S.yaw], ['seat', name], ['anim', 'Sitting_Enter']);
   if (S.pull) t.push(['chair', name, 0]);
   return t;
 }
@@ -308,6 +313,14 @@ function floorBelow(x, y, z) { // 人物走路贴地：起居室木台 0.25、�
   const h = npcRay.intersectObjects(npcFloors, false)[0]; return h ? h.point.y : null;
 }
 const _npcO = new THREE.Vector3();
+function blockedBy(p, ux, uz) { // 走的方向上正前方 0.6m、左右 0.3m 内站着别人（同一层）；坐着的不算，路线已经绕开座位，等也等不走
+  const r = p.root.position;
+  for (const q of people.values()) {
+    if (q === p || q.mode === 'sit') continue; const o = q.root.position, x = o.x - r.x, z = o.z - r.z, ahead = x * ux + z * uz;
+    if (Math.abs(o.y - r.y) < 1 && ahead > 0 && ahead < 0.6 && Math.abs(x * uz - z * ux) < 0.3) return true;
+  }
+  return false;
+}
 function runTask(p, dt) {
   const T = p.tasks[0], k = T[0], r = p.root, C = CLIMB_TASKS[k];
   if (!T.on && C && C.need && !C.need(p)) { p.tasks.unshift(...C.fix(p)); return; } // 条件不满足：先把要做的插到前面
@@ -325,6 +338,11 @@ function runTask(p, dt) {
     const a = p.cur, d = a.getClip().duration, e = Math.min(1, a.time / d);
     if (T[1] === 'Sitting_Exit') r.position.y = p.sitY + (p.standY - p.sitY) * e; // 坐着压低一点贴坐垫，站起来脚踩回地板
     if (T[1] === 'Sitting_Enter') r.position.y = p.standY + (p.sitY - p.standY) * e;
+    if (p.seat && (T[1] === 'Sitting_Enter' || T[1] === 'Sitting_Exit')) { // 坐下前段从座位前挪回坐姿位置，起身后段往前挪出去
+      const F = seatFront(p, p.seat), u = T[1] === 'Sitting_Enter' ? 1 - THREE.MathUtils.smoothstep(e, 0, 0.4) : THREE.MathUtils.smoothstep(e, 0.3, 1);
+      if (T.ax === undefined) { const o = T[1] === 'Sitting_Exit' ? r.position : { x: F.a.x, z: F.a.z }; T.ax = o.x; T.az = o.z; }
+      r.position.x = T.ax + (F.x - F.a.x) * u; r.position.z = T.az + (F.z - F.a.z) * u;
+    }
     done = a.time >= d - 0.05;
   } else if (k === 'lamp') { const l = shared.toggles.get(T[1]); if (l) l.on = true; done = true; // 开灯（只改 intensity）
   } else if (k === 'idle') done = T.t >= T[1];
@@ -340,7 +358,10 @@ function runTask(p, dt) {
     const da = shared.angDiff(r.rotation.y, k === 'turn' ? T[1] : Math.atan2(dx, dz)), lim = 4 * dt; // 模型面朝 +Z：朝向 = atan2(dx, dz)
     r.rotation.y += THREE.MathUtils.clamp(da, -lim, lim);
     if (k === 'walk') {
-      const v = Math.min(dist, WALK_SPEED * r.scale.x * dt * (Math.abs(da) < 1 ? 1 : 0.3)); // 还没转过来先慢走
+      const wait = (T.wait || 0) < 1.5 && dist > 0.05 && blockedBy(p, dx / dist, dz / dist); // 前面 0.6m 内有人：原地等，最多 1.5 秒（两人互等也会各自走开）
+      if (wait !== !!T.held) { T.held = wait; p.play(wait ? MOODS.stand.idle : 'Walk_Loop', 0.3); }
+      if (wait) T.wait = (T.wait || 0) + dt;
+      const v = wait ? 0 : Math.min(dist, WALK_SPEED * r.scale.x * dt * (Math.abs(da) < 1 ? 1 : 0.3)); // 还没转过来先慢走
       if (dist > 1e-4) { r.position.x += dx / dist * v; r.position.z += dz / dist * v; }
       const fy = floorBelow(r.position.x, r.position.y, r.position.z); if (fy !== null) r.position.y += (fy + 0.01 - r.position.y) * Math.min(1, dt * 10);
       done = dist - v < 0.01;

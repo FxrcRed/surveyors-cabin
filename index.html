@@ -3737,7 +3737,7 @@ function sliceStart() {
   fp.yaw = Math.PI; fp.pitch = SL_PITCH; inside = null; SL.room = null; SL.fp = fp;
 }
 // —— 第 2、3 天早上（2026-10-29，用户：去掉开场飞行，每天一开始就在屋里）：约 5.6 秒，玩家只看——他在沙发上醒来、站起来走到炉子边（做早饭），
-// 书记员从阁楼梯子下来（静态模型：整体平移 + 每档一点上下起伏，不放爬梯骨骼动画），完了 startFP 交给玩家；按键跳到结尾。当天已有进度（刷新）照旧
+// 书记员从阁楼梯子下来（走她自己的爬梯任务 topDown → climb → dismount，和白天上下楼同一套动作；2026-11-01 前是站姿整体平移，美术评审说像雕像滑下来），完了 startFP 交给玩家；按键跳到结尾。当天已有进度（刷新）照旧
 let morn = null;
 const MORN = { T: 5.6, stove: [1.2, -0.72] };
 function mornOn() {
@@ -3751,24 +3751,19 @@ function mornStart() {
   if (d) { d.on = true; d.k = 1; for (const q of d.parts) q(1); }
   if (g) { g.on = false; g.k = 0; for (const q of g.parts) q(0); }
   shadowDirty = true;
-  const z = ladderZ(), B = ladderRoot(CLIMB.top), C = ladderRoot(0), A = new THREE.Vector3(B.x - CLIMB.fwd, B.y + CLIMB.up, z);
+  const z = ladderZ(), B = ladderRoot(CLIMB.top), A = new THREE.Vector3(B.x - CLIMB.fwd, B.y + CLIMB.up, z);
   const D = new THREE.Vector3(NAV.ladder[0], (floorBelow(NAV.ladder[0], 0.3, z) ?? 0.16) + 0.01, z);
-  placeMan(w, A.x, A.z, LADDER.yaw); w.root.position.copy(A); w.roam = w.next = 1e9;
+  placeMan(w, A.x, A.z, LADDER.yaw); w.root.position.copy(A); w.roam = w.next = 1e9; w.tasks = [['topDown'], ['climb', 0], ['dismount'], ['face', ...MORN.stove]];
   placeMan(m, ...MORN.stove, 0); m.roam = m.next = 1e9; m.root.visible = false; // 镜头就是他的眼睛
   const eh = 1.62 * m.root.scale.x, fy = (x, z) => floorBelow(x, 0.3, z) ?? 0.16, [sx, sz] = SL.sofa, [tx, tz] = MORN.stove;
   const walk = new THREE.CatmullRomCurve3([new THREE.Vector3(sx, fy(sx, sz) + eh, sz), new THREE.Vector3(NAV.ne[0], fy(...NAV.ne) + eh, NAV.ne[1]), new THREE.Vector3(tx, fy(tx, tz) + eh, tz)]);
   spin = false; fly = null; controls.enabled = false; inside = ROOMS.find((r) => r.name === 'Parlour'); roomsBox.hidden = true; enterBtn.hidden = true;
   camera.fov = 72; camera.updateProjectionMatrix();
-  morn = { t: 0, m, w, A, B, C, D, walk, sit: fy(sx, sz) + 1.05, lk: A.clone().setY(A.y + 1.45) };
+  morn = { t: 0, m, w, D, walk, sit: fy(sx, sz) + 1.05, lk: A.clone().setY(A.y + 1.45) };
   showQuest();
 }
 function mornTick(dt) {
   const M = morn, t = (M.t += dt), e = (a, b) => smoothstep(a, b, t), w = M.w.root;
-  // 书记员：阁楼口 → 梯子顶（0.5–1.3s）→ 往下（1.3–3.9s，每档 0.28 一下起伏）→ 落地走一步（3.9–4.5s）→ 转身朝炉子
-  if (t < 1.3) w.position.lerpVectors(M.A, M.B, e(0.5, 1.3));
-  else if (t < 3.9) { const k = e(1.3, 3.9), S = CLIMB.top * (1 - k); ladderRoot(S, w.position); w.position.y += Math.abs(Math.sin(Math.PI * S / 0.28)) * 0.03; }
-  else w.position.lerpVectors(M.C, M.D, e(3.9, 4.5));
-  if (t > 4.5) w.rotation.y += angDiff(w.rotation.y, Math.atan2(MORN.stove[0] - w.position.x, MORN.stove[1] - w.position.z)) * Math.min(1, dt * 4);
   // 他：沙发上坐着的眼高抬到站姿（0–1.6s）→ 经 NAV.ne 走到炉子边（1.6–3.6s），一路看着她
   const k = e(1.6, 3.6), P = M.walk.getPointAt(k);
   if (t < 1.6) P.y = THREE.MathUtils.lerp(M.sit, P.y, e(0, 1.6));
@@ -3776,12 +3771,12 @@ function mornTick(dt) {
   camera.position.copy(P);
   M.lk.lerp(_slD.copy(w.position).setY(w.position.y + 1.45), Math.min(1, dt * 3));
   controls.target.copy(M.lk); camera.lookAt(M.lk);
-  if (t >= MORN.T) mornEnd();
+  if (t >= MORN.T && !M.w.tasks.length) mornEnd(); // 她下完梯子、转向炉子才交给玩家
 }
 function mornEnd() {
   if (!morn) return;
   const { m, w, D } = morn, dir = _slD.copy(morn.lk).sub(camera.position).normalize(); morn = null;
-  w.root.position.copy(D); w.root.rotation.y = Math.atan2(MORN.stove[0] - D.x, MORN.stove[1] - D.z); w.roam = 8; w.next = 4; // 之后照白天的样子在楼下转
+  placeMan(w, D.x, D.z, Math.atan2(MORN.stove[0] - D.x, MORN.stove[1] - D.z)); w.root.position.copy(D); w.S = null; w.roam = 8; w.next = 4; // 之后照白天的样子在楼下转
   const yaw = Math.atan2(dir.x, dir.z); m.root.visible = true; placeMan(m, ...MORN.stove, yaw); m.root.position.y = floorBelow(MORN.stove[0], 0.3, MORN.stove[1]) ?? 0.16;
   startFP('person_man'); if (!fp) return;
   fp.yaw = yaw; fp.pitch = Math.asin(dir.y);
