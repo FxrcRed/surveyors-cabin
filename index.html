@@ -573,7 +573,7 @@ const shoreR = (a) => 1 + 0.12 * Math.sin(a * 3 + 1) + 0.07 * Math.sin(a * 5) + 
 const SHORE_GLSL = `float shoreK(vec2 d, vec3 L) { float u = d.x / 1.35, v = -d.y / 0.85, a = atan(v, u);
   return length(vec2(u, v)) / (L.z * (1.0 + 0.12 * sin(a * 3.0 + 1.0) + 0.07 * sin(a * 5.0) + 0.03 * sin(a * 13.0 + 2.0) + 0.018 * sin(a * 23.0 + 4.1))); }
 `;
-let pathCurve = null, trailCurve = null;
+let pathCurve = null, trailCurve = null, trail3Curve = null; // trail3Curve：第 3 天去 ✕ 的岔路（踪迹 D3.fork 米处分出，往北绕，到老云杉跟旧踪迹汇合）
 const OUTDOOR = [], XSHIFT = new THREE.Vector2(); // 走到 ✕ 时要一起平移的屋外物件；XSHIFT = ✕ 那间屋在自家坐标里的位置
 function extendPath() {
   const P = planarUV('path_core'); if (!P) return;
@@ -743,12 +743,17 @@ float wH(vec2 p) { vec2 q = p + 3.0 * vec2(wNoise(p * 0.06 + uT * 0.03), wNoise(
   // ✕ 那间屋在踪迹老云杉旁边：X = 老云杉位置 − 那间屋院子里老云杉的位置（D3.spruceX），种树时留出这块空地
   const sp = trailCurve.getPointAt(D3.s / trailCurve.getLength());
   XSHIFT.set(sp.x - D3.spruceX[0], sp.z - D3.spruceX[1]);
-  // 种树前先定好第 2 天的灯、标记树的位置：灯放在「林子突然分开」处，从该看见灯的地方到灯清出一条没树的视线
+  // 第 3 天的岔路：不走第 2 天看过的记号，往北绕进更密的林子，弯多、两侧留空忽宽忽窄（trailClear 的点左右晃），路上两根倒木（D3_LOGS）要绕
+  const fk = trailCurve.getPointAt(D3.fork / trailCurve.getLength());
+  trail3Curve = new THREE.CatmullRomCurve3([fk, ...[[27, -16], [24, -26], [30, -36], [42, -42], [52, -50], [60, -60], [72, -64], [82, -60], [88, -53]]
+    .map(([dx, dz]) => new THREE.Vector3(x0 + dx, 0, z0 + dz)), new THREE.Vector3(sp.x, 0, sp.z)]);
+  trail3Curve.getSpacedPoints(240).forEach((c, i) => { const t = trail3Curve.getTangentAt(i / 240), o = 0.6 * Math.sin(i * 0.21) + 0.3 * Math.sin(i * 0.57 + 1);
+    trailClear.push([c.x - t.z * o, c.z + t.x * o]); });
+  for (const [s, side] of D3_LOGS) { const u = Math.min(1, (s - D3.fork) / trail3Curve.getLength()), c = trail3Curve.getPointAt(u), t = trail3Curve.getTangentAt(u); // 倒木露出的那头多清一块，绕得过去
+    for (const a of [-1.5, 0, 1.5]) for (const o of [1.8, 3]) trailClear.push([c.x + t.x * a + t.z * side * o, c.z + t.z * a - t.x * side * o]); }
+  // 种树前先定好第 2 天的烟、标记树的位置（烟升过树梢，不清视线通道）
   const tl = trailCurve.getLength(), on = (s, off = 0) => { const u = Math.min(1, s / tl), p = trailCurve.getPointAt(u), t = trailCurve.getTangentAt(u); return [p.x - t.z * off, p.z + t.x * off]; };
-  [D2.lamp[0], D2.lamp[2]] = on(86, -5); // 傍晚的灯：踪迹往前、石堆再过去的雾里
-  const xl = [XSHIFT.x, XSHIFT.y + 3.4]; // ✕ 那间屋门廊灯（大概位置，空地 12m 本来就没树）
-  for (const s of [10, 64]) SIGHT.push([...on(s), D2.lamp[0], D2.lamp[2]]); // 院子边（回家时看见）、石堆（第四样找到时天转傍晚）
-  for (const s of [60, 75, 90]) SIGHT.push([...on(s), ...xl]); // 第 3 天沿踪迹走：光晕 105m 内开始淡入
+  [D2.lamp[0], D2.lamp[2]] = on(86, -18); // 傍晚的烟：踪迹往前、石堆再过去，离踪迹 18m 的林子里
   CROWN_KEEP.push([...on(D2_SPOTS.d2_blaze.s, D2_SPOTS.d2_blaze.off), MARK_TREES.blaze[1] * MARK_R], [...on(D3.s), MARK_TREES.spruce[1] * MARK_R]); // 两棵标记树先占位
 }
 
@@ -871,10 +876,6 @@ function nearD(list, x, z) { // 离 list 里最近的点多远（只查 8m 内�
   }
   return Math.sqrt(d);
 }
-function segD(x, z, [ax, az, bx, bz]) { // 点到线段的水平距离
-  const dx = bx - ax, dz = bz - az, u = THREE.MathUtils.clamp(((x - ax) * dx + (z - az) * dz) / (dx * dx + dz * dz), 0, 1);
-  return Math.hypot(x - ax - u * dx, z - az - u * dz);
-}
 function takeAt(taken, x, z) { gridOf(taken); taken.push([x, z]); gridAdd(taken, x, z); }
 async function ringPoints(rand, n, r0, r1, gap, center, taken, keep) { // keep(x, z)：额外筛选（开场/走路看得到才种）
   const pts = [];
@@ -942,7 +943,6 @@ let forestCenter;
 // 树冠宽只 ×1.35（TREE_W）：云杉本来就细长，全按高度放大的话树冠半径 4m+，林子里挤成一团
 const TREE_K = 2.35, TREE_W = 0.75;
 const TREE_XZ = []; // 小屋 120m 内高于 2m 的树：x, z 交替
-const SIGHT = []; // 看灯的视线通道 [ax, az, bx, bz]：树冠不碰（extendPath 里定）
 const CROWN_KEEP = []; // 先占位的树冠 [x, z, 半径]：标记树
 const MARK_R = 0.28; // pine.glb 树冠半径 / 树宽
 const MARK_TREES = { blaze: [15, 6.5], spruce: [24, 11] }; // 刻「7」的云杉、老云杉：[树高, 树宽]（m）
@@ -960,7 +960,6 @@ function pathRoom(x, z, h) {
 }
 function crownRoom(x, z, mutual, h) {
   let m = Math.min(pathRoom(x, z, h), nearD(trailClear, x, z) - 1.0);
-  for (const sg of SIGHT) m = Math.min(m, segD(x, z, sg) - 0.8);
   if (mutual) { const cx = Math.floor(x / CELL), cz = Math.floor(z / CELL);
     for (let i = -1; i <= 1; i++) for (let j = -1; j <= 1; j++) for (const [px, pz, r] of crownGrid.get((cx + i) * 100003 + cz + j) || []) m = Math.min(m, Math.hypot(px - x, pz - z) / 0.85 - r); }
   return m;
@@ -1104,7 +1103,7 @@ function setupTerrain(center) {
   // 洼地、密灌丛的位置：固定种子；离路、踪迹、河湖、视线通道、两间屋都要远
   const rand = rng(31), ok = (x, z, r) => minDist(pathClear, x, z) > r + 6 && minDist(trailClear, x, z) > r + 5 && minDist(WATER.river, x, z) > r + 8
     && lakeD(x, z) >= (WATER.lake[2] * 1.2 + 4) + r + 8
-    && Math.hypot(x, z) > r + 22 && Math.hypot(x - XSHIFT.x, z - XSHIFT.y) > r + 22 && SIGHT.every((sg) => segD(x, z, sg) > r + 3)
+    && Math.hypot(x, z) > r + 22 && Math.hypot(x - XSHIFT.x, z - XSHIFT.y) > r + 22
     && ![...terrain.pits, ...THICKETS].some(([px, pz, pr]) => Math.hypot(x - px, z - pz) < pr + r + 8);
   const put = (n, rMin, rMax, d0, d1, f) => { for (let t = 0; t < 400 && n > 0; t++) { const a = rand() * 6.283, d = d0 + (d1 - d0) * rand(), r = rMin + (rMax - rMin) * rand(), x = center.x + Math.cos(a) * d, z = center.z + Math.sin(a) * d; if (ok(x, z, r)) { f(x, z, r); n--; } } };
   put(4, 3.5, 5, 25, 90, (x, z, r) => terrain.pits.push([x, z, r, 4.5]));
@@ -1135,7 +1134,7 @@ function plantUnder(parts, pts, rand, hMin, hMax, sink, block, pal = BUSHES) { /
 function underOk(x, z, pathD) { // 灌木/草不压路、踪迹、看灯的视线、河湖、两间屋的空地、洼地
   return !nearAny(pathClear, x, z, pathD) && !nearAny(trailClear, x, z, 2.2) && !nearAny(WATER.river, x, z, 4)
     && lakeD(x, z) >= (WATER.lake[2] * 1.2 + 4) && Math.hypot(x, z) > 9 && Math.hypot(x - XSHIFT.x, z - XSHIFT.y) > 9
-    && SIGHT.every((sg) => segD(x, z, sg) > 1.2) && !terrain.pits.some(([px, pz, pr]) => Math.hypot(x - px, z - pz) < pr * 1.3);
+    && !terrain.pits.some(([px, pz, pr]) => Math.hypot(x - px, z - pz) < pr * 1.3);
 }
 async function roadsidePoints(rand, n, d0, d1, gap, taken, iMax = 130, keep) { // 沿路两边（前 iMax 个点，约 iMax m）离路中心 d0–d1 米；keep(x, z) 额外筛选
   const pts = [], P = pathClear;
@@ -1371,7 +1370,7 @@ loader.load('cabin.glb', async (gltf) => {
   matchGround(center);
   extendPath();
   mapWall(); // 墙上那张换成按世界坐标画的羊皮纸地图
-  if (game.day >= 2) day2Setup(); // 第 2 天的木桩、标桩、刻记号的树、石堆、雾里的灯（要等地面高度和小路曲线）
+  if (game.day >= 2) day2Setup(); // 第 2 天的木桩、标桩、刻记号的树、石堆、林子那头的烟（要等地面高度和小路曲线）
   controls.minDistance = 1;
   controls.maxDistance = 220; // 可以一直拉远看整片森林（雾跟着相机距离变，见渲染循环）
   resetView();
@@ -1994,13 +1993,13 @@ const GAME_TEXT = {
   letter: ['Unburnt Letter · Kitchen, Day 1', 'Under the ashes lies half a sheet of paper, scorched at the edges. Only a few lines can be made out:\n\n"…seven degrees east of north, about four miles. Beneath an old spruce the ground has split; the compass spins; the needles are scorched black, as if by fire — yet there is no fire there. Marked ✕. This place is not fit…"\n\n"…bearings enclosed; I beg the Office…"\n\nThe rest is burnt away. He wrote it, did not send it, and put it in at the stove door.', '炉灰底下压着半张纸，边上烧焦了。能认出来的只有几行：\n\n“……北偏东七度，约四里。老云杉根下地面开裂，罗盘打转，松针焦黑，像被火燎过，可那里没有火。已标 ✕。此处不宜……”\n\n“……附坐标，请局里……”\n\n后面烧没了。他写了，没寄，又塞进了炉门。'],
   logIntro: ['Field Log · Parlour bookcase, bottom left', 'A book of bark paper, stitched together; neat at the front, more and more disordered towards the back. The inspector knows the hand: he watched it sign the commission.', '树皮纸订成的本子，前面工整，后面越写越乱。老稽查认得这笔迹，委任状上的签名是他看着签的。'],
   log1: ['Field Log, first part · Day 1', 'July 19th. Seven degrees east of north, about four miles. Beneath an old spruce the ground split open; the compass spins; the needles scorched black. Marked ✕, Do Not Enter. Report written; to be posted at the post-house come spring.\n\nAugust 2nd. Went to look again. The rift no wider. Cannot say why I wished to go again.\n\nSeptember. The map not yet finished. Wrote to the Office, begging leave to stay the winter.', '七月十九。北偏东七度，约四里。老云杉根下地面开裂，罗盘打转，松针焦黑。已标 ✕，勿入。报告写好了，开春去驿站寄。\n\n八月二日。又去看了一次，裂口没变大。说不清为什么想再去。\n\n九月。图还没画完。写信给局里，请准许留下过冬。'],
-  log2: ['Field Log, middle part · Day 2, on coming back', 'Eleventh year. There is a stake in the woods as tall as the chopping-block by my door — even the slanting cut is the same. I did not set it there.\n\nNineteenth year, winter. A light in the fog. I stood under the porch and watched it: east of north, the wrong way. There is no house out there.\n\nTwenty-fourth year. On the way to the ✕, a woodpile that was never there before, stacked as I stack mine. On the end of the topmost log, charcoal marks too — but not a word written.', '第十一年。林子里有一根桩子，跟我门口劈柴那根一样高，连那道斜刀口都一样。不是我立的。\n\n第十九年，冬。雾里有一盏灯。我站在门廊下看，灯在北偏东，方向不对，那边没有人家。\n\n第二十四年。去 ✕ 的路上多了一堆柴，码法跟我的一样，最上面那块柴的截面上也有炭笔印子，可一个字都没写。'],
+  log2: ['Field Log, middle part · Day 2, on coming back', 'Eleventh year. There is a stake in the woods as tall as the chopping-block by my door — even the slanting cut is the same. I did not set it there.\n\nNineteenth year, winter. Smoke over the trees at dusk. I stood under the porch and watched it: east of north, the wrong way. There is no house out there.\n\nTwenty-fourth year. On the way to the ✕, a woodpile that was never there before, stacked as I stack mine. On the end of the topmost log, charcoal marks too — but not a word written.', '第十一年。林子里有一根桩子，跟我门口劈柴那根一样高，连那道斜刀口都一样。不是我立的。\n\n第十九年，冬。傍晚树梢上有一柱烟。我站在门廊下看，烟在北偏东，方向不对，那边没有人家。\n\n第二十四年。去 ✕ 的路上多了一堆柴，码法跟我的一样，最上面那块柴的截面上也有炭笔印子，可一个字都没写。'],
   log3: ['Field Log, last part · Day 3, before setting out', 'Thirtieth year. I draw it, and it draws me.\n\nIt draws slowly, a little each year. First the stake, then the woodpile, then the roof. This spring it has drawn its way indoors. I sit here, and over there its rocking chair is rocking too.\n\nTonight I go to see whether the likeness is good. The fire is banked, the door left a crack, the lamp left burning. I shall not go to the post-house this year; the Office will have no report, and will send someone. One must leave them a light.', '第三十年。我画它，它也在画我。\n\n它画得很慢，一年一点。先是桩子，后是柴堆，后是屋顶。今年开春，它画到屋里了。我在这边坐着，它那边的摇椅也在摇。\n\n今晚我去看看画得像不像。炉火压好了，门留条缝，灯留着。今年不去驿站了，局里收不到报告，会派人来，总得给他们留个亮处。'],
   notes1: ['Inquiry Notes · Night of Day 1', 'Arrived. Door ajar, porch lamp burning, no one in the house. Stove stone cold, the ash cold; gone a month at least. His greatcoat, boots and lantern all in their places. Lit the fire. We stop here.\n\nThe house is newer than the reports made it. Timber thirty years old ought not to be this colour. Perhaps his reports exaggerated.', '到达。大门虚掩，门廊灯亮着，屋里无人。炉子冷透了，灰是凉的，少说走了一个月。他的大衣、靴子、提灯都在原处。生了火，住下。\n\n这屋子比报告里写的新。三十年的木头，不该是这个颜色。也许是他报告写得夸张。'],
-  notes2: ['Inquiry Notes · Night of Day 2', 'A survey stake in the woods, its notch the very same as the chopping-block by the door. The inspector says he set it himself, as a matter of course.\n\nAt dusk, a light in the fog, east of north. The inspector says I was mistaken. I was not mistaken.', '林子里有一根标桩，刻口和门口劈柴的木桩一模一样。稽查说是他自己立的，顺手。\n\n傍晚雾里有一盏灯，在北偏东。稽查说是看错了。我没有看错。'],
-  xArrive: ['Day 3 · At the ✕', 'Into the fog along the trail, by the marks in the log. The compass turns faster and faster, until at last it points nowhere. Beside the roots of an old spruce the trail gives out; the earth beneath the roots is split open, and the pine needles are scorched black.\n\nAhead in the fog a lamp is burning. Then a roof, a stovepipe, a porch. A chopping block by the step, a slanting cut across its top.\n\nThe door is open.', '沿着林间踪迹走进雾里，照着日志里的记号走。罗盘越转越快，最后不再指任何方向。踪迹在一棵老云杉的树根旁边断了，树根下的土地裂开一道口子，松针是焦黑的。\n\n前面雾里亮着一盏灯。然后是屋顶、烟囱、门廊。台阶边一个劈柴木桩，顶上一道斜刀口。\n\n门开着。'],
+  notes2: ['Inquiry Notes · Night of Day 2', 'A survey stake in the woods, its notch the very same as the chopping-block by the door. The inspector says he set it himself, as a matter of course.\n\nAt dusk, smoke over the trees, east of north. The inspector says I was mistaken. I was not mistaken.', '林子里有一根标桩，刻口和门口劈柴的木桩一模一样。稽查说是他自己立的，顺手。\n\n傍晚北偏东的树梢上有一柱烟。稽查说是看错了。我没有看错。'],
+  xArrive: ['Day 3 · At the ✕', 'Into the fog along the trail, by the marks in the log. The compass turns faster and faster, until at last it points nowhere. Beside the roots of an old spruce the trail gives out; the earth beneath the roots is split open, and the pine needles are scorched black.\n\nAhead, over the trees, a thread of smoke. Then a roof, a stovepipe, a porch. A chopping block by the step, a slanting cut across its top.\n\nThe door is open.', '沿着林间踪迹走进雾里，照着日志里的记号走。罗盘越转越快，最后不再指任何方向。踪迹在一棵老云杉的树根旁边断了，树根下的土地裂开一道口子，松针是焦黑的。\n\n前面树梢上一柱烟。然后是屋顶、烟囱、门廊。台阶边一个劈柴木桩，顶上一道斜刀口。\n\n门开着。'],
   xNote: ['Day 3 · The page on the other desk', 'Day three. The inspector went out early, seven degrees east of north. I stayed in the house. He did not take the lantern.', '第三天。稽查一早出门，往北偏东七度。我留在屋里。他没带提灯。'],
-  xLook: ['Day 3 · From the other porch', 'Standing under this porch and looking south, far off in the fog, there is a light.', '站在这间屋的门廊下往南看，雾里很远的地方有一盏灯。'],
+  xLook: ['Day 3 · From the other porch', 'Standing under this porch and looking south, far off over the trees, there is smoke rising.', '站在这间屋的门廊下往南看，很远的树梢上升着一柱烟。'],
   endBack: ['Ending · Going Back', 'You back out of the door and go the way you came. Slowly the compass settles, and points north again. At the end of the fog the porch lamp is burning, the fire is lit, and the clerk is waiting in the rocking chair.\n\nShe hears you out, thinks a long while, and writes in the report: "No irregularity found. The Surveyor\'s whereabouts unknown." Then she puts his field log back on the shelf.', '你退出门，沿着来路走。罗盘慢慢停下来，指回北方。雾的尽头，门廊灯亮着，炉火在烧，书记员在摇椅上等你。\n\n她听你说完，想了很久，在报告上写：“未发现异常。测绘员下落不明。”然后把他的工作日志放回书架。'],
   endStay: ['Ending · Staying', 'You sit down under the porch of that house, light the lantern, and hang it on its peg.\n\nBack in your own cabin, the clerk looks up from his papers, goes out under the porch, and looks north. Deep in the woods there is one more light.\n\nShe does not go out to look for you. She finishes that day\'s notes, and the last line reads: "The inspector stayed. Someone must watch it."', '你在那间屋的门廊下坐下，把提灯点亮，挂在钉子上。\n\n画面回到你们的小屋。书记员从遗稿上抬起头，走到门廊下，看向北边。林子深处多了一盏灯。\n\n她没有出门找你。她把那天的调查记录写完，最后一行是：“稽查留下了。总得有人看着它。”'],
   endHidden: ['Hidden Ending · only when all four differences are found', 'You come back to the cabin and stamp the snow from your boots. The clerk looks at you, and says:\n\n"You didn\'t take the lantern when you went out."\n\nYou look down. Your hand is empty. The lantern hangs on its peg of the coat rail, just as it did before you left.\n\nYet you remember carrying it into the fog.', '你回到小屋，跺掉靴子上的雪。书记员看着你，说：\n\n“你出门的时候没带提灯。”\n\n你低头看。手上是空的。提灯挂在衣帽架的钉子上，和你出门前一样。\n\n可你记得，你是提着它走进雾里的。'],
@@ -2393,8 +2392,8 @@ function gameInit() { // 模型和开关都建好后调（loadPeople 之前）�
 // → 走回屋里读到工作日志中段 → 天黑，书记员在书桌写第 2 夜的记录 → 读完「第 3 天 · 待续」。物件都是 three.js 几何体，在 day2Setup 里建（要等地面高度和小路曲线）。
 const DAY2_NEED = ['d2block', 'd2stake', 'd2blaze', 'd2cairn'];
 const DAY2_MARKS = ['d2stake', 'd2blaze', 'd2cairn']; // 沿路的三样：每认出一样，雾里能走的那段就往前放一截（D2.reach）
-const D2 = { door: [-0.05, 3.4], block: [1.9, 3.0], yard: 13, width: 6.5, reach: [32, 52, 72, 90], lost: 1.2, lamp: [40, 2.4, -38], lampNear: 26 };
-const D2_SPOTS = { d2_stake: { s: 24, off: 2.3 }, d2_blaze: { s: 44, off: 2.6 }, d2_cairn: { s: 64, off: 2.0 } }; // s = 从院子边起沿小路的米数，off = 离路中心
+const D2 = { door: [-0.05, 3.4], block: [1.7, 5.4], yard: 13, width: 6.5, reach: [29, 49, 74, 90], lost: 2, lostAt: 30, lamp: [40, 2.4, -38], lampNear: 26 };
+const D2_SPOTS = { d2_stake: { s: 21, off: 1.8 }, d2_blaze: { s: 41, off: 3.0 }, d2_cairn: { s: 66, off: -2.4 } }; // s = 从院子边起沿小路的米数，off = 离路中心（负 = 左手边）；间距、远近、左右故意不齐（11-01 评审：原 24/44/64 像节拍器）
 const d2 = { veil: false, lamp: null, lostT: 0, samples: null, lampSaid: false };
 window.cabinD2 = d2; // 调试
 const D2_CARDS = { // 图层 → [标题, 区域, 中文标题, 英, 中, 说明]
@@ -2402,7 +2401,7 @@ const D2_CARDS = { // 图层 → [标题, 区域, 中文标题, 英, 中, 说明
   d2_stake: ['Survey Stake', 'Exterior', '测量标桩', 'A survey stake beside the path, as tall as the chopping-block by the door. Near the top, one slanting cut: the same angle, the same depth.\n\nThe inspector: "He set it himself, as a matter of course."\n\nBelow the cut, a bearing burnt into the wood. The path holds on, past the next bend.', '路边一根测量标桩，跟门口的劈柴木桩一样高。靠上有一道斜刀口——一样的角度，一样的深。\n\n稽查说：“他自己立的，顺手。”\n\n刀口下面烙着一行方位：沿路再走，过下一道弯。', 'A stake by the path, a rag of red cloth at its head.'],
   d2_blaze: ['Blazed Spruce', 'Exterior', '刻了记号的云杉', 'An old spruce with a blaze cut into the bark at eye height: an arrow, and beneath it the figure 7. The bark has grown back round the edges; it was cut a great many years ago.', '一棵老云杉，齐眼高的树皮上削出一块记号：一个箭头，下面刻着“7”。切口边上的树皮已经长回来了——是很多年前刻的。', 'A mark cut in the bark.'],
   d2_cairn: ['Cairn', 'Exterior', '石堆', 'Stones heaped knee-high where the path bends. On the topmost, in charcoal: ✕ → 4 mi.\n\nBeyond it the fog lies so thick the path cannot be seen at all.', '小路拐弯的地方堆着齐膝高的石头。最上面那块用炭笔写着：✕ → 四里。\n\n再往前，雾浓得连路都看不见了。', 'Stones heaped where the path bends.'],
-  d2_lamp: ['A Light in the Fog', 'Exterior', '雾里的灯', 'A light in the fog, east of north, like the porch lamp. There is no house that way.', '雾里一盏灯，在北偏东，像门廊灯。那边没有人家。', 'A light, far off in the fog.'],
+  d2_lamp: ['Smoke over the Trees', 'Exterior', '树梢上的烟', 'Smoke rising over the trees, east of north, as from a chimney. There is no house that way.', '北偏东的树梢上升着一柱烟，像是烟囱里冒的。那边没有人家。', 'Smoke, far off over the trees.'],
 };
 const D2_KEY = { d2_block: 'd2block', d2_stake: 'd2stake', d2_blaze: 'd2blaze', d2_cairn: 'd2cairn', d2_lamp: 'd2light' };
 const LOG2_CARD = ['Field Log', 'Parlour', '工作日志', 'Back indoors, the clerk turns the field log on to its middle pages.\n\n' + GAME_TEXT.log2[1], '回到屋里，书记员把工作日志翻到了中间。\n\n' + GAME_TEXT.log2[2], 'The middle pages.'];
@@ -2412,29 +2411,32 @@ const DAY2_TEXT = { // Journal「第二天」：键 → [英标题, 中标题, �
   d2stake: ['A Stake by the Path', '路边的标桩', D2_CARDS.d2_stake[3], D2_CARDS.d2_stake[4]],
   d2blaze: ['The Blazed Spruce', '刻了记号的云杉', D2_CARDS.d2_blaze[3], D2_CARDS.d2_blaze[4]],
   d2cairn: ['The Cairn', '石堆', D2_CARDS.d2_cairn[3], D2_CARDS.d2_cairn[4]],
-  d2light: ['A Light in the Fog', '雾里的灯', D2_CARDS.d2_lamp[3], D2_CARDS.d2_lamp[4]],
+  d2light: ['Smoke over the Trees', '树梢上的烟', D2_CARDS.d2_lamp[3], D2_CARDS.d2_lamp[4]],
   log2: ['Field Log, Middle Part', '工作日志 · 中段', GAME_TEXT.log2[1], GAME_TEXT.log2[2]],
   notes2: ['Inquiry Notes, Night of Day 2', '调查记录 · 第 2 天夜里', GAME_TEXT.notes2[1], GAME_TEXT.notes2[2]],
 };
 Object.assign(QUEST, {
   out: ['The fog is down. He left his marks along the path — go and find them.', '起雾了。他在小路边留了记号，出去找找。'],
-  dusk2: ['Dusk is coming on. Look about you — is there a light anywhere in the woods?', '天要黑了。四下看看，林子里有没有亮光。'], // 原来写「往小屋走吧」，玩家进了屋就看不到灯（11-01 评审 #4）
+  dusk2: ['Dusk is coming on. Look about you — is anything rising over the trees?', '天要黑了。四下看看，树梢上有没有什么。'], // 原来写「往小屋走吧」，玩家进了屋就看不到灯（11-01 评审 #4）
   home2: ['Go back inside.', '回屋里去。'],
   end2: ['The second day is done.', '第二天结束了。'],
 });
 const D2_SAYS = {
   morning: ['Morning. In the night the fog came down over the woods.', '早上。夜里起了雾，把林子盖住了。'],
   clerk: ['The clerk: "He wrote that in fog you find the way by his marks."', '书记员：“他写过，雾里认路靠记号。”'],
-  lost: ['The fog turned you round. You are back at the cabin door. Something stood by the path, and you did not stop for it.', '雾里绕了一圈，又回到了小屋门口。路边好像有什么，你没停下来。'],
+  lost: ['The fog turned you round. The cabin is ahead of you again. Something stood by the path, and you did not stop for it.', '雾里绕了一圈，眼前又是小屋。路边好像有什么，你没停下来。'],
+  lost0: ['The fog turned you round. The cabin is ahead of you again.', '雾里绕了一圈，眼前又是小屋。'],
+  change1: ['A second line of tracks runs to the door — going in. Boots the size of yours.', '门口多了一行脚印，往屋里走的，跟你的靴子一样大。'],
+  change2: ['No smoke from the chimney. The fire was burning when you went out.', '烟囱不冒烟了。你出门时炉火还烧着。'],
   dusk: ['The light is going.', '天色暗下来了。'],
-  lamp: ['The clerk: "Look — east of north. A light."', '书记员：“你看——北偏东，有一盏灯。”'],
+  lamp: ['The clerk: "Look — east of north. Smoke."', '书记员：“你看——北偏东，有烟。”'],
 };
 Object.assign(HINTS, {
   d2block: [['Before the woods, look about the porch.', '进林子之前，先看看门廊边上。'], ['By the porch there is a chopping block.', '门廊边有一个劈柴木桩。'], 'd2_block'],
   d2stake: [['Follow the path into the fog.', '顺着小路往雾里走。'], ['A stake stands beside the path, past the first bend.', '过了第一道弯，路边立着一根标桩。'], 'd2_stake'],
   d2blaze: [['Look at the trees along the path.', '看看路边的树。'], ['An old spruce by the path has a mark cut in its bark.', '路边一棵老云杉的树皮上刻了记号。'], 'd2_blaze'],
   d2cairn: [['Further on, where the path bends again.', '再往前，路又拐弯的地方。'], ['A heap of stones where the path bends.', '小路拐弯处有一堆石头。'], 'd2_cairn'],
-  d2light: [['Look about you, away from the path.', '离开小路，四下看看。'], ['East of north, past the cabin.', '北偏东，小屋那边过去。'], 'd2_lamp'],
+  d2light: [['Look up, over the treetops.', '抬头看看树梢。'], ['East of north, past the cabin.', '北偏东，小屋那边过去。'], 'd2_lamp'],
 });
 const HINT_ORDER2 = ['d2block', 'd2stake', 'd2blaze', 'd2cairn', 'd2light'];
 for (const [n, c] of Object.entries(D2_CARDS)) { INFO[n] = [c[0], c[1], c[5]]; STORY[c[0] + '|' + c[1]] = c[3]; STORY_ZH[c[0] + '|' + c[1]] = [c[2], c[4]]; }
@@ -2490,6 +2492,46 @@ function d2Add(name, g, x, z, yaw = 0) {
   scene.add(g); layers.set(name, g); g.traverse((o) => { if (o.isMesh) { meshes.push(o); o.receiveShadow = true; } });
   return g;
 }
+// 远处的烟：一柱炊烟升到树冠以上（树照样挡住下半截，不用在林子里清视线通道）。Points，位置在顶点着色器里按「出生后多久」算，同炉子的烟
+const PLUME_N = 110, PLUME_LIFE = 24, PLUME_GRAY = new THREE.Color(0xd8d4cc), PLUME_WARM = new THREE.Color(0xffb070);
+function makePlume(H) { // H = 烟升多高（米）；→ Group（原点 = 烟囱口），带看不见的点选柱（树冠以上那段）
+  const u = { uTime: { value: Math.random() * 50 }, uWind: { value: 0 }, uAmt: { value: 0 }, uScale: { value: 1 }, uColor: { value: new THREE.Color() }, uWarm: { value: new THREE.Color() }, uFogC: { value: new THREE.Color() } };
+  const geo = new THREE.BufferGeometry(), seed = new Float32Array(PLUME_N * 2);
+  for (let i = 0; i < PLUME_N; i++) { seed[i * 2] = i / PLUME_N; seed[i * 2 + 1] = Math.random(); }
+  geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(PLUME_N * 3), 3));
+  geo.setAttribute('seed', new THREE.BufferAttribute(seed, 2));
+  const mat = new THREE.ShaderMaterial({ uniforms: u, transparent: true, depthWrite: false,
+    vertexShader: `uniform float uTime, uWind, uAmt, uScale; attribute vec2 seed; varying float vA, vAge, vFog;
+      void main() {
+        float age = fract(uTime / ${PLUME_LIFE.toFixed(1)} + seed.x), r = seed.y, w = min(uWind, 6.0), a = r * 6.2832 + age * 2.0;
+        vec3 p = vec3(0.0, ${H.toFixed(1)} * (1.0 - pow(1.0 - age, 1.8)), 0.0); // 先直升、到顶慢下来摊开（冷天傍晚的炊烟）
+        p.x += (1.0 + w * 0.6) * pow(age, 1.5) * 5.0; // 越高越往下风偏
+        p.xz += vec2(cos(a), sin(a)) * (0.3 + age * 3.0 + age * age * 12.0) * (0.4 + 0.6 * r);
+        vec4 mv = modelViewMatrix * vec4(p, 1.0);
+        gl_Position = projectionMatrix * mv;
+        gl_PointSize = (2.0 + age * 18.0) * uScale / -mv.z;
+        vAge = age; vFog = smoothstep(30.0, 260.0, -mv.z) * 0.6; // 不吃 scene.fog（第 2 天雾 26m 就到底）：只稍微淡进雾色
+        vA = uAmt * smoothstep(0.0, 0.06, age) * pow(1.0 - age, 1.1) * 0.8;
+      }`,
+    fragmentShader: `uniform vec3 uColor, uWarm, uFogC; varying float vA, vAge, vFog;
+      void main() {
+        float a = vA * smoothstep(1.0, 0.15, length(gl_PointCoord - 0.5) * 2.0);
+        if (a < 0.004) discard;
+        gl_FragColor = vec4(mix(mix(uWarm, uColor, smoothstep(0.0, 0.25, vAge)), uFogC, vFog), a); // 根部带一点火光
+      }` });
+  const pts = new THREE.Points(geo, mat); pts.frustumCulled = false; pts.renderOrder = 2;
+  const g = new THREE.Group(); g.add(pts);
+  const pad = pickPad(new THREE.CylinderGeometry(6, 3, H * 0.6, 8)); pad.position.set(5, H * 0.6, 0); g.add(pad);
+  g.userData.plume = u; return g;
+}
+function updatePlume(g, dt, amt) { // amt 0..1；每帧调（可见时）
+  const u = g.userData.plume;
+  u.uTime.value += dt; u.uWind.value = wx.cur.wind; u.uAmt.value = amt;
+  u.uScale.value = renderer.domElement.height * 0.5 * camera.projectionMatrix.elements[5];
+  const day = Math.min(1, hemi.intensity / 0.8);
+  u.uColor.value.copy(PLUME_GRAY).multiplyScalar(0.35 + 0.65 * day).lerp(scene.fog.color, 0.25); // 比雾色亮一点，傍晚压在暗下来的天上
+  u.uWarm.value.copy(PLUME_WARM).lerp(u.uColor.value, day * 0.7); u.uFogC.value.copy(scene.fog.color);
+}
 function markTree(g, H, W) { // 标记树：林子里的云杉模型（pine.glb）放大，不另建模型；→ 「离地 y 米处的树干半径」函数，贴刻痕用
   return loadTree('trees/pine.glb').then((parts) => {
     for (const { geometry, material, trunk } of parts) { // 单实例 InstancedMesh：树冠材质（色块、积雪）跟林子里一样，它的着色器要 instanceMatrix
@@ -2533,23 +2575,21 @@ function day2Setup() {
     const S = D2_SPOTS[name], [p, rt] = pathAt(S.s), q = p.addScaledVector(rt, S.off);
     d2Add(name, g, q.x, q.z, Math.atan2(-rt.x * Math.sign(S.off), -rt.z * Math.sign(S.off))); // 记号那面朝着路
   }
-  // 雾里的灯：暖色光晕（不吃雾、不被挡）+ 一个看不见的大球好点；傍晚才出现
-  const lamp = new THREE.Group();
-  const glow = d2Canvas(64, 64, (x) => { const gr = x.createRadialGradient(32, 32, 0, 32, 32, 32); gr.addColorStop(0, 'rgba(255,226,170,1)'); gr.addColorStop(0.12, 'rgba(255,196,110,.9)'); gr.addColorStop(0.4, 'rgba(240,150,60,.3)'); gr.addColorStop(1, 'rgba(230,140,60,0)'); x.fillStyle = gr; x.fillRect(0, 0, 64, 64); });
-  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: glow, fog: false, depthTest: false, transparent: true, depthWrite: false })); sp.scale.set(9, 9, 1); sp.renderOrder = 10; lamp.add(sp); // 原 7：远处林缝里太小
-  lamp.add(pickPad(new THREE.SphereGeometry(3.5, 8, 6))); // 原 1.8：光晕 9m 宽，瞄光晕边上点不中（11-01 评审 #11）
-  d2Add('d2_lamp', lamp, D2.lamp[0], D2.lamp[2]); lamp.position.y = gy + D2.lamp[1]; lamp.visible = false; d2.lamp = lamp; d2.glow = sp;
+  // 林子那头的烟：那边没有人家，却有一柱炊烟升过树梢；傍晚才出现（原来是不吃雾、不被挡的灯光晕，要在林子里清出视线通道）
+  const lamp = makePlume(55);
+  d2Add('d2_lamp', lamp, D2.lamp[0], D2.lamp[2]); lamp.position.y = gy + 6; lamp.visible = false; d2.lamp = lamp;
   // 脚印：出门沿卵石路走几步，拐进林间踪迹，一直到雾里（和你的一样大；只出不进）
   { const pl = pathCurve.getLength(), tl = trailCurve.getLength(), at = (c, l, s) => c.getPointAt(Math.min(1, s / l));
-    const route = new THREE.CatmullRomCurve3([new THREE.Vector3(D2.door[0], 0, D2.door[1]), at(pathCurve, pl, 0), at(pathCurve, pl, 2.5), ...[5, 9, 14, 20, 27, 34, 42, 50].map((s) => at(trailCurve, tl, s))]);
-    const n = Math.floor(route.getLength() / 0.38), pp = printPool();
-    const im = new THREE.InstancedMesh(pp.im.geometry, pp.im.material, n);
-    const o = new THREE.Object3D();
-    for (let i = 0; i < n; i++) { const u = (i + 0.5) / n, p = route.getPointAt(u), t = route.getTangentAt(u), side = i % 2 ? 1 : -1;
-      o.position.set(p.x - t.z * 0.11 * side, ground.position.y + 0.02, p.z + t.x * 0.11 * side); o.rotation.set(0, Math.atan2(-t.x, -t.z), 0); o.updateMatrix(); im.setMatrixAt(i, o.matrix); }
-    im.name = 'd2_prints'; im.renderOrder = 2; scene.add(im); OUTDOOR.push(im); d2.prints = im;
+    d2.prints = makePrints('d2_prints', [new THREE.Vector3(D2.door[0], 0, D2.door[1]), at(pathCurve, pl, 0), at(pathCurve, pl, 2.5), ...[5, 9, 14, 20, 27, 34, 42, 50].map((s) => at(trailCurve, tl, s))]);
   }
   if (game.day >= 3) day3Setup(); // 小路尽头的老云杉、✕ 那边的灯
+}
+function makePrints(name, pts, side0 = 0.11) { // 一行靴印，沿 pts 连成的曲线走（和你的一样大，复用 printPool 的几何和材质）；side0 = 左右脚离中心线
+  const route = new THREE.CatmullRomCurve3(pts), n = Math.floor(route.getLength() / 0.38), pp = printPool();
+  const im = new THREE.InstancedMesh(pp.im.geometry, pp.im.material, n), o = new THREE.Object3D();
+  for (let i = 0; i < n; i++) { const u = (i + 0.5) / n, p = route.getPointAt(u), t = route.getTangentAt(u), side = i % 2 ? 1 : -1;
+    o.position.set(p.x - t.z * side0 * side, ground.position.y + 0.02, p.z + t.x * side0 * side); o.rotation.set(0, Math.atan2(-t.x, -t.z), 0); o.updateMatrix(); im.setMatrixAt(i, o.matrix); }
+  im.name = name; im.renderOrder = 2; scene.add(im); OUTDOOR.push(im); return im;
 }
 function pathNear(x, z) { // 离小路最近的采样点：{ d 离路中心, s 沿路米数 }
   let best = 1e9, bi = 0;
@@ -2572,23 +2612,40 @@ function day2StopFP(p) {
   inside = null; placeRooms(null); enterBtn.innerHTML = lbl('Enter the Cabin', '进屋'); enterBtn.classList.add('glow');
   controls.minDistance = 1; controls.maxDistance = 220; resetView(true); showQuest();
 }
-function loopBack() { // 走进还没认出来的雾里：压黑、回到门口
-  d2.veil = true; veilEl.style.transition = 'opacity .7s'; veilEl.style.opacity = 1;
+function loopBack() { // 走进雾里太远：雾浓到看不见（不黑屏），换个地方，雾散开时面前又是小屋
+  d2.veil = true; d2.fogGoal = 1;
   setTimeout(() => {
     if (fp && x3.shifted && !x3.on) { const [p] = pathAt(45); placeMan(fp.p, p.x, p.z, 0); } // 世界挪过了：原点那间是 ✕ 那间，放回踪迹上，不放到它门口
-    else if (fp) { placeMan(fp.p, ...D2.door, 0); fp.yaw = 0; fp.pitch = -0.1; }
-    veilEl.style.opacity = 0; showRoomNote(!x3.shifted ? D2_SAYS.lost : x3.on ? D3_SAYS.lostX : D3_SAYS.lost); hint.clicks++;
-    setTimeout(() => { d2.veil = false; veilEl.style.transition = ''; }, 800);
-  }, 800);
+    else if (fp && x3.on) { placeMan(fp.p, ...D2.door, 0); fp.yaw = 0; fp.pitch = -0.1; }
+    else if (fp) { const [p] = pathAt(9); placeMan(fp.p, p.x, p.z, 0); fp.yaw = Math.atan2(-p.x, D2.door[1] - p.z); fp.pitch = -0.05; if (!game.found.has('d2light')) loopChange(); } // 在院子边上、面朝小屋
+    d2.fogGoal = 0; showRoomNote(!x3.shifted ? (d2.passed ? D2_SAYS.lost : D2_SAYS.lost0) : x3.on ? D3_SAYS.lostX : D3_SAYS.lost); hint.clicks++;
+    setTimeout(() => { d2.veil = false; }, 1500);
+  }, 1100);
+}
+function loopChange() { // 雾里绕回来，小屋有一处变了（只第 2 天、白天）：第 1 次门口多一行进门的脚印，第 2 次烟囱不冒烟了（出门时大门本来就开着，不能用门）
+  d2.loops = (d2.loops || 0) + 1;
+  if (d2.loops === 1 && !d2.inPrints) { const [a] = pathAt(8), [b] = pathAt(3); d2.inPrints = makePrints('d2_in', [a.add(new THREE.Vector3(0.5, 0, 0)), b.add(new THREE.Vector3(0.6, 0, 0)), new THREE.Vector3(0.45, 0, 4.3), new THREE.Vector3(0.3, 0, 3.0)]); }
+  else if (d2.loops === 2) { const sf = toggles.get('stove_fire'); if (!sf || !sf.on) return; sf.on = false; } // 炉火灭了（烟囱的烟慢慢停），进屋炉子是冷的；玩家可以再点着
+  else return;
+  setTimeout(() => showRoomNote(D2_SAYS['change' + d2.loops]), 4500);
+}
+function lostFog(dev, dt) { // dev = 偏出可走范围多少米
+  d2.fogGoal = 0.75 * THREE.MathUtils.smoothstep(dev, 2, D2.lostAt);
+  d2.lostT = dev < D2.lostAt ? 0 : d2.lostT + dt;
+  if (d2.lostT > D2.lost) { d2.lostT = 0; loopBack(); }
 }
 function updateDay2(dt) {
   if (!d2.samples) return;
   const f = game.found, t = performance.now() / 1000;
-  if (fp && !game.night) { scene.fog.near = 2; scene.fog.far = 26; } // 第一人称在雾里：二十来米外就看不见
-  // 傍晚的灯：四样找齐、天色到傍晚才亮；人在屋里看不到
+  d2.fogV = (d2.fogV || 0) + ((d2.fogGoal || 0) - (d2.fogV || 0)) * Math.min(1, dt * 2.5); // 0 平常、0.75 走偏了、1 绕回去那一下
+  if (fp && !game.night) { scene.fog.near = 2 * (1 - d2.fogV); scene.fog.far = 26 - 24 * d2.fogV; } // 第一人称在雾里：二十来米外就看不见，走偏越远越浓
+  // 傍晚林子那头冒烟：四样找齐、天色到傍晚才有；人在屋里看不到
   const lampOn = DAY2_NEED.every((k) => f.has(k)) && !game.night && sky.hour > 17.2 && outdoors(camera.position);
   d2.lamp.visible = lampOn;
-  if (lampOn) d2.glow.material.opacity = 0.82 + 0.1 * Math.sin(t * 1.7) + 0.06 * Math.sin(t * 4.3);
+  if (game.day === 2 && !d2.backPrints && DAY2_NEED.every((k) => f.has(k))) { // 四样找齐：你那行脚印旁边多出一行一样大的，从石堆往屋里走（你还没往回走）
+    const via = []; for (let s = D2_SPOTS.d2_cairn.s - 2; s > 3; s -= 3) { const [q, rt] = pathAt(s); via.push(q.addScaledVector(rt, 0.55)); }
+    d2.backPrints = makePrints('d2_back', [...via, new THREE.Vector3(0.45, 0, 4.3), new THREE.Vector3(0.3, 0, 3.0)]); }
+  if (lampOn) updatePlume(d2.lamp, dt, THREE.MathUtils.smoothstep(sky.hour, 17.2, 17.5));
   if (!fp || game.night) return;
   const r = fp.p.root.position;
   if (lampOn && !d2.lampSaid && Math.hypot(r.x, r.z) < D2.lampNear) { d2.lampSaid = true; showRoomNote(D2_SAYS.lamp); }
@@ -2599,22 +2656,24 @@ function updateDay2(dt) {
   }
   if (d2.veil || x3.on) return; // ✕ 那间屋的院子在 updateDay3 里管
   const n = DAY2_MARKS.filter((k) => f.has(k)).length, q = pathNear(r.x, r.z);
-  const ok = Math.hypot(r.x, r.z) < D2.yard || (q.d < D2.width && q.s <= (game.day >= 3 ? D3.reach : D2.reach[n]));
-  d2.lostT = ok ? 0 : d2.lostT + dt;
-  if (d2.lostT > D2.lost) { d2.lostT = 0; loopBack(); }
+  // 没有墙：离踪迹（或走过还没认出的记号）越远雾越浓，偏出 D2.lostAt 米、再走 D2.lost 秒才绕回去
+  const side = q.d - D2.width, ahead = q.s - (game.day >= 3 ? D3.reach : D2.reach[n]);
+  d2.passed = ahead > side; // 是走过了记号（不是走偏）：绕回来时提一句「路边好像有什么」
+  lostFog(Math.hypot(r.x, r.z) < D2.yard ? 0 : Math.max(side, ahead), dt);
 }
 // —— 三日调查小游戏 · 第 3 天 + 结局（2026-10-27，灰盒）：读完第 2 夜记录 →「第二天结束」→ 重新载入成第三天早上（还是雾）→ 书架读工作日志后段 →「出门走走」，
 // 雾里的路一直放到 ✕（D3.s 米处一棵老云杉、树根下裂口、焦黑松针）→ 走到树跟前压黑，「放进」✕ 那间小屋：就是同一个模型换一套状态（applyX：大衣 / 靴子 / 提灯藏掉、
 // 炉火烧着、摇椅一直摇、书记员不在），所以两间屋永远不会同时渲染。四处不同（X_NEED）点到就记；走出门廊弹「回去 / 留下 / 再看看」；四处都找到再「回去」= 隐藏结局。
 // 结局读完存 ended、重新载入回自己那间，Journal 解锁终章、后记。进度键都在 game.found：log3 → xarrive → xcoat / xwatch / xnotes / xfire → xlook → end_* + ended。
-const D3 = { s: 110, reach: 118, near: 3.2, shiftAt: 40, yard: 14, spruceX: [-9, 10], light: [0, 2.4, 80] }; // s = 老云杉在小路上的米数（D2.reach 最后一档 90 之后）
+const D3 = { s: 110, fork: 28, reach: 118, near: 3.2, shiftAt: 40, yard: 14, spruceX: [-9, 10], light: [0, 2.4, 80] }; // s = 老云杉在小路上的米数（D2.reach 最后一档 90 之后）
+const D3_LOGS = [[D3.fork + 32, 1, 0.35, 5.5], [D3.fork + 78, -1, -0.3, 6]]; // 倒木 [路线米数, 躺在哪边（右手 +）, 斜多少, 长]：挡住这边，另一边在 extendPath 里多清出一块好绕
 const X_NEED = ['xcoat', 'xwatch', 'xnotes', 'xfire'];
 const X_HIDE = ['entry_coat', 'entry_boots', 'entry_lantern']; // ✕ 那间：他是穿戴整齐出的门
 const x3 = { on: false, wasIn: false, spruce: null, light: null };
 window.cabinX = x3; // 调试
 const D3_CARDS = { // 图层 → [标题, 区域, 中文标题, 英, 中, 说明]
   d3_spruce: ['The Old Spruce', 'Exterior', '老云杉', GAME_TEXT.xArrive[1].split('\n\n')[0], GAME_TEXT.xArrive[2].split('\n\n')[0], 'Where the trail gives out.'],
-  x_light: ['A Light to the South', 'Exterior', '南边的灯', GAME_TEXT.xLook[1], GAME_TEXT.xLook[2], 'A light, far off in the fog.'],
+  x_light: ['Smoke to the South', 'Exterior', '南边的烟', GAME_TEXT.xLook[1], GAME_TEXT.xLook[2], 'Smoke, far off over the trees.'],
 };
 for (const [n, c] of Object.entries(D3_CARDS)) { INFO[n] = [c[0], c[1], c[5]]; STORY[c[0] + '|' + c[1]] = c[3]; STORY_ZH[c[0] + '|' + c[1]] = [c[2], c[4]]; }
 const LOG3_CARD = ['Field Log', 'Parlour', '工作日志', 'Before setting out, the clerk reads the last pages of the field log aloud.\n\n' + GAME_TEXT.log3[1], '出发前，书记员把工作日志最后几页念了一遍。\n\n' + GAME_TEXT.log3[2], 'The last pages.'];
@@ -2653,7 +2712,7 @@ const D3_SAYS = {
 };
 Object.assign(HINTS, {
   log3: [['He wrote more than you have read.', '他写下的，比你读到的多。'], ['The field log, on the parlour bookcase.', '起居室书架上的工作日志。'], 'living_bookcase'],
-  xarrive: [['Follow his marks along the trail, past the stones.', '顺着踪迹上的记号走，过了石堆再往前。'], ['Keep on towards the light in the fog.', '朝雾里那盏灯走。'], 'd3_spruce'],
+  xarrive: [['Follow his marks along the trail, past the stones.', '顺着踪迹上的记号走，过了石堆再往前。'], ['Keep on towards the smoke over the trees.', '朝树梢上那柱烟走。'], 'd3_spruce'],
   xcoat: [['How did he go out, this time?', '这一回，他是怎么出的门？'], ['Look at the coat rail by the door.', '看看门边的衣帽架。'], 'entry_coat_rail'],
   xnotes: [['Someone has been writing.', '有人在写东西。'], ['The writing desk under the wall lamp.', '壁灯下的书桌。'], 'loft_desk'],
   xfire: [['Is the house as cold as yours was?', '这屋子跟你们那间一样冷吗？'], ['The stove — and up in the loft, the rocking chair.', '炉子——还有阁楼上的摇椅。'], 'loft_rocking_chair'],
@@ -2691,6 +2750,25 @@ function endDay2() { // 读完第 2 夜的调查记录：同 endDay，存成第 
     [['Next Morning', '第三天早上', () => { game.day = 3; saveGame(); try { sessionStorage.setItem('cabin.nextDay', '1'); } catch (e) { /* 存不了就照常问「继续上次」 */ } location.reload(); }]]);
 }
 function day3Setup() { // 小路尽头的老云杉 + 裂口 + 焦黑松针；✕ 那间屋往南看的灯（只在 ✕ 那边亮）
+  // 第 3 天走岔路：samples 换成「踪迹 0..D3.fork + 岔路 trail3Curve」，pathAt / pathNear / 迷路 / 小地图揭雾都跟着走（三样记号已在 day2Setup 按旧踪迹摆好）
+  const S0 = d2.samples, ds = S0.ds, t3 = trail3Curve.getSpacedPoints(Math.round(trail3Curve.getLength() / ds));
+  d2.samples = [...S0.slice(0, Math.round(D3.fork / ds)), ...t3]; d2.samples.ds = ds; D3.end = (d2.samples.length - 1) * ds; D3.reach = D3.end + 8;
+  scene.remove(d2.prints); OUTDOOR.splice(OUTDOOR.indexOf(d2.prints), 1); // 早上门口那行脚印改成一直通到老云杉跟前
+  { const pl = pathCurve.getLength(), at = (s) => pathCurve.getPointAt(Math.min(1, s / pl)), via = [];
+    for (let s = 5; s < D3.end - 4; s += 2.5) { const [q, rt] = pathAt(s), lg = D3_LOGS.find(([ls]) => Math.abs(ls - s) < 4); // 到倒木跟前往露出的那头绕
+      if (lg) q.addScaledVector(rt, -lg[1] * 1.5 * (1 - Math.abs(lg[0] - s) / 4)); via.push(q); }
+    d2.prints = makePrints('d2_prints', [new THREE.Vector3(D2.door[0], 0, D2.door[1]), at(0), at(2.5), ...via]); }
+  // 岔路上两根倒木，斜躺着挡住大半条路，要从露出的那头绕过去（碰撞圈并进 TREE_XZ，跟树干一样推开人；脚印也绕着走）
+  const logMat = d2Mat('#4a3a2c'), snowMat = d2Mat('#e9edf0');
+  for (const [s, side, yaw, L] of D3_LOGS) {
+    const [p, rt] = pathAt(s), c = p.clone().addScaledVector(rt, side * (L / 2 - 0.4)); // 里头那端过中心线 0.4m
+    const dir = rt.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), yaw), lg = new THREE.Group();
+    const m = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.26, L, 9), logMat); m.rotation.z = Math.PI / 2; m.castShadow = m.receiveShadow = true; lg.add(m);
+    const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.2, L * 0.92, 9), snowMat); cap.rotation.z = Math.PI / 2; cap.scale.set(1, 1, 0.45); cap.position.y = 0.13; lg.add(cap); // 背上一层雪（第 3 天固定积雪）
+    for (const e of [-1, 1]) { const st = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.06, 0.7, 5), logMat); st.position.set(e * L * 0.2, 0.3, 0.1 * e); st.rotation.set(0.5 * e, 0, 0.4); lg.add(st); } // 断枝
+    lg.position.set(c.x, ground.position.y + 0.2, c.z); lg.rotation.y = Math.atan2(-dir.z, dir.x); lg.name = 'd3_log'; scene.add(lg); OUTDOOR.push(lg);
+    for (let u = -L / 2; u <= L / 2; u += 0.45) TREE_XZ.push(c.x + dir.x * u, c.z + dir.z * u);
+  }
   const g = new THREE.Group(), bark = d2Mat('#3e3024');
   markTree(g, ...MARK_TREES.spruce); // 林子里同一种云杉，最高最粗的一棵
   for (let i = 0; i < 6; i++) { // 树根：几根斜插进土里的圆木
@@ -2703,15 +2781,13 @@ function day3Setup() { // 小路尽头的老云杉 + 裂口 + 焦黑松针；✕
     for (let y = 0; y <= h; y += 16) x.lineTo(w / 2 + (y % 32 ? 1 : -1) * (6 + 18 * Math.sin(Math.PI * y / h)), y);
     for (let y = h; y >= 0; y -= 16) x.lineTo(w / 2 + (y % 32 ? -1 : 1) * (3 + 10 * Math.sin(Math.PI * y / h)), y); x.fill(); });
   flat(new THREE.PlaneGeometry(1.1, 4.4), new THREE.MeshBasicMaterial({ map: rift, transparent: true, depthWrite: false, color: '#000' }), 0.04, -4).position.set(1.7, 0.04, 0.4);
-  const [p] = pathAt(D3.s);
+  const [p] = pathAt(D3.end);
   x3.spruce = d2Add('d3_spruce', g, p.x, p.z); x3.home = [p.x, p.z];
-  const lamp = new THREE.Group(), sp = new THREE.Sprite(d2.glow.material.clone()); sp.scale.set(5, 5, 1); sp.renderOrder = 10; lamp.add(sp);
-  lamp.add(pickPad(new THREE.SphereGeometry(2.5, 8, 6)));
-  x3.light = d2Add('x_light', lamp, D3.light[0], D3.light[2]); lamp.position.y = ground.position.y + D3.light[1]; lamp.visible = false;
-  // ✕ 那间屋的门廊灯：屋子还没「到」之前，雾里先亮这一团光晕（不吃雾），跟着世界一起平移
-  const pl = layers.get('entry_porch_lamp'), pc = pl ? new THREE.Box3().setFromObject(pl).getCenter(new THREE.Vector3()) : new THREE.Vector3(0, ground.position.y + 2.2, 3.4);
-  x3.glow = new THREE.Sprite(d2.glow.material.clone()); x3.glow.scale.set(5.5, 5.5, 1); x3.glow.renderOrder = 10; x3.glow.visible = false;
-  x3.glow.position.set(pc.x + XSHIFT.x, pc.y, pc.z + XSHIFT.y); scene.add(x3.glow); OUTDOOR.push(x3.glow);
+  const lamp = makePlume(55); // ✕ 那间屋门廊下往南看：自家烟囱的烟在树梢上
+  x3.light = d2Add('x_light', lamp, D3.light[0], D3.light[2]); lamp.position.y = ground.position.y + 4; lamp.visible = false;
+  // ✕ 那间屋的烟囱：屋子还没「到」之前，先看见树梢上一柱烟（原来是不吃雾、不被挡的门廊灯光晕），跟着世界一起平移
+  x3.glow = makePlume(55); x3.glow.visible = false;
+  x3.glow.position.set(2.42 + XSHIFT.x, ground.position.y + 3.6, -1.52 + XSHIFT.y); scene.add(x3.glow); OUTDOOR.push(x3.glow); // 烟囱口同 interact.js SMOKE_AT
   if (game.found.has('xarrive') && !game.found.has('ended')) applyX();
 }
 function xLook() { // 换成 ✕ 那间屋的样子（同一个模型，不另外渲染一间）
@@ -2773,10 +2849,10 @@ function updateDay3(dt) {
       if (!x3.shifted) { if (Math.hypot(r.x, r.z) > D3.shiftAt && pathNear(r.x, r.z).d < D2.width) shiftWorld(); }
       else if (Math.hypot(r.x - D2.door[0], r.z - D2.door[1]) < 2.4) enterX(); // 走到门廊下
     }
-    if (x3.glow) { // 雾里先看见门廊灯：远处淡、走近亮，到跟前交给真的灯
+    if (x3.glow) { // 树梢上先看见 ✕ 那间屋的烟
       const d = camera.position.distanceTo(x3.glow.position);
-      x3.glow.visible = f.has('log3') && !f.has('ended') && outdoors(camera.position) && d > 5;
-      x3.glow.material.opacity = 0.85 * (1 - THREE.MathUtils.smoothstep(d, 55, 105)) * THREE.MathUtils.smoothstep(d, 5, 12);
+      x3.glow.visible = f.has('log3') && !f.has('ended') && outdoors(camera.position) && d > 15;
+      if (x3.glow.visible) updatePlume(x3.glow, dt, THREE.MathUtils.smoothstep(d, 15, 35)); // 走近了交给屋子自己的烟
     }
     return;
   }
@@ -2784,13 +2860,12 @@ function updateDay3(dt) {
   const w = people.get('person_woman'); if (w && w.root.visible) { w.root.visible = false; w.hit.visible = false; } // 这边屋里没有人
   const rk = toggles.get('loft_rocking_chair'); if (rk && rocker.g && rocker.t > 3) rk.click(); // 摇椅一直在摇
   x3.light.visible = outdoors(camera.position);
-  if (x3.light.visible) x3.light.children[0].material.opacity = 0.75 + 0.1 * Math.sin(performance.now() / 600);
+  if (x3.light.visible) updatePlume(x3.light, dt, 1);
   if (!fp || d2.veil) return;
   const r = fp.p.root.position;
   if (Math.abs(r.x) < 1.5 && Math.abs(r.z) < 1.5) x3.wasIn = true;
   else if (x3.wasIn && outdoors(r) && Math.hypot(r.x, r.z) < 6 && $('dlg').hidden && card.hidden) { x3.wasIn = false; porchAsk(); }
-  d2.lostT = Math.hypot(r.x, r.z) < D3.yard ? 0 : d2.lostT + dt; // 这边走远了也是雾，绕回门口
-  if (d2.lostT > D2.lost) { d2.lostT = 0; loopBack(); }
+  lostFog(Math.hypot(r.x, r.z) - D3.yard, dt); // 这边走远了也是雾，绕回门口
 }
 // —— 迷雾小地图（2026-10-27，v3 起底图 = 墙上那张羊皮纸地图，见下面 mapBase）：左下角，北在上；没去过的地方盖着雾。0.3 秒重画一次（2D，不碰 WebGL）。
 const MM_ROOM = { Entry: 'Entry', 'Water Closet': 'Water Closet', Kitchen: 'Kitchen', 'Kitchen & Dining': 'Kitchen', Parlour: 'Parlour', Hall: 'Parlour', Loft: 'Loft' };
@@ -2927,7 +3002,7 @@ function mmDraw() {
     g.drawImage(mmDraw.home || (mmDraw.home = mapPaint(document.createElement('canvas'), false)), 0, 0, W, H);
     const mark = (wx, wz, col, r = 3) => { const [a, d] = P(wx, wz); g.fillStyle = col; g.beginPath(); g.arc(a, d, r, 0, 7); g.fill(); };
     for (const n of ['d2_stake', 'd2_blaze', 'd2_cairn']) { const o = layers.get(n); if (o) mark(o.position.x + ox, o.position.z + oz, n === 'd2_stake' ? '#8a3a2a' : n === 'd2_blaze' ? '#2f3a2e' : '#6d6a62', 2.5); }
-    mark(D2.lamp[0], D2.lamp[2], '#e8a040', 3.5);
+    mark(D2.lamp[0], D2.lamp[2], '#b8b2a8', 3.5);
     // 雾：整张盖住，再按进度挖洞：红圈（拿到那页纸就开）→ 黄线（沿卵石路走过的，第 2 天起整条）→ 绿线（沿踪迹一段段）
     const fog = mmDraw.fog || (mmDraw.fog = document.createElement('canvas')); fog.width = W; fog.height = H;
     const m = fog.getContext('2d'); m.fillStyle = 'rgba(206,208,204,0.97)'; m.fillRect(0, 0, W, H);
@@ -2937,7 +3012,7 @@ function mmDraw() {
     const pMax = game.day >= 2 ? 1e9 : mmPath;
     for (let i = 0; i < pathClear.length && i * 0.933 <= pMax; i += 12) hole(...pathClear[i], 22);
     const S = d2.samples || trailCurve.getSpacedPoints(80);
-    const sMax = Math.max(mmFar, f.has('xarrive') ? D3.s : 0, ...['d2stake', 'd2blaze', 'd2cairn'].map((n, i) => f.has(n) ? [24, 44, 64][i] + 4 : 0));
+    const sMax = Math.max(mmFar, f.has('xarrive') ? (D3.end || D3.s) : 0, ...['d2stake', 'd2blaze', 'd2cairn'].map((n) => f.has(n) ? D2_SPOTS[n.replace('d2', 'd2_')].s + 4 : 0));
     for (let i = 0; i < S.length && i * (S.ds || 1e9) <= sMax; i += 6) hole(S[i].x + ox, S[i].z + oz, 18);
     for (const n of ['d2_stake', 'd2_blaze', 'd2_cairn']) { const o = layers.get(n); if (o && f.has(n.replace('_', ''))) hole(o.position.x + ox, o.position.z + oz, 18); }
     if (f.has('d2light')) hole(D2.lamp[0], D2.lamp[2], 18);
