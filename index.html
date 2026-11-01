@@ -1649,7 +1649,7 @@ $('note').onclick = (e) => { e.stopPropagation(); showNote(null); };
 const journal = $('journal');
 $('jBtn').onclick = () => { for (const [q] of PANELS) q.hidden = true; journal.hidden = false; journal.scrollTop = 0; };
 journal.querySelector('.x').onclick = () => { journal.hidden = true; };
-addEventListener('keydown', (e) => { if (e.key === 'Escape') journal.hidden = true; });
+addEventListener('keydown', (e) => { if (e.key === 'Escape' && !journal.hidden) { journal.hidden = true; e.cabinClosed = true; } }); // 标记：这次 Esc 已用来关遗稿，第一人称别再退出
 // 屋里原地环顾：相机站定不动，目标点放在视线前方 LOOK_R 处，OrbitControls 绕它转 = 只转头，
 // 位置和高度基本不变（原来绕 0.3–2.5m 外的目标点公转，转着转着就穿墙、钻进家具）。屋里缩放改成滚轮调视场角。
 const LOOK_R = 0.05;
@@ -2198,7 +2198,7 @@ const HINTS = {
   lantern: [['And a light to find the way home?', '还有回来时照路的灯呢？'], ['The lantern on its peg in the Entry.', '玄关钉子上的提灯。'], 'entry_lantern'],
 };
 const HINT_ORDER = ['page', 'fire', 'letter', 'map']; // v2：只提示过关要的；日志、大衣靴子提灯是选看
-const HINT_IDLE = 90, HINT_IDLE_NIGHT = 20, HINT_CLICKS = 6, HINT_GLOW = 5000; // 天黑只差点书记员 / 书桌：20 秒就提示，每 20 秒升一级
+const HINT_IDLE = 90, HINT_IDLE_NIGHT = 20, HINT_IDLE_PAGE = 30, HINT_CLICKS = 6, HINT_GLOW = 5000; // 天黑只差点书记员 / 书桌：20 秒就提示，每 20 秒升一级；第一条（书桌上的纸）30 秒：玄关像死角，新玩家进门不知往哪走（11-01 评审）
 const hint = { idle: 0, clicks: 0, key: null, lvl: 0 };
 let hintGlow = null, hintGlowT = 0; // 三级提示时描边的图层（drawHighlight 当悬停画）
 function hintReset() { hint.idle = 0; hint.clicks = 0; }
@@ -2222,7 +2222,7 @@ function hintClick() { // select 里调：点了东西却没找到新线索
   const q = questNow(); if (!game.entered || !HINT_Q.includes(q) || hint.wait) return;
   if (++hint.clicks >= HINT_CLICKS) { hint.wait = true; setTimeout(() => { hint.wait = false; hintFire(); }, 1200); } // 等物件说明先读一眼
 }
-setInterval(() => { if (hintActive() && ++hint.idle >= (questNow() === 'night' ? HINT_IDLE_NIGHT : HINT_IDLE)) hintFire(); }, 1000);
+setInterval(() => { if (hintActive() && ++hint.idle >= ({ night: HINT_IDLE_NIGHT, page: HINT_IDLE_PAGE }[questNow()] || HINT_IDLE)) hintFire(); }, 1000);
 window.cabinHint = { hint, fire: hintFire, click: hintClick, HINTS, glow: () => hintGlow };
 function startNight(late) { // 线索找齐：书记员说一句 → 天色转到夜里、她走去书桌 → 壁灯亮起（late：刚弹出「他什么都没带」，等它读完）
   game.night = game.dusk = true;
@@ -2275,7 +2275,7 @@ function clerkToDesk() { // 天黑：书记员走到书桌坐下写（正在走�
   p.home = 'loft_chair'; INFO.person_woman[1] = 'Parlour'; INFO.person_woman[2] = 'Writing up the day at the desk.';
   p.after = () => { if (seatTaken('loft_chair', p)) return false; goHome(p, 'person_woman'); return true; };
 }
-const WANDER = ['books', 'map', 'dish', 'stove']; // 第 1 天白天她只在楼下转（书桌留到夜里）
+const WANDER = ['books', 'map', 'stove']; // 第 1 天白天她只在楼下转（书桌留到夜里）；不去碗架 dish：那点 (0.2,−1.25) 正堵在厨房到书桌的窄过道（11-01 评审）
 function planWander(p) {
   const r = p.root, names = WANDER.filter((s) => s !== p.lastSpot), s = names[Math.floor(Math.random() * names.length)], node = SPOTS[s].node;
   p.lastSpot = s; p.roam = 20 + Math.random() * 25;
@@ -2971,11 +2971,12 @@ function pick(e) {
   const rect = renderer.domElement.getBoundingClientRect();
   pointer.set((e.clientX - rect.left) / rect.width * 2 - 1, -(e.clientY - rect.top) / rect.height * 2 + 1);
   raycaster.setFromCamera(pointer, camera);
-  const hit = raycaster.intersectObjects(meshes.filter((m) => isShown(m) && m.parent.name !== 'wall_fixings').concat(roofWx.sides.filter((S) => S.s < 0 && S.slab.visible).map((S) => S.slab)), false)[0]; // 墙上的钉子、支架（wall_fixings）不挡点选：点挂钩等于点挂着的东西
+  const hit = raycaster.intersectObjects(meshes.filter((m) => isShown(m) && m.parent.name !== 'wall_fixings').concat(roofWx.sides.filter((S) => S.s < 0 && S.slab.visible).map((S) => S.slab)), false).find((h) => !(h.distance < 0.5 && /^person_/.test(h.object.parent.name))); // 墙上的钉子、支架（wall_fixings）不挡点选：点挂钩等于点挂着的东西
   pick.side = hit && hit.object.userData.side; // 点到屋顶积雪：记下是哪一坡
   let name = pick.side ? 'roof_snow' : hit && hit.object.parent.name;
   if (name === 'entry_toilet_room') return null; // 卫生间隔墙、门框、门柱、门锁都算房屋结构，不可点（2026-10-22 用户定；挡射线照旧）
   if (name === 'toilet_door_B') name = 'toilet_door_A'; // 两扇折叠门算一个：点哪扇都选 A（B 挂在 A 下，描边一起）
+  if (name === 'stove_iron_body' && !toggles.get('stove_fire')?.on) name = 'stove_firebox'; // 炉膛在炉身里，站着点总打到炉身：没生火时点炉子 = 点炉膛（电脑、触屏、悬停都走这里）
   return name && infoOf(name) ? name : null;
 }
 
@@ -3254,7 +3255,7 @@ fpHud.innerHTML = '<div class="dot"></div><div class="help">' + FP_HELP + '</div
 document.body.append(fpHud);
 const fpHint = fpHud.querySelector('.hint');
 // 不挡路的：墙上的挂件（贴着墙，墙本身会挡）、门帘、挂着的大衣、卫生纸架、毛巾架、地毯、正端在手里的东西
-const FP_SOFT = /^(wall_|take_|sink_water_bucket_dipper$|entry_(tp_holder|towel_rack|cleaning_tools|noren|coat$|coat_rail_keys|lantern|doormat)|loft_hanging_towel|.*_rug$)/;
+const FP_SOFT = /^(wall_|take_|sink_water_bucket_dipper$|entry_(tp_holder|towel_rack|cleaning_tools|noren|coat$|coat_rail_keys|lantern|doormat)|loft_hanging_towel|dining_stool_1$|.*_rug$)/; // dining_stool_1：和梯子夹出玄关进屋唯一的口，只剩 0.2m 能过（11-01 评审：玄关走不出去）
 function fpSolid() { // 碰撞用的网格：显示着的、不是自己的胶囊
   return meshes.filter((m) => m !== fp.p.hit && isShown(m) && !FP_SOFT.test(m.parent.name) && !(held && m.parent === held.g));
 }
@@ -3506,7 +3507,7 @@ canvas.addEventListener('mousedown', (e) => {
 });
 addEventListener('keydown', (e) => {
   if (!fp) return;
-  if (e.key === 'Escape' && fp.paused && card.hidden) { stopFP(); return; } // 卡片开着（鼠标已放出）：Esc 只关卡片
+  if (e.key === 'Escape' && fp.paused && card.hidden && !e.cabinClosed) { stopFP(); return; } // 卡片开着（鼠标已放出）：Esc 只关卡片
   if (e.code === 'KeyE' && !e.repeat) { fpUse(); return; }
   fp.keys.add(e.code);
 });
@@ -3664,6 +3665,8 @@ function updateFP(dt) {
       const q0 = fpProbe(r.position.x, r.position.y, r.position.z);
       fpPush(r, s, Math.max(0.42 * s, Math.min(1.1 * s, q0.ceil - r.position.y - 0.3)));
       fpTrees(r.position); fpShrubs(r.position);
+      const w = people.get('person_woman'); // 书记员站着闲着、玩家走到 0.9m 内：提前去下一处，别堵过道和书桌（11-01 评审）
+      if (w && !w.player && w.mode !== 'sit' && !w.tasks.length && w.roam > 0 && w.roam < 1e8 && Math.abs(w.root.position.y - r.position.y) < 1 && Math.hypot(w.root.position.x - r.position.x, w.root.position.z - r.position.z) < 0.9) w.roam = 0;
       const q = fpProbe(r.position.x, r.position.y, r.position.z);
       if (q.floor !== null) r.position.y += (q.floor - r.position.y) * Math.min(1, dt * 12);
       stepPrint(r, moving);
@@ -3840,7 +3843,6 @@ function fpTap(e) {
   if (p.tasks.length || fp.climb) return; // 起身、爬梯中
   if (p.mode === 'sit') { p.tasks = fpRise(p); return; }
   let name = pick(e); if (name && /_rug$|doormat/.test(name)) name = null; // 地毯、门垫当地面
-  if (name === 'stove_iron_body' && !toggles.get('stove_fire')?.on) name = 'stove_firebox'; // 炉膛在炉身里，站着点总打到炉身：没生火时点炉子 = 点炉膛（电脑上是低头对准炉膛）
   if (name && name !== 'roof_snow' && name !== p.id) {
     const g = layers.get(name) || people.get(name)?.root; if (!g) return;
     const box = new THREE.Box3().setFromObject(g), c = box.getCenter(new THREE.Vector3());
