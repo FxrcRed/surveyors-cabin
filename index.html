@@ -435,6 +435,7 @@ import { shared, share } from './js/state.js';
 import { terrain, terrainH, terrainSlope, sstep, makeGroundGeometry, applyTerrain } from './js/terrain.js';
 import { paperMesh, agedPaper, makeBook, inspectTick, inspecting, inspectBusy, inspectKind, inspectStart, inspectRelease } from './js/props3d.js';
 import { WX_ZH, sky, skyEl, skyU, indoorU, indoorShade, PANELS, wallU, updateSky } from './js/time-of-day.js';
+import { audioTick, audioStep, sfx } from './js/audio.js';
 import { applyWeather, wsPos, WS, groundCover, cover, precipHole, setupRoofWeather, wx, roofWx, setWeather, wxTimer, slideSnow, updatePrecip, updateRoofWeather } from './js/weather.js';
 import { LAMPS, toggles, DOORS, swapSoftProps, splitParts, setupToggles, setupFire, setupWaterFx, toggle, fire, rocker, toggleOf, updateToggles, updateFire, updateLantern, updateRocker, updateWaterFx } from './js/interact.js';
 import { people, SEATS, wakePerson, loadPeople, seatTaken, goHome, SPOTS, routeTasks, NAV, MOODS, fpRise, sitTasks, CLIMB, moodOf, climbAt, WALK_SPEED, ladderRoot, floorBelow, goTasks, nearNode, navPath, updatePeople } from './js/characters.js';
@@ -3103,7 +3104,7 @@ function select(name, direct) {
     if (inspectBusy()) { if (name) return; inspectRelease(); } // 飞的途中点别处不理；按 Esc / × 直接收尾
     else if (inspecting()) inspectRelease(() => { if (game.found.has('letter')) { const l = layers.get('stove_letter'); if (l) l.visible = false; } });
     const k = name && (/^(living_bookcase|field_log)/.test(name) && infoOf(name)?.[0] === 'Bookcase' && isClue(name) ? 'field_log' : inspectKind(name) && name);
-    if (k && inspectStart(k, bookText(), () => select(name, true))) return;
+    if (k && inspectStart(k, bookText(), () => select(name, true))) { sfx(k === 'book' ? 'book' : 'paper'); return; }
   }
   const prev = selected; selected = name; paint(prev); paint(name);
   if (!card.hidden && card.classList.contains('clue')) clueFly();
@@ -3407,7 +3408,7 @@ function fpTake() {
   const name = hovered, g = reachable(name);
   if (!g) return;
   const info = gripOf(name, g);
-  held = { name, g, info, mode: 'up', t: 0, from: poseOf(g, info.c0), turn: new THREE.Quaternion(), inspect: 0 };
+  held = { name, g, info, mode: 'up', t: 0, from: poseOf(g, info.c0), turn: new THREE.Quaternion(), inspect: 0 }; sfx('pick');
   g.traverse((o) => { if (o.isMesh) o.castShadow = false; }); shadowDirty = true; // 拿着时不投影（否则每帧要重画阴影图）
   heldLayer(g, true);
   select(name); paint(name); fp.solidT = 0; // 碰撞列表里去掉它
@@ -3443,7 +3444,7 @@ function updateHeld(dt) {
   if (h.mode === 'back') { h.g.position.set(0, 0, 0); h.g.quaternion.identity(); drops.delete(h.name); } // 放回原处：Group 复位
   else drops.set(h.name, h.to);
   h.g.traverse((o) => { if (o.isMesh) o.castShadow = true; }); shadowDirty = true; heldLayer(h.g, false);
-  held = null; if (fp) fp.solidT = 0;
+  held = null; if (fp) fp.solidT = 0; sfx('place', 0.5);
   if (selected === h.name) select(null); else paint(h.name);
 }
 function heldTurn(dx, dy) { // 翻看：在相机坐标里绕竖轴、横轴转
@@ -3685,6 +3686,7 @@ function updateFP(dt) {
   const eyeH = Math.min(1.62 * s, ceil - r.position.y - 0.14);
   fp.crouch = eyeH < 1.62 * s - 0.08;
   fp.bob = moving ? fp.bob + dt * (run ? 13 : 8.5) : fp.bob * 0.9;
+  audioStep(fp.bob, moving, run);
   _fpO.set(r.position.x + Math.sin(fp.yaw) * 0.12 * s, r.position.y + eyeH + Math.sin(fp.bob * 2) * 0.012, r.position.z + Math.cos(fp.yaw) * 0.12 * s);
   const seated = !!p.seat || p.mode === 'sit' || (climbs(p) && (!!fp.climb || p.S != null)); // 坐着、她爬梯子时镜头跟头骨
   fp.headK = (fp.headK || 0) + ((seated ? 1 : 0) - (fp.headK || 0)) * Math.min(1, dt * 6);
@@ -4263,6 +4265,7 @@ renderer.setAnimationLoop(() => {
   // 按真实时间转（原来按帧转，高刷新率屏会转得快），和开场结尾的角速度一致
   const now = performance.now(), dt = Math.min(0.1, (now - (lastT || now)) / 1000); lastT = now;
   adaptRes(now, dt);
+  audioTick(dt, !!VOICE.a && !VOICE.a.paused);
   updatePeople(dt);
   if (WATER.mat) WATER.mat.userData.u.uT.value = now / 1000;
   if (WATER.ice) { const I = WATER.ice, k1 = wx.name === 'Blizzard' ? 1 : 0; // 浮冰：暴雪时约 4 秒长出来，转晴时缩回去；看不到就不算
