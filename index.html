@@ -429,12 +429,14 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 import { mergeGeometries, mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
+import { MeshBVH } from 'three-mesh-bvh';
 import { SimplifyModifier } from 'three/addons/modifiers/SimplifyModifier.js';
 import { scene, sun, hemi, renderer, camera, controls, $, lang, esc, lbl, PR_MAX } from './js/core.js';
 import { shared, share } from './js/state.js';
 import { terrain, terrainH, terrainSlope, sstep, makeGroundGeometry, applyTerrain } from './js/terrain.js';
 import { paperMesh, agedPaper, makeBook, inspectTick, inspecting, inspectBusy, inspectKind, inspectStart, inspectRelease } from './js/props3d.js';
 import { WX_ZH, sky, skyEl, skyU, indoorU, indoorShade, PANELS, wallU, updateSky } from './js/time-of-day.js';
+import { audioTick, audioStep, sfx } from './js/audio.js';
 import { applyWeather, wsPos, WS, groundCover, cover, precipHole, setupRoofWeather, wx, roofWx, setWeather, wxTimer, slideSnow, updatePrecip, updateRoofWeather } from './js/weather.js';
 import { LAMPS, toggles, DOORS, swapSoftProps, splitParts, setupToggles, setupFire, setupWaterFx, toggle, fire, rocker, toggleOf, updateToggles, updateFire, updateLantern, updateRocker, updateWaterFx } from './js/interact.js';
 import { people, SEATS, wakePerson, loadPeople, seatTaken, goHome, SPOTS, routeTasks, NAV, MOODS, fpRise, sitTasks, CLIMB, moodOf, climbAt, WALK_SPEED, ladderRoot, floorBelow, goTasks, nearNode, navPath, updatePeople } from './js/characters.js';
@@ -1391,7 +1393,7 @@ loader.load('cabin.glb', async (gltf) => {
   // 树种好再揭开加载页、开始开场动画，免得飞行中树一棵棵冒出来
   plantForest(center, ground.position.y).catch(console.error).then(clearOrbitView).then(() => peopleReady).finally(async () => {
     T('forest');
-    await prewarm(); sceneReady = true;
+    await prewarm(); const w0 = performance.now(); await Promise.all(bvhJobs); window.__bvhWait = performance.now() - w0; sceneReady = true; // __bvhWait 调试用：后台 BVH 没赶上时多等了多久
     T('prewarm');
     pct.textContent = '100%'; bar.style.width = '100%';
     const go = () => { document.getElementById('loader').classList.add('done'); startIntro(); startOpening(); resumeAsk(); if (!opening) { enterBtn.classList.remove('wait'); $('jBtn').classList.remove('wait'); } }; // 有开场字幕就等播完再出「进屋」「遗稿」
@@ -1422,6 +1424,21 @@ async function mergeByLayerAndMaterial(root) {
   }
   return out;
 }
+// 点选加速结构（BVH）交给后台线程 js/bvh-worker.js 建，揭开加载页前等齐（bvhJobs）；worker 起不来或出错就在主线程建
+const bvhJobs = [], bvhWait = new Map();
+let bvhWorker = null, bvhN = 0;
+try {
+  bvhWorker = new Worker(new URL('./js/bvh-worker.js', location.href), { type: 'module' });
+  bvhWorker.postMessage({ init: 1, bvhURL: import.meta.resolve('three-mesh-bvh'), threeURL: import.meta.resolve('three') });
+  bvhWorker.onmessage = ({ data }) => { const j = bvhWait.get(data.id); bvhWait.delete(data.id); if (data.err) j.g.computeBoundsTree(); else j.g.boundsTree = MeshBVH.deserialize(data.s, j.g); j.done(); };
+  bvhWorker.onerror = () => { bvhWorker = null; for (const j of bvhWait.values()) { j.g.computeBoundsTree(); j.done(); } bvhWait.clear(); };
+} catch (e) { bvhWorker = null; }
+function buildBVH(g) {
+  if (!bvhWorker) { g.computeBoundsTree(); return; }
+  const id = ++bvhN, position = g.attributes.position.array.slice(), index = g.index.array.slice(); // 拷一份传过去，原数组还要渲染
+  bvhJobs.push(new Promise((done) => bvhWait.set(id, { g, done })));
+  bvhWorker.postMessage({ id, position, index }, [position.buffer, index.buffer]);
+}
 function mergeSubtree(name, roots) {
   const buckets = new Map();
   for (const r of roots) r.traverse((o) => {
@@ -1439,7 +1456,7 @@ function mergeSubtree(name, roots) {
   for (const [mat, geos] of buckets) {
     const mesh = new THREE.Mesh(mergeGeometries(geos), mat);
     mesh.castShadow = mesh.receiveShadow = true;
-    mesh.geometry.computeBoundsTree();
+    buildBVH(mesh.geometry);
     meshes.push(mesh);
     group.add(mesh);
     geos.forEach((g) => g.dispose());
@@ -3178,7 +3195,7 @@ function select(name, direct) {
     if (inspectBusy()) { if (name) return; inspectRelease(); } // 飞的途中点别处不理；按 Esc / × 直接收尾
     else if (inspecting()) inspectRelease(() => { if (game.found.has('letter')) { const l = layers.get('stove_letter'); if (l) l.visible = false; } });
     const k = name && (/^(living_bookcase|field_log)/.test(name) && infoOf(name)?.[0] === 'Bookcase' && isClue(name) ? 'field_log' : inspectKind(name) && name);
-    if (k && inspectStart(k, bookText(), () => select(name, true))) return;
+    if (k && inspectStart(k, bookText(), () => select(name, true))) { sfx(k === 'book' ? 'book' : 'paper'); return; }
   }
   const prev = selected; selected = name; paint(prev); paint(name);
   if (!card.hidden && card.classList.contains('clue')) clueFly();
@@ -3482,7 +3499,7 @@ function fpTake() {
   const name = hovered, g = reachable(name);
   if (!g) return;
   const info = gripOf(name, g);
-  held = { name, g, info, mode: 'up', t: 0, from: poseOf(g, info.c0), turn: new THREE.Quaternion(), inspect: 0 };
+  held = { name, g, info, mode: 'up', t: 0, from: poseOf(g, info.c0), turn: new THREE.Quaternion(), inspect: 0 }; sfx('pick');
   g.traverse((o) => { if (o.isMesh) o.castShadow = false; }); shadowDirty = true; // 拿着时不投影（否则每帧要重画阴影图）
   heldLayer(g, true);
   select(name); paint(name); fp.solidT = 0; // 碰撞列表里去掉它
@@ -3518,7 +3535,7 @@ function updateHeld(dt) {
   if (h.mode === 'back') { h.g.position.set(0, 0, 0); h.g.quaternion.identity(); drops.delete(h.name); } // 放回原处：Group 复位
   else drops.set(h.name, h.to);
   h.g.traverse((o) => { if (o.isMesh) o.castShadow = true; }); shadowDirty = true; heldLayer(h.g, false);
-  held = null; if (fp) fp.solidT = 0;
+  held = null; if (fp) fp.solidT = 0; sfx('place', 0.5);
   if (selected === h.name) select(null); else paint(h.name);
 }
 function heldTurn(dx, dy) { // 翻看：在相机坐标里绕竖轴、横轴转
@@ -3760,6 +3777,7 @@ function updateFP(dt) {
   const eyeH = Math.min(1.62 * s, ceil - r.position.y - 0.14);
   fp.crouch = eyeH < 1.62 * s - 0.08;
   fp.bob = moving ? fp.bob + dt * (run ? 13 : 8.5) : fp.bob * 0.9;
+  audioStep(fp.bob, moving, run);
   _fpO.set(r.position.x + Math.sin(fp.yaw) * 0.12 * s, r.position.y + eyeH + Math.sin(fp.bob * 2) * 0.012, r.position.z + Math.cos(fp.yaw) * 0.12 * s);
   const seated = !!p.seat || p.mode === 'sit' || (climbs(p) && (!!fp.climb || p.S != null)); // 坐着、她爬梯子时镜头跟头骨
   fp.headK = (fp.headK || 0) + ((seated ? 1 : 0) - (fp.headK || 0)) * Math.min(1, dt * 6);
@@ -4356,6 +4374,7 @@ renderer.setAnimationLoop(() => {
   const now = performance.now(), dt = Math.min(0.1, (now - (lastT || now)) / 1000); lastT = now;
   adaptRes(now, dt);
   if (sceneReady) hideOutdoors(now);
+  audioTick(dt, !!VOICE.a && !VOICE.a.paused);
   updatePeople(dt);
   if (WATER.mat) WATER.mat.userData.u.uT.value = now / 1000;
   if (WATER.ice) { const I = WATER.ice, k1 = wx.name === 'Blizzard' ? 1 : 0; // 浮冰：暴雪时约 4 秒长出来，转晴时缩回去；看不到就不算
