@@ -1431,7 +1431,7 @@ function mergeSubtree(name, roots) {
     if (!g.attributes.normal) g.computeVertexNormals();
     if (!g.attributes.uv) g.setAttribute('uv', new THREE.Float32BufferAttribute(new Float32Array(g.attributes.position.count * 2), 2));
     const list = buckets.get(o.material) || [];
-    list.push(g.index ? g.toNonIndexed() : g);
+    list.push(g.index ? g : mergeVertices(g)); // 保留索引、共用顶点（2026-11-02 前是 toNonIndexed：每个三角面独占 3 个顶点，小屋 730 万顶点、JS 堆 234MB）
     buckets.set(o.material, list);
   });
   const group = new THREE.Group();
@@ -4248,6 +4248,23 @@ function adaptRes(now, dt) {
   else if (res.ema < 0.012 && pr < RES_MAX) np = Math.min(RES_MAX, pr + 0.25);
   if (np !== pr) { renderer.setPixelRatio(np); res.at = now; res.ema = 0.016; }
 }
+// 人在屋里（头顶、四面都挡着）且门洞不在视野里：屋外的树、灌木、草、芦苇、石头（屋外的 InstancedMesh，屋里画面约 136 万面）都看不见，不画（2026-11-02 mobile-perf）
+// 用 layer 不用 visible：FAR_DETAIL 的 visible 归渲染循环那行管；这些物体挪到 OUT_LAYER，主相机和太阳阴影相机都开这一层，在屋里时主相机关掉它
+const OUT_LAYER = 5, inRay = new THREE.Raycaster(), _inDirs = [[0, 1, 0], [1, 0, 0], [-1, 0, 0], [0, 0, 1], [0, 0, -1]].map((a) => new THREE.Vector3(...a)), _frus = new THREE.Frustum(), _pm = new THREE.Matrix4(), doorBox = new THREE.Box3();
+const outdoor = { at: 0, inHouse: false };
+camera.layers.enable(OUT_LAYER); sun.shadow.camera.layers.enable(OUT_LAYER); inRay.far = 6; inRay.firstHitOnly = true;
+function hideOutdoors(now) {
+  if (now - outdoor.at > 250) { // 4 次/秒：把新种的屋外实例挪层、射线判断在不在屋里、更新门洞范围
+    outdoor.at = now;
+    scene.traverse((o) => { if (o.isInstancedMesh && o.layers.isEnabled(0) && !o.userData.indoor) { let m = false; for (let p = o.parent; p && !m; p = p.parent) m = p === window.cabin.model; if (m) o.userData.indoor = 1; else { o.layers.disable(0); o.layers.enable(OUT_LAYER); } } });
+    const solid = meshes.filter(isShown);
+    outdoor.inHouse = _inDirs.every((d) => { inRay.set(camera.position, d); return inRay.intersectObjects(solid, false).length > 0; });
+    const dw = layers.get('door_wood'); if (dw) doorBox.setFromObject(dw).expandByScalar(0.8); // 门扇加 0.8m：盖住门洞和开门扫过的范围
+  }
+  let hide = outdoor.inHouse && !intro;
+  if (hide && !doorBox.isEmpty()) { camera.updateMatrixWorld(); _frus.setFromProjectionMatrix(_pm.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse)); hide = !_frus.intersectsBox(doorBox); } // 门洞在画面里就照画（门可能开着）
+  if (hide === camera.layers.isEnabled(OUT_LAYER)) hide ? camera.layers.disable(OUT_LAYER) : camera.layers.enable(OUT_LAYER);
+}
 addEventListener('resize', () => {
   camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix();
   renderer.setSize(innerWidth, innerHeight);
@@ -4338,6 +4355,7 @@ renderer.setAnimationLoop(() => {
   // 按真实时间转（原来按帧转，高刷新率屏会转得快），和开场结尾的角速度一致
   const now = performance.now(), dt = Math.min(0.1, (now - (lastT || now)) / 1000); lastT = now;
   adaptRes(now, dt);
+  if (sceneReady) hideOutdoors(now);
   updatePeople(dt);
   if (WATER.mat) WATER.mat.userData.u.uT.value = now / 1000;
   if (WATER.ice) { const I = WATER.ice, k1 = wx.name === 'Blizzard' ? 1 : 0; // 浮冰：暴雪时约 4 秒长出来，转晴时缩回去；看不到就不算
