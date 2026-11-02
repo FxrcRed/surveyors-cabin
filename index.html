@@ -430,7 +430,7 @@ import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 import { mergeGeometries, mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
 import { SimplifyModifier } from 'three/addons/modifiers/SimplifyModifier.js';
-import { scene, sun, hemi, renderer, camera, controls, $, lang, esc, lbl } from './js/core.js';
+import { scene, sun, hemi, renderer, camera, controls, $, lang, esc, lbl, PR_MAX } from './js/core.js';
 import { shared, share } from './js/state.js';
 import { terrain, terrainH, terrainSlope, sstep, makeGroundGeometry, applyTerrain } from './js/terrain.js';
 import { paperMesh, agedPaper, makeBook, inspectTick, inspecting, inspectBusy, inspectKind, inspectStart, inspectRelease } from './js/props3d.js';
@@ -1399,10 +1399,10 @@ loader.load('cabin.glb', async (gltf) => {
     else { const b = document.createElement('button'); b.id = 'startBtn'; b.innerHTML = lbl('Enter', '进入'); b.onclick = go; pct.replaceWith(b); } // 加载完先点「进入」再放开场：浏览器要先有一次点击才让配音出声
   });
 }, (e) => {
-  // GitHub Pages 用 gzip 传，e.total 是压缩后大小（约 16.9MB）而 e.loaded 是解压后字节 → 会超 100%；按解压后约 27.3MB 算，并封顶 99%
-  const t = Math.max(e.total || 0, 27.3e6);
+  // GitHub Pages 用 gzip 传，e.total 是压缩后大小（约 16.9MB）而 e.loaded 是解压后字节 → 会超 100%；按解压后约 20.3MB 算（2026-11-02 贴图降到 512 后），并封顶 99%
+  const t = Math.max(e.total || 0, 20.3e6);
   PROG.dl = Math.min(55, e.loaded / t * 55);
-  if (!window.__dl && e.loaded >= 27.3e6 * 0.995) { window.__dl = 1; T('downloaded'); }
+  if (!window.__dl && e.loaded >= 20.3e6 * 0.995) { window.__dl = 1; T('downloaded'); }
 }, (err) => { pct.innerHTML = lbl('Alas, it could not be loaded: ', '唉，没能加载：') + esc(err.message); console.error(err); });
 
 // 导出的模型有上万个小网格，逐个绘制太慢：按「子图层 + 材质」合并。
@@ -4237,7 +4237,7 @@ for (const ev of ['pointerdown', 'wheel']) canvas.addEventListener(ev, () => { i
 addEventListener('keydown', () => { if (!justUnlocked()) { endIntro(true); mornEnd(); } }); // 早上那段只认按键跳过（点画面是要锁鼠标）
 
 // 自适应分辨率：帧间隔平均持续 >24ms（不到 ~42 帧）就把像素比降 0.25（最低 1，大屏/高分屏上像素着色是大头）；持续 <12ms 再慢慢升回去
-const RES_MAX = Math.min(devicePixelRatio, 2), res = { ema: 0.016, at: 0 };
+const RES_MAX = PR_MAX, res = { ema: 0.016, at: 0 };
 function adaptRes(now, dt) {
   if (dt <= 0 || document.hidden) return;
   res.ema += (dt - res.ema) * 0.05;

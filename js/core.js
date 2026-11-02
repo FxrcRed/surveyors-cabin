@@ -9,7 +9,8 @@ THREE.Mesh.prototype.raycast = acceleratedRaycast; // 合并后单个网格三�
 
 const app = document.getElementById('app');
 const renderer = new THREE.WebGLRenderer({ antialias: true });
-renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+const PR_MAX = Math.min(devicePixelRatio, matchMedia('(pointer: coarse)').matches ? 1.5 : 2); // 像素比上限：触屏（手机）1.5，3 倍屏上和 2 肉眼分不出、少画 44% 像素（2026-11-02 对比截图）
+renderer.setPixelRatio(PR_MAX);
 renderer.setSize(innerWidth, innerHeight);
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.shadowMap.enabled = true;
@@ -45,4 +46,4 @@ const lang = () => document.documentElement.dataset.lang;
 const esc = (t) => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;');
 const lbl = (en, zh) => `<span class="en">${esc(en)}</span><span class="zh">${esc(zh)}</span>`;
 
-export { scene, sun, hemi, renderer, camera, controls, $, lang, esc, lbl };
+export { scene, sun, hemi, renderer, camera, controls, $, lang, esc, lbl, PR_MAX };
