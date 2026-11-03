@@ -36,10 +36,10 @@ for (const [n, p] of WEATHERS) {
 }
 // 打开时随机一种天气（直接到位，不渐变），之后每 2–4 分钟自动换成另一种；手动选了就从那时重新计时
 let wxTimer = 0;
-function setWeather(n, now) {
+function setWeather(n, now, show = n) { // show：界面上写的名字和图标（第 2、3 天实际是小雪，故事里是雾，标签写雾）
   const i = WEATHERS.findIndex((w) => w[0] === n), p = WEATHERS[i][1];
   wx.name = n; wx.goal = p; if (now) wx.cur = { ...p };
-  $('wxName').innerHTML = lbl(n, WX_ZH[n]); $('wxIco').innerHTML = `<svg viewBox="0 0 20 20">${WX_ICON[n]}</svg>`; [...wxPanel.children].forEach((c, k) => c.classList.toggle('on', k === i));
+  $('wxName').innerHTML = lbl(show, WX_ZH[show]); $('wxIco').innerHTML = `<svg viewBox="0 0 20 20">${WX_ICON[show]}</svg>`; [...wxPanel.children].forEach((c, k) => c.classList.toggle('on', k === i));
   clearTimeout(wxTimer);
   wxTimer = setTimeout(() => { const o = WEATHERS.filter((w) => w[0] !== wx.name); setWeather(o[Math.floor(Math.random() * o.length)][0]); }, (120 + Math.random() * 120) * 1000);
 }
