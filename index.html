@@ -134,14 +134,14 @@ if (navigator.webdriver || /[?&]nolock\b/.test(location.search)) { let el = null
   #langBtn { position: fixed; right: 7px; bottom: 26px; z-index: 8; font: inherit; font-family: "IM Fell English SC", "IM Fell English", Georgia, serif; font-size: var(--fs-xs); letter-spacing: 1px; color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,.7);
     background: none; border: 0; border-radius: 4px; padding: 2px 5px; cursor: pointer; }
   #viewBtn { position: fixed; right: 7px; top: 10px; z-index: 8; font: inherit; font-size: var(--fs-xs); letter-spacing: .5px; color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,.7); background: none; border: 0; padding: 2px 5px; cursor: pointer; opacity: .75; }
-  /* 房间导览（触屏第一人称）：按钮在「看模型」下面（它藏着时顶上去），列表从按钮处展开 */
-  #roomBtn { position: fixed; right: 7px; top: 34px; z-index: 8; font: inherit; font-size: var(--fs-xs); letter-spacing: .5px; color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,.7); background: none; border: 0; padding: 2px 5px; cursor: pointer; opacity: .75; }
-  #viewBtn[hidden] + #roomBtn { top: 10px; }
-  #roomList { position: fixed; right: 10px; top: 60px; z-index: 8; display: flex; flex-direction: column; align-items: flex-end; gap: 4px; color: #f4efe6; text-shadow: 0 1px 3px rgba(0,0,0,.75), 0 0 8px rgba(0,0,0,.45);
+  /* 房间导览（触屏第一人称）：按钮在「看模型」下面（它藏着时顶上去），列表从按钮处展开；按钮和列表项点击区至少 44px 高（字号不变） */
+  #roomBtn { position: fixed; right: 7px; top: 27px; z-index: 8; font: inherit; font-size: var(--fs-xs); letter-spacing: .5px; color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,.7); background: none; border: 0; padding: 0 5px; min-width: 44px; min-height: 44px; text-align: right; cursor: pointer; opacity: .75; }
+  #viewBtn[hidden] + #roomBtn { top: 3px; }
+  #roomList { position: fixed; right: 10px; top: 72px; z-index: 8; display: flex; flex-direction: column; align-items: flex-end; color: #f4efe6; text-shadow: 0 1px 3px rgba(0,0,0,.75), 0 0 8px rgba(0,0,0,.45);
     transform-origin: top right; transition: opacity .2s, transform .2s ease; }
-  #viewBtn[hidden] ~ #roomList { top: 36px; }
+  #viewBtn[hidden] ~ #roomList { top: 48px; }
   #roomList.shut { opacity: 0; transform: scale(.6); pointer-events: none; }
-  #roomList button { font: inherit; font-size: var(--fs-m); letter-spacing: 1px; color: inherit; text-shadow: inherit; background: none; border: 0; padding: 3px 4px; text-align: right; cursor: pointer; }
+  #roomList button { font: inherit; font-size: var(--fs-m); letter-spacing: 1px; color: inherit; text-shadow: inherit; background: none; border: 0; padding: 0 4px 0 12px; min-height: 44px; text-align: right; cursor: pointer; }
   #roomList button .zh { display: block; font-size: var(--fs-xs); letter-spacing: 2px; opacity: .8; }
   html[data-lang="zh"] #roomList button .zh { font-size: var(--fs-m); opacity: 1; }
   #roomList button.on { color: #e8c89a; }
@@ -3741,20 +3741,17 @@ function fpTryMove(r, dx, dz, s) { // 整步走不了就试只走 x、只走 z�
   }
   return false;
 }
-function ladderNear(r) {
-  if (!ladderReady() || Math.abs(r.position.z - ladderZ()) > 0.5) return false;
-  const x = r.position.x, y = r.position.y;
-  return (y < 1 && x > 0.77 && x < 1.75) || (y > 2 && x > 0.15 && x < 0.72);
+function ladderNear(r) { // 「E 上/下梯子」提示和按 E 能爬（fpLadderStart）用同一个范围：原来提示 z ±0.5、能爬 ±0.24，站偏了有提示却爬不上
+  if (!ladderReady() || Math.abs(r.position.z - ladderZ()) > LADDER.halfW) return false;
+  const x = r.position.x, y = r.position.y, w = climbs(fp.p);
+  return (y < 1 && x > 0.77 && x < (w ? 1.75 : 1.45)) || (y > 2 && x > (w ? 0.15 : 0.25) && x < 0.72); // 1.45：梯子脚在 x≈1.15，人站梯子东边（NAV.ladder 1.40）也能上
 }
 // 女调查员有真的爬梯动作（CLIMB）：上下梯子的过渡（mount / top / topDown / dismount）排进 p.tasks 由 runTask 跑，梯子上按 W/S 改 S、动作相位跟着 S；
 // 爬到顶自动上阁楼（拦杆放着她自己推起来）；镜头跟着头骨。老人没有爬梯动作，还是原来那套（走路动画凑合）。
 const climbs = (p) => !!p.acts.Climb_Ladder_Loop;
 function fpLadderStartW(r) {
-  if (!ladderReady() || Math.abs(r.position.z - ladderZ()) > LADDER.halfW) return null;
-  const x = r.position.x, y = r.position.y;
-  if (y < 1 && x > 0.77 && x < 1.75) return { ph: 'mount' };
-  if (y > 2 && x > 0.15 && x < 0.72 && gateOpen()) return { ph: 'down' };
-  return null;
+  if (!ladderNear(r)) return null;
+  return r.position.y < 1 ? { ph: 'mount' } : gateOpen() ? { ph: 'down' } : null;
 }
 function fpClimbW(r, dt, f, run) {
   const C = fp.climb, p = fp.p;
@@ -3769,11 +3766,9 @@ function fpClimbW(r, dt, f, run) {
 }
 function fpLadderStart(r) { // 站在梯子前按 E → 上梯；在阁楼梯子口按 E → 下梯（2026-10-30 起不再走路按 W 自动上梯：路过梯子脚会被「吸」上阁楼）
   if (climbs(fp.p)) return fpLadderStartW(r);
-  if (!ladderReady() || Math.abs(r.position.z - ladderZ()) > LADDER.halfW) return null;
-  const x = r.position.x, y = r.position.y;
-  if (y < 1 && x > 0.77 && x < 1.45) { r.position.y += 0.05; return { ph: 'on' }; } // 1.45：梯子脚在 x≈1.15，人站梯子东边（NAV.ladder 1.40）也能上 // 抬离地面一点：不然没按 W 当场就算「下到地了」
-  if (y > 2 && x > 0.25 && x < 0.72 && gateOpen()) return { ph: 'down', t: 0, x0: x };
-  return null;
+  if (!ladderNear(r)) return null;
+  if (r.position.y < 1) { r.position.y += 0.05; return { ph: 'on' }; } // 抬离地面一点：不然没按 W 当场就算「下到地了」
+  return gateOpen() ? { ph: 'down', t: 0, x0: r.position.x } : null;
 }
 function fpClimb(r, dt, f, run) {
   const C = fp.climb, p = fp.p;
@@ -3968,7 +3963,7 @@ function sliceView() { // 右上角：第一人称时「看模型」（作品集
   b.innerHTML = fp ? lbl('View the model', '看模型') : lbl('Back to him', '回到稽查');
 }
 // 房间导览（2026-11-03，触屏第一人称）：右上「Rooms」点开 6 间，点一间沿路网走过去（fpGo；跨层自动爬梯子）
-const ROOM_GO = { 'Entry': NAV.entry, 'Water Closet': NAV.wc, 'Hall': NAV.hall3, 'Parlour': SL.sofa, 'Kitchen & Dining': NAV.hall, 'Loft': NAV.L_mid };
+const ROOM_GO = { 'Entry': [0.15, 1.7, 110, -0.2], 'Water Closet': [-0.62, 1.0, 293, -0.3], 'Hall': [...NAV.hall3, 185, 0.15], 'Parlour': [0.2, -1.0, 327, -0.2], 'Kitchen & Dining': [...NAV.hall, 180, -0.15], 'Loft': [...NAV.L_mid, 213, -0.1] }; // [x, z, 朝向°, 俯仰]：朝向照 ROOMS 的看屋视角，到了转过去（不然脸贴墙）
 const roomBtn = $('roomBtn'), roomList = $('roomList');
 roomBtn.innerHTML = lbl('Rooms', '房间');
 roomList.innerHTML = Object.keys(ROOM_GO).map((n) => { const r = ROOMS.find((q) => q.name === n); return `<button data-room="${n}">${lbl(r.name, r.zh)}</button>`; }).join('');
@@ -3982,7 +3977,8 @@ roomList.onclick = (e) => {
   if (!b || !fp || fp.climb || fp.lad) return;
   const p = fp.p; select(null);
   if (p.mode === 'sit') p.tasks = fpRise(p);
-  fpGo(...ROOM_GO[b.dataset.room], null, b.dataset.room === 'Loft');
+  const [x, z, yaw, pitch] = ROOM_GO[b.dataset.room];
+  fpGo(x, z, null, b.dataset.room === 'Loft', [yaw * Math.PI / 180, pitch]);
 };
 function roomNavSync() { // 每帧（updateFP）：进过屋、不在梯子上才显示
   const on = !!fp && touchFP && game.entered && !fp.climb && !fp.lad;
@@ -4076,15 +4072,15 @@ function fpRoute(x0, y0, z0, x1, z1, pad, nav) { // 看得见就直走；不然�
 }
 const onLoft = (y) => y > home.floorY + 1.6;
 const LAD_FOOT = NAV.ladder, LAD_TOP = [0.42, 1.12]; // 触屏自动爬梯子的站点：fpLadderStart 要 x 0.77–1.45（地上；梯子脚占着 x≈1.15）/ 0.25–0.72（阁楼口），z 在梯子 ±0.24 内
-function fpGo(x, z, act, loft = onLoft(fp.p.root.position.y)) {
+function fpGo(x, z, act, loft = onLoft(fp.p.root.position.y), face = null) { // face：[偏航, 俯仰]，到了转过去（房间导览）
   const P = fp.p.root.position;
   if (loft !== onLoft(P.y)) { // 在另一层：先走到梯子口，fpArrive 接着爬（fpLadTick），爬完再走过去
     const d = toggles.get('loft_ladder'), g = toggles.get('loft_gate');
     if (d && !d.on) toggle('loft_ladder'); // 出发时就推梯子、抬拦杆：等走到梯子口再推，滑过来的梯子会把人挤开
     if (g && g.on) toggle('loft_gate');
-    fpLadGo({ up: loft, dest: [x, z, act], t: 0 }); return;
+    fpLadGo({ up: loft, dest: [x, z, act, loft, face], t: 0 }); return;
   }
-  fp.go = { pts: fpRoute(P.x, P.y, P.z, x, z, act ? 0.7 : 0), act, stuck: 0, last: null, dt: 0, chk: 0 }; fp.turn = null;
+  fp.go = { pts: fpRoute(P.x, P.y, P.z, x, z, act ? 0.7 : 0), act, face, stuck: 0, last: null, dt: 0, chk: 0 }; fp.turn = null;
 }
 function fpLadGo(L) { // 楼下沿路网走到梯子东边（梯子脚的横档细，fpClear 的射线会从横档间漏过去，直走会被卡在梯子西边）
   const P = fp.p.root.position, [sx, sz] = L.up ? LAD_FOOT : LAD_TOP;
@@ -4129,6 +4125,7 @@ function fpSteer(r, dt) { // 返回这一帧往哪走（单位向量），到了
 function fpArrive(stuck) { // 走到了：点的是物件就转过去看着它，再开关 / 出卡片
   const g = fp.go; fp.go = null; SL.end = stuck ? 'stuck' : 'arrived'; // 调试
   if (g.lad) { if (!stuck) fp.lad = g.lad; else if (!g.lad.retry) { g.lad.retry = true; fpLadGo(g.lad); } return null; } // 到了梯子口：开始爬；路上被正在滑的梯子挡住就再走一次
+  if (g.face) fp.turn = { yaw: g.face[0], pitch: g.face[1], t: 0, name: null };
   const a = g.act; if (!a || (stuck && fpNear(a.box, fp.p.root.position) > 1.4)) return null;
   const c = a.box.getCenter(new THREE.Vector3()), e = fp.eye || camera.position, h = Math.hypot(c.x - e.x, c.z - e.z);
   fp.turn = { yaw: Math.atan2(c.x - e.x, c.z - e.z), pitch: THREE.MathUtils.clamp(Math.atan2(c.y - e.y, h), -1.2, 1.1), t: 0, name: a.name };
@@ -4139,7 +4136,7 @@ function fpTouchTick(dt) {
   const k = Math.min(1, dt * 6); t.t += dt;
   fp.yaw += angDiff(fp.yaw, t.yaw) * k; fp.pitch += (t.pitch - fp.pitch) * k;
   if (t.t < 0.45) return;
-  fp.turn = null;
+  fp.turn = null; if (!t.name) return;
   if (toggleOf(t.name)) toggle(t.name);
   select(t.name);
 }
