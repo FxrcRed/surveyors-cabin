@@ -452,6 +452,7 @@ import { paperMesh, agedPaper, makeBook, inspectTick, inspecting, inspectBusy, i
 import { WX_ZH, sky, skyEl, skyU, indoorU, indoorShade, PANELS, wallU, updateSky } from './js/time-of-day.js';
 import { audioTick, audioStep, audioRung, setIce, sfx } from './js/audio.js';
 import { updateBirds } from './js/birds.js';
+import { LOG } from './js/playlog.js';
 import { applyWeather, wsPos, WS, groundCover, cover, precipHole, setupRoofWeather, wx, roofWx, setWeather, wxTimer, slideSnow, updatePrecip, updateRoofWeather } from './js/weather.js';
 import { LAMPS, toggles, DOORS, swapSoftProps, splitParts, setupToggles, setupFire, setupWaterFx, toggle, fire, rocker, toggleOf, updateToggles, updateFire, updateLantern, updateRocker, updateWaterFx } from './js/interact.js';
 import { people, SEATS, wakePerson, loadPeople, seatTaken, goHome, SPOTS, routeTasks, NAV, MOODS, fpRise, sitTasks, CLIMB, moodOf, climbAt, WALK_SPEED, ladderRoot, floorBelow, goTasks, nearNode, navPath, updatePeople } from './js/characters.js';
@@ -1635,7 +1636,7 @@ const VOICE = { ms: null, a: null, src: '', until: 0, keep: false, wait: null };
 fetch('voice/manifest.json').then((r) => (r.ok ? r.json() : null)).then((m) => { VOICE.ms = m; }).catch(() => { /* 没有配音就全按计时 */ });
 function vkey(t) { let h = 0x811c9dc5; for (let i = 0; i < t.length; i++) { h ^= t.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; } return h.toString(16).padStart(8, '0'); }
 function say(en, src, keep) { // en = 英文原句；返回字幕该停的毫秒数，0 = 没有配音；keep = 剧情台词，别的提示排在它后面
-  stopVoice(); (window.__said ||= new Set()).add(en); // __said：试玩时出现过的句子，生成脚本拿来查漏
+  LOG && en && LOG.ev('voice', en); stopVoice(); (window.__said ||= new Set()).add(en); // __said：试玩时出现过的句子，生成脚本拿来查漏
   const ms = en && VOICE.ms && VOICE.ms[vkey(en)];
   if (!ms) return 0;
   const a = VOICE.a = new Audio(`voice/${vkey(en)}.mp3`); a.play().catch(() => { VOICE.wait = a; }); // 还没点过页面浏览器不让出声：等第一次点击
@@ -2253,6 +2254,7 @@ function hintFire() { // 升一级并显示
   if (key !== hint.key) { hint.key = key; hint.lvl = 0; }
   hint.lvl = Math.min(3, hint.lvl + 1); hintReset();
   const h = HINTS[key];
+  LOG && LOG.ev('hint', `第${hint.lvl}级 ${key}：${hint.lvl < 3 ? h[hint.lvl - 1].join(' / ') : 'Look — there. / 看——就在那儿。'}`);
   if (hint.lvl < 3) { showRoomNote(h[hint.lvl - 1], null, key); return; }
   showRoomNote(['Look — there.', '看——就在那儿。']);
   if (layers.get(h[2])) {
@@ -2506,7 +2508,7 @@ function gameSeen2(name, title, add, got) {
   showQuest();
   return over;
 }
-function endDay() { // 第一天读完调查记录：卡片 / 遗稿 / 别的弹窗关了再弹；点了存成第 2 天、重新载入（人物、灯、火都按第 2 天早上重新摆）
+function endDay() { LOG && LOG.ev('day', '第1天结束'); // 第一天读完调查记录：卡片 / 遗稿 / 别的弹窗关了再弹；点了存成第 2 天、重新载入（人物、灯、火都按第 2 天早上重新摆）
   if (!$('card').hidden || !journal.hidden || !$('dlg').hidden) { setTimeout(endDay, 500); return; }
   dialog(['The First Day Ends', '第一天结束'], ['The clerk puts out the lamp. In the night the fog comes down over the woods.', '书记员吹熄了灯。夜里，雾把林子盖住了。'],
     [['Next Morning', '第二天早上', () => { game.day = 2; saveGame(); try { sessionStorage.setItem('cabin.nextDay', '1'); } catch (e) { /* 存不了就照常问「继续上次」 */ } location.reload(); }]]);
@@ -2682,6 +2684,7 @@ function loopChange() { // 雾里绕回来，小屋有一处变了（只第 2 �
   setTimeout(() => showRoomNote(D2_SAYS['change' + d2.loops]), 4500);
 }
 function lostFog(dev, dt) { // dev = 偏出可走范围多少米
+  if (LOG && (dev >= D2.lostAt) !== !!d2.logLost) { d2.logLost = dev >= D2.lostAt; LOG.ev('fog', d2.logLost ? `雾里迷路 偏出${dev.toFixed(1)}m` : '走出迷雾'); }
   d2.fogGoal = 0.75 * THREE.MathUtils.smoothstep(dev, 2, D2.lostAt);
   d2.lostT = dev < D2.lostAt ? 0 : d2.lostT + dt;
   if (d2.lostT > D2.lost) { d2.lostT = 0; loopBack(); }
@@ -2796,7 +2799,7 @@ function gameSeen3(name, title, add, got) {
   showQuest();
   return over;
 }
-function endDay2() { // 读完第 2 夜的调查记录：同 endDay，存成第 3 天、重新载入
+function endDay2() { LOG && LOG.ev('day', '第2天结束'); // 读完第 2 夜的调查记录：同 endDay，存成第 3 天、重新载入
   if (!$('card').hidden || !journal.hidden || !$('dlg').hidden) { setTimeout(endDay2, 500); return; }
   dialog(['The Second Day Ends', '第二天结束'], ['The clerk puts out the lamp. All night long the fog does not lift.', '书记员吹熄了灯。雾一夜都没有散。'],
     [['Next Morning', '第三天早上', () => { game.day = 3; saveGame(); try { sessionStorage.setItem('cabin.nextDay', '1'); } catch (e) { /* 存不了就照常问「继续上次」 */ } location.reload(); }]]);
@@ -2940,7 +2943,7 @@ function porchAsk() { // ✕ 那间屋的门廊下：回去 / 留下 / 再看看
   dialog(['Under the Other Porch', '另一间屋的门廊下'], [GAME_TEXT.xLook[1], GAME_TEXT.xLook[2]],
     [['Go Back', '回去', () => ending('back')], ['Stay', '留下', () => ending('stay')], ['Not Yet', '再看看']]);
 }
-function ending(kind) { // 压黑，一张张放结局文字；读完存 ended，重新载入回自己那间屋
+function ending(kind) { LOG && LOG.ev('end', `结局 ${kind}`); LOG && LOG.ev('day', '第3天结束'); // 压黑，一张张放结局文字；读完存 ended，重新载入回自己那间屋
   const hidden = kind === 'back' && X_NEED.every((k) => game.found.has(k)), seq = kind === 'stay' ? ['endStay'] : hidden ? ['endBack', 'endHidden'] : ['endBack'];
   if (fp) stopFP();
   d2.veil = true; veilEl.style.transition = 'opacity 1.2s'; veilEl.style.zIndex = 30; veilEl.style.opacity = 1;
@@ -2957,7 +2960,7 @@ function ending(kind) { // 压黑，一张张放结局文字；读完存 ended�
 }
 function endAsk() { // 通关后刷新：不问「继续上次」，告诉玩家终章、后记解锁了
   dialog(['The Papers Complete', '遗稿齐了'], ['The last pages are in the Journal now: where he went, and what came after.', '终章和后记已经收进遗稿：他去了哪里，以及后来。'],
-    [['Read the Papers', '翻开遗稿', () => $('jBtn').click()], ['Begin Again', '重新开始', () => { try { localStorage.removeItem(GAME_KEY); } catch (e) { /* 清不掉也重开 */ } location.reload(); }]]);
+    [['Read the Papers', '翻开遗稿', () => $('jBtn').click()], ...(LOG ? [['Copy Log', '复制记录', () => { const t = window.__logText(); (navigator.clipboard?.writeText(t) || Promise.reject()).catch(() => { const a = document.createElement('textarea'); a.value = t; document.body.append(a); a.select(); document.execCommand('copy'); a.remove(); }); }]] : []), ['Begin Again', '重新开始', () => { try { localStorage.removeItem(GAME_KEY); } catch (e) { /* 清不掉也重开 */ } location.reload(); }]]);
 }
 function updateDay3(dt) {
   if (!x3.spruce) return;
@@ -4529,10 +4532,29 @@ function fpsTick(now, tris) {
   const avg = ms.reduce((a, b) => a + b, 0) / ms.length, p95 = ms[Math.min(ms.length - 1, Math.floor(ms.length * 0.95))];
   fpsEl.textContent = `${(1000 / avg).toFixed(0)} fps · P95 ${p95.toFixed(1)}ms · px ${renderer.getPixelRatio().toFixed(2)} · ${(tris / 1e6).toFixed(2)}M tri`;
 }
+// —— 试玩记录（?log）：每帧读一下状态，变了就记一条；字幕 / 任务条靠 MutationObserver ——
+const logSeen = { found: new Set(game.found), card: !card.hidden, fp: false, inside: undefined, sub: {} };
+if (LOG) {
+  LOG.bind({ hour: () => sky.hour, pos: () => { const d = camera.getWorldDirection(new THREE.Vector3()); return { x: camera.position.x, z: camera.position.z, yaw: ((Math.round(Math.atan2(d.x, -d.z) * 180 / Math.PI) || 0) + 360) % 360 }; } });
+  for (const [id, kind] of [['quest', 'quest'], ['subs', 'sub'], ['roomNote', 'sub'], ['note', 'sub']]) new MutationObserver(() => {
+    const el = $(id), txt = el.classList.contains('on') || id === 'quest' ? el.innerText.replace(/\s+/g, ' ').trim() : '';
+    if (txt && txt !== logSeen.sub[id]) LOG.ev(kind, txt); logSeen.sub[id] = txt;
+  }).observe($(id), { childList: true, characterData: true, subtree: true, attributes: true, attributeFilter: ['class'] });
+}
+function logPoll() {
+  if (!sceneReady) return; // 加载页盖着时相机还没就位，位置和时刻不准
+  if (!logSeen.day) { logSeen.day = true; LOG.ev('day', `第${game.day}天开始`); }
+  for (const k of game.found) if (!logSeen.found.has(k)) { logSeen.found.add(k); if (!/^m:/.test(k)) LOG.ev('clue', `找到 ${k}${INFO[k] ? '「' + INFO[k][0] + '」' : ''}`); }
+  const co = !card.hidden; if (co !== logSeen.card) { logSeen.card = co; LOG.ev('card', (co ? '打开 ' : '关闭 ') + (card.querySelector('h2')?.innerText || '')); }
+  if (!!fp !== logSeen.fp) { logSeen.fp = !!fp; LOG.ev('fp', fp ? '进入第一人称' : '退出第一人称'); }
+  const rn = inside ? inside.name : null;
+  if (rn !== logSeen.inside) { const was = logSeen.inside; logSeen.inside = rn; if (was !== undefined && !!was !== !!rn) LOG.ev('door', rn ? '进屋' : '出屋'); if (rn) LOG.ev('room', rn); }
+}
 renderer.setAnimationLoop(() => {
   // 按真实时间转（原来按帧转，高刷新率屏会转得快），和开场结尾的角速度一致
   const now = performance.now(), dt = Math.min(0.1, (now - (lastT || now)) / 1000); lastT = now;
   adaptRes(now, dt);
+  if (LOG) { LOG.tick(dt); logPoll(); }
   if (sceneReady) hideOutdoors(now);
   audioTick(dt, !!VOICE.a && !VOICE.a.paused);
   updateBirds(dt);
