@@ -95,7 +95,7 @@ if (navigator.webdriver || /[?&]nolock\b/.test(location.search)) { let el = null
      开场字幕 #subs > 物件说明 #note / 房间开场白·书记员的话 #roomNote（这两个新的顶掉旧的）> 任务 #quest（常驻，有别的提示时先让开，提示淡掉再回来）。
      进度 #prog 是下面一行小字。淡出快（.35s）、淡入等淡出做完再开始，同一位置不叠字 */
   #roomNote.on, #subs.on, #note.on { pointer-events: auto; cursor: pointer; } /* 显示时点一下跳过 */
-  #roomNote, #quest, #subs, #note { position: fixed; bottom: 150px; left: 50%; transform: translateX(-50%); z-index: 6; width: max-content; max-width: min(560px, calc(100vw - 32px)); pointer-events: none; text-align: center;
+  #roomNote, #quest, #subs, #note { position: fixed; bottom: 88px; left: 50%; transform: translateX(-50%); z-index: 6; width: max-content; max-width: min(560px, calc(100vw - 32px)); pointer-events: none; text-align: center;
     padding: 4px 14px; border-radius: 8px; background: rgba(43,38,32,.42); /* 白字压雪地读不出：垫一层半透明深色底（2026-10-30） */
     font-size: var(--fs-m); line-height: 1.7; color: #f4efe6; text-shadow: 0 1px 3px rgba(0,0,0,.85), 0 0 12px rgba(0,0,0,.6); opacity: 0; transition: opacity .35s; }
   #roomNote.on, #quest.on, #subs.on, #note.on { opacity: 1; transition: opacity .9s .35s; }
@@ -103,7 +103,7 @@ if (navigator.webdriver || /[?&]nolock\b/.test(location.search)) { let el = null
   #roomNote .zh, #quest .zh { display: block; margin-top: 2px; font-size: var(--fs-s); }
   #quest.end { font-size: var(--fs-l); letter-spacing: 2px; }
   #quest.end .zh { font-size: var(--fs-m); }
-  #prog { position: fixed; bottom: 124px; left: 50%; transform: translateX(-50%); z-index: 6; width: max-content; max-width: calc(100vw - 32px); pointer-events: none; text-align: center;
+  #prog { position: fixed; bottom: 62px; left: 50%; transform: translateX(-50%); z-index: 6; width: max-content; max-width: calc(100vw - 32px); pointer-events: none; text-align: center;
     font-size: var(--fs-xs); line-height: 1.5; letter-spacing: .6px; color: rgba(244,239,230,.75); text-shadow: 0 1px 3px rgba(0,0,0,.75), 0 0 8px rgba(0,0,0,.45); transition: opacity .35s; }
   #prog:empty { display: none; }
   #subs, #opening p { white-space: pre-line; text-wrap: balance; } /* 字幕里的 \n 换行；自动折行时各行长度均匀，不剩一个字孤零零一行 */
@@ -261,7 +261,7 @@ if (navigator.webdriver || /[?&]nolock\b/.test(location.search)) { let el = null
   #wxPanel[hidden] { display: none; }
   #wxPanel button { padding: 5px 2px; font-size: var(--fs-xs); }
   #wxPanel button.on { background: rgba(232,200,154,.3); border-color: #e8c89a; }
-  @media (max-width: 600px) { #subs, #note, #roomNote, #quest:not(.end) { bottom: 140px; font-size: var(--fs-s); } #quest.end { bottom: 140px; } #fpHud .help { bottom: 78px; } #fpHud .help { width: calc(100vw - 32px); box-sizing: border-box; white-space: normal; } #prog { bottom: 116px; } #opening .box { font-size: var(--fs-s); } }
+  @media (max-width: 600px) { #subs, #note, #roomNote, #quest:not(.end) { z-index: 7; bottom: 96px; font-size: var(--fs-s); } #quest.end { bottom: 96px; } #fpHud .help { bottom: 150px; } #fpHud .help { width: calc(100vw - 32px); box-sizing: border-box; white-space: normal; } #prog { z-index: 7; bottom: 70px; } #opening .box { font-size: var(--fs-s); } }
   @media (max-width: 600px) { body:has(#card:not([hidden])) :is(#quest, #prog) { opacity: 0; } }
   @media (max-width: 600px) { #card { left: 16px; top: 50%; transform: translateY(-50%); width: calc(100vw - 32px); max-height: calc(100vh - 160px); } #rooms { right: 8px; gap: 2px; } #rooms button { font-size: var(--fs-s); padding: 2px 6px; } #rooms button .zh { font-size: var(--fs-xs); } #rooms.bottom { gap: 0 4px; } #skyPresets { grid-template-columns: repeat(3, 1fr); } #skyL .btns { flex-direction: column; align-items: flex-start; gap: 0; } #skyName { display: none; } }
 </style>
@@ -313,8 +313,8 @@ if (navigator.webdriver || /[?&]nolock\b/.test(location.search)) { let el = null
     <label><span class="en">Strength of the Sun</span><span class="zh">日光强弱</span><input type="range" id="skyStrength" min="0" max="2" step="0.05"></label>
   </div>
   <div id="wxPanel" hidden></div>
-  <div class="btns"><button id="skyBtn"><span id="skyClock">9:00</span> · <span id="skyName">Forenoon</span></button>
-    <button id="wxBtn"><span id="wxIco" aria-hidden="true"></span><span id="wxName">Fair</span></button>
+  <div class="btns"><button id="skyBtn"><span id="skyClock">9:00</span> · <span id="skyName"><span class="en">Forenoon</span><span class="zh">上午</span></span></button>
+    <button id="wxBtn"><span id="wxIco" aria-hidden="true"></span><span id="wxName"><span class="en">Fair</span><span class="zh">晴</span></span></button>
     <button id="jBtn" class="wait"><span class="sec">§</span><span class="en">Journal</span><span class="zh">遗稿</span></button></div>
 </div>
 <div id="roomNote"></div>
@@ -2424,7 +2424,7 @@ function gameInit() { // 模型和开关都建好后调（loadPeople 之前）�
   sky.goal = null; sky.play = false; sky.bearing = skyEl.bearing.value = game.day === 1 ? 335 : 55; /* 第 1 天：太阳转到小屋前方（15:30 方位约 21°），正面受光、山墙檐口影子落在前墙上；55 时下午太阳在侧面、前墙背光，黄昏时逆光 */ sky.indoorK = game.day === 1 ? 0.3 : 1; /* 第 1 天屋里不靠天光：灯没开前是暗的 */ sky.hour = game.night && game.day > 1 ? 21 : game.day >= 3 ? 9.5 : game.day >= 2 ? (DAY2_NEED.every((k) => game.found.has(k)) ? 17.5 : 9.5) : game.night ? 18.3 : 15.5; // 第 1 天下午到，找齐线索后转黄昏（用户 2026-10-31：17 点太暗，改回下午）
   if (game.day === 2 && game.found.has('notes2')) endDay2(); // 读完第 2 夜的记录还没点「第三天早上」就刷新了
   if (game.day === 1 && game.found.has('notes1')) endDay(); // 读完第 1 夜的记录还没点「第二天早上」就刷新了 // 下午到，找齐线索时天黑；时间不自己走，免得找着找着天就黑了
-  if (game.day >= 2) { setWeather('Snow', true); clearTimeout(wxTimer); cover.uSnow.value = 1; game.entered = true; } // 第 2、3 天：地面积雪 + 小雪，不自动换天气（2026-10-29 起不再起雾；玩家走过留脚印）
+  if (game.day >= 2) { setWeather('Snow', true, 'Fog'); clearTimeout(wxTimer); cover.uSnow.value = 1; game.entered = true; } // 第 2、3 天：地面积雪 + 小雪，不自动换天气（2026-10-29 起不再起雾；玩家走过留脚印）
   if (game.night) { const w = toggles.get('wall_lamp'); if (w) w.on = true; }
   setupJournal(); showQuest();
 }
@@ -2838,6 +2838,18 @@ function d2Scene() { // 第 2 天路上的小景：只看，不点、不算线�
     const b = putScene('d2_scene', new THREE.Group(), q1); TREE_XZ.push(q1.x, q1.z);
     loadTree0(BUSH_URLS[0], true).then((parts) => { for (const { geometry, material } of parts) { const o = new THREE.InstancedMesh(geometry, material, 1); // 林子里同一种灌木，单实例（着色器要 instanceMatrix / 实例色）
       o.setMatrixAt(0, new THREE.Matrix4().makeScale(1.6, 1.1, 1.6)); o.setColorAt(0, new THREE.Color(BUSHES[1][0])); o.computeBoundingSphere(); o.castShadow = o.receiveShadow = true; b.add(o); } }); }
+  { const [q, rt] = sceneAt(D2_SCENE.glade), g = new THREE.Group(), cv = (w, h, f) => { const c = document.createElement('canvas'); c.width = w; c.height = h; f(c.getContext('2d'), w, h); const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t; }; // 空地要看得见：一块亮雪地、一道从树冠缺口漏下的光柱、边上几根倒木围一圈（留出路口）
+    const spot = cv(128, 128, (c, w, h) => { const r = c.createRadialGradient(w / 2, h / 2, 0, w / 2, h / 2, w / 2); r.addColorStop(0, 'rgba(255,244,214,.9)'); r.addColorStop(.6, 'rgba(255,244,214,.45)'); r.addColorStop(1, 'rgba(255,244,214,0)'); c.fillStyle = r; c.fillRect(0, 0, w, h); });
+    flatOn(g, new THREE.CircleGeometry(5.6, 40), new THREE.MeshBasicMaterial({ map: spot, transparent: true, opacity: 0.55, depthWrite: false, blending: THREE.AdditiveBlending, fog: false }), 0.03);
+    const beam = cv(4, 128, (c, w, h) => { const v = c.createLinearGradient(0, 0, 0, h); v.addColorStop(0, 'rgba(255,240,205,0)'); v.addColorStop(.35, 'rgba(255,240,205,.5)'); v.addColorStop(1, 'rgba(255,240,205,0)'); c.fillStyle = v; c.fillRect(0, 0, w, h); });
+    const sh = new THREE.Mesh(new THREE.CylinderGeometry(3.4, 4.6, 20, 28, 1, true), new THREE.MeshBasicMaterial({ map: beam, transparent: true, opacity: 0.35, side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending }));
+    sh.position.y = 9; sh.renderOrder = 3; g.add(sh);
+    const bark = d2Mat('#4a3a2c'), snow = d2Mat('#e9edf0');
+    for (const deg of [20, 55, 125, 160, 200, 235, 305, 340]) { const a = deg * Math.PI / 180, len = 3 + (deg % 7) * 0.2, lg = new THREE.Group(); // 角度 0 = 路右手边；90 / 270 是路的去向，不放
+      const tr = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.2, len, 8), bark); tr.rotation.z = Math.PI / 2; tr.position.y = 0.2; tr.castShadow = tr.receiveShadow = true;
+      const cap = new THREE.Mesh(new THREE.BoxGeometry(len * 0.9, 0.06, 0.22), snow); cap.position.y = 0.4; lg.add(tr, cap);
+      lg.position.set(5.6 * Math.cos(a), 0, 5.6 * Math.sin(a)); lg.rotation.y = -(a + Math.PI / 2); g.add(lg); }
+    putScene('d2_scene', g, q, rt); }
   d2.glade = sceneAt(D2_SCENE.glade)[0]; // 林中空地：树在 extendPath 里留开了，雾在 updateDay2 里淡一点
 }
 function d3Scene() { // 第 3 天岔路上的小景：被雪压弯的小树拱、凿了三角的石头、冷掉的火堆（测绘员也走过这条路，不说是他）
@@ -3800,7 +3812,7 @@ function fpClimb(r, dt, f, run) {
   r.position.y = Math.min(r.position.y, LADDER.top - 0.2); // 拦杆放着上不去时停在梯子顶，别一直往上爬
   p.play('Walk_Loop', 0.25); p.cur.timeScale = f && !C.lock ? 0.7 * f : 0; // 没有爬梯动画：走路动画按爬的方向放，停下就定住
   const gq = fpProbe(LADDER.onX, 0.3, ladderZ()).floor, g = gq === null ? 0.16 : gq;
-  if (r.position.y <= g && f <= 0) { r.position.y = g; fp.climb = null; }
+  if (r.position.y <= g && f <= 0) { r.position.y = g; r.position.x = LADDER.onX + 0.3; fp.climb = null; } // 下到地上往外落 0.3m，不贴着梯子脚
   else if (r.position.y >= LADDER.top - 0.25 && f > 0 && !C.lock && gateOpen()) fp.climb = { ph: 'board', t: 0, y0: r.position.y };
 }
 // 雪地脚印池（玩家、稽查、书记员共用；第 2 天「只出不进」那串 d2_prints 用同一套几何和材质，大小一致才能比）：固定 400 个循环复用（2026-10-31 起第 1 天下雪时两人走路也留）
