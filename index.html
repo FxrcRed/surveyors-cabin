@@ -131,6 +131,17 @@
   #langBtn { position: fixed; right: 7px; bottom: 26px; z-index: 8; font: inherit; font-family: "IM Fell English SC", "IM Fell English", Georgia, serif; font-size: var(--fs-xs); letter-spacing: 1px; color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,.7);
     background: none; border: 0; border-radius: 4px; padding: 2px 5px; cursor: pointer; }
   #viewBtn { position: fixed; right: 7px; top: 10px; z-index: 8; font: inherit; font-size: var(--fs-xs); letter-spacing: .5px; color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,.7); background: none; border: 0; padding: 2px 5px; cursor: pointer; opacity: .75; }
+  /* 房间导览（触屏第一人称）：按钮在「看模型」下面（它藏着时顶上去），列表从按钮处展开 */
+  #roomBtn { position: fixed; right: 7px; top: 34px; z-index: 8; font: inherit; font-size: var(--fs-xs); letter-spacing: .5px; color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,.7); background: none; border: 0; padding: 2px 5px; cursor: pointer; opacity: .75; }
+  #viewBtn[hidden] + #roomBtn { top: 10px; }
+  #roomList { position: fixed; right: 10px; top: 60px; z-index: 8; display: flex; flex-direction: column; align-items: flex-end; gap: 4px; color: #f4efe6; text-shadow: 0 1px 3px rgba(0,0,0,.75), 0 0 8px rgba(0,0,0,.45);
+    transform-origin: top right; transition: opacity .2s, transform .2s ease; }
+  #viewBtn[hidden] ~ #roomList { top: 36px; }
+  #roomList.shut { opacity: 0; transform: scale(.6); pointer-events: none; }
+  #roomList button { font: inherit; font-size: var(--fs-m); letter-spacing: 1px; color: inherit; text-shadow: inherit; background: none; border: 0; padding: 3px 4px; text-align: right; cursor: pointer; }
+  #roomList button .zh { display: block; font-size: var(--fs-xs); letter-spacing: 2px; opacity: .8; }
+  html[data-lang="zh"] #roomList button .zh { font-size: var(--fs-m); opacity: 1; }
+  #roomList button.on { color: #e8c89a; }
   #langBtn:hover { background: rgba(255,255,255,.12); }
   #langBtn { opacity: .6; } #langBtn:hover { opacity: 1; }
   #langBtn b { font-weight: normal; }
@@ -259,7 +270,7 @@
 <script>try { const g = /[?&]reset/.test(location.search) ? {} : JSON.parse(localStorage.getItem('cabin.game.v1') || '{}'), t = g.found && g.found.includes('ended') ? null : g.day >= 3 ? ['The third morning. Still the fog has not lifted…', '第三天早上。雾还是没有散……'] : g.day === 2 ? ['The second morning. The fog came down in the night…', '第二天早上。夜里起的雾还没有散……'] : null; // 加载页按存档的天数换字
   if (t) document.querySelector('#loader > div').innerHTML = `<span class="en">${t[0]}</span><span class="zh">${t[1]}</span>`; } catch (e) { /* 读不到存档就用第 1 天那句 */ }</script>
 <div id="title"><h1><span class="en">The Surveyor's Cabin</span><span class="zh">无名测绘员的遗稿</span></h1></div>
-<button id="viewBtn" hidden></button>
+<button id="viewBtn" hidden></button><button id="roomBtn" hidden></button><div id="roomList" class="shut"></div>
 <button id="langBtn" aria-label="中文 / English"><b class="l-zh">CN</b><b class="l-en">EN</b></button>
 <div id="by">Vibe Coding by Fxrc</div>
 <div id="tip" hidden></div>
@@ -3575,6 +3586,7 @@ function stopFP() {
   p.root.traverse((o) => { if (FP.HIDE.test(o.name)) o.visible = true; });
   if (document.pointerLockElement) document.exitPointerLock();
   fpHud.hidden = true; roomsBox.hidden = false; enterBtn.hidden = false; if (SLICE) sliceView();
+  roomNavSync();
   controls.enabled = true; lookAround(); // 相机留在他眼睛的位置，接着原地环顾
   if (climbs(p) && p.S != null && !p.tasks.length) p.tasks = p.S > CLIMB.top / 2 ? [['climb', CLIMB.top], ['top']] : [['climb', 0], ['dismount']]; // 在梯子上退出：自己爬完
   if (!p.tasks.length) p.play(moodOf(p).idle);
@@ -3803,6 +3815,7 @@ function updateFP(dt) {
     : reachable(hovered) ? key('E', '拿取', 'Take')
     : ladderNear(r) ? (r.position.y > 2 ? key('E', '下梯子', 'Climb down') : key('E', '上梯子', 'Climb up')) : '';
   if (hint !== fpHint.dataset.h) { fpHint.dataset.h = hint; fpHint.innerHTML = hint; } // 变了才改 DOM
+  roomNavSync();
 }
 
 // —— 第一人称切片（2026-10-28，网址带 ?fp）：开场落在门廊，玩家就是稽查，推门进屋；书记员当同伴。手机：点哪走哪 + 拖动转头（不做摇杆）——
@@ -3882,6 +3895,27 @@ function sliceView() { // 右上角：第一人称时「看模型」（作品集
   const b = $('viewBtn'); b.hidden = !SLICE || game.day !== 1 || !!intro;
   b.innerHTML = fp ? lbl('View the model', '看模型') : lbl('Back to him', '回到稽查');
 }
+// 房间导览（2026-11-03，触屏第一人称）：右上「Rooms」点开楼下 5 间，点一间沿路网走过去（fpGo）；阁楼要按 E 上梯子，不列
+const ROOM_GO = { 'Entry': NAV.entry, 'Water Closet': NAV.wc, 'Hall': NAV.hall3, 'Parlour': SL.sofa, 'Kitchen & Dining': NAV.hall };
+const roomBtn = $('roomBtn'), roomList = $('roomList');
+roomBtn.innerHTML = lbl('Rooms', '房间');
+roomList.innerHTML = Object.keys(ROOM_GO).map((n) => { const r = ROOMS.find((q) => q.name === n); return `<button data-room="${n}">${lbl(r.name, r.zh)}</button>`; }).join('');
+roomBtn.onclick = () => {
+  const open = roomList.classList.contains('shut'), rn = fp && roomAt(fp.p.root.position);
+  if (open) for (const b of roomList.children) b.classList.toggle('on', b.dataset.room === rn);
+  roomList.classList.toggle('shut', !open);
+};
+roomList.onclick = (e) => {
+  const b = e.target.closest('button'); roomList.classList.add('shut');
+  if (!b || !fp || fp.climb) return;
+  const p = fp.p; select(null);
+  if (p.mode === 'sit') p.tasks = fpRise(p);
+  fpGo(...ROOM_GO[b.dataset.room], null);
+};
+function roomNavSync() { // 每帧（updateFP）：在楼下、进过屋、不在梯子上才显示
+  const on = !!fp && touchFP && game.entered && !fp.climb && fp.p.root.position.y < home.floorY + 1.6;
+  if (roomBtn.hidden === on) { roomBtn.hidden = !on; if (!on) roomList.classList.add('shut'); }
+}
 $('viewBtn').onclick = () => {
   if (fp) { stopFP(); inside = null; placeRooms(null); enterBtn.innerHTML = lbl('Enter the Cabin', '进屋'); enterBtn.classList.add('glow'); controls.minDistance = 1; controls.maxDistance = 220; resetView(true); return; }
   fly = null; startFP('person_man'); SL.room = undefined; // 位置照旧，sliceTick 重新认房间
@@ -3934,6 +3968,7 @@ for (const ev of ['pointerup', 'pointercancel']) canvas.addEventListener(ev, (e)
   fpT.drag = false;
 });
 function fpTap(e) {
+  if (!roomList.classList.contains('shut')) { roomList.classList.add('shut'); return; } // 房间列表开着：点画面 = 收起
   if (!card.hidden) { select(null); return; } // 卡片开着：点画面 = 关
   const p = fp.p, P = p.root.position;
   if (p.tasks.length || fp.climb) return; // 起身、爬梯中
