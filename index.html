@@ -2068,7 +2068,7 @@ function infoOf(name) {
 // took = coat + boots + lantern 三样都看过（「他什么都没带」）。找齐 DAY1_NEED → startNight；夜里点书桌 / 书记员 → notes1。
 const GAME_KEY = 'cabin.game.v1';
 // 改版 v2（2026-10-27）：开头先有书桌上那页「还没写的记录」（page），线索砍到 page / fire / letter / map（地图和抽屉合成一条）；书架日志、「他什么都没带」还在，但不算过关条件
-const DAY1_NEED = ['page', 'fire', 'letter', 'map', 'watch']; // watch：阁楼床头柜抽屉里停在 3:17 的怀表（11-03 用户定：最短路线也要上阁楼，第 3 天 ✕ 那间同一只在走）
+const DAY1_NEED = ['page', 'fire', 'letter', 'map', 'watch', 'basin']; // watch：阁楼床头柜抽屉里停在 3:17 的怀表；basin：卫生间洗脸盆里冻成一块的半盆水（11-03 用户定：最短路线也要上阁楼、进卫生间；第 3 天 ✕ 那间表在走、盆里是水浮着碎冰）
 const game = (() => {
   if (/[?&]reset\b/.test(location.search)) try { localStorage.removeItem(GAME_KEY); } catch (e) { /* 读写不了就当没存过 */ }
   let s = null; try { s = JSON.parse(localStorage.getItem(GAME_KEY)); } catch (e) { s = null; }
@@ -2087,6 +2087,7 @@ const DAY1_TEXT = {
   letter: ['The Unburnt Letter', '没烧完的信', GAME_TEXT.letter[1], GAME_TEXT.letter[2]],
   map: ['The ✕ on the Map', '地图上的 ✕', 'Deep in the woods he drew a great ✕, and beside it wrote "Do Not Enter". In the desk drawer, a draft whose last line gives the same spot, to three places of decimals.\n\nOn the back of the draft, a line in small writing: "This morning a page lay on my desk. I never wrote it."', '林子深处画了一个大 ✕，旁注“勿入”。书桌抽屉里的草稿，最后一行是同一处的坐标，精确到小数点后三位。\n\n草稿背面有一行小字：“今早桌上有一页纸，我没写过。”'], // 背面那行：design v2-playable「第 1 天伏笔 · 测绘员勾连」
   watch: ['The Stopped Watch', '停了的怀表', 'In the night-table drawer in the loft: a pocket-watch, an old compass, a few pine needles. The watch has stopped at seventeen minutes past three.', '阁楼床头柜的抽屉里有怀表、旧罗盘、几根松针。怀表停在三点十七分。'],
+  basin: ['The Frozen Basin', '冻住的脸盆', 'In the water closet, half a basin of water, frozen into one solid block.', '卫生间的盆里还有半盆水，冻成了一整块冰。'],
   drawer: ['The Desk Drawer', '书桌抽屉', 'An unfinished draft in the drawer; its last line a string of bearings, to three places of decimals.', '抽屉里一张没画完的草稿，最后一行是一串坐标，精确到小数点后三位。'],
   log: ['Field Log, First Part', '工作日志 · 前段', GAME_TEXT.logIntro[1] + '\n\n' + GAME_TEXT.log1[1], GAME_TEXT.logIntro[2] + '\n\n' + GAME_TEXT.log1[2]],
   took: ['He Took Nothing', '他什么都没带', 'His greatcoat on its peg, his boots by the tray, his lantern where it always hung. He went out with nothing.', '大衣挂在钉子上，靴子立在托盘边，提灯挂在老地方。他出门什么都没带。'],
@@ -2108,6 +2109,7 @@ const PAGE_SAYS = ['The clerk reads it twice. "That is my hand. But I have not w
 const LETTER_SAYS = ['The clerk looks from the letter to the page in her hand, and says nothing.', '书记员看看信，又看看手里那页纸，没说话。'];
 const LETTER_CARD = ['Unburnt Letter', 'Kitchen', '没烧完的信', '"…seven degrees east of north, about four miles. Beneath an old spruce the ground has split… Marked ✕. This place is not fit…"\n\nThe rest is burnt away.', '“……北偏东七度，约四里。老云杉根下地面开裂……已标 ✕。此处不宜……”\n\n后面烧没了。'];
 const MAP_CARD = ['The ✕ on the Map', 'Parlour', '地图上的 ✕', DAY1_TEXT.map[2], DAY1_TEXT.map[3]];
+const BASIN_CARD = ['Washstand', 'Water Closet', '洗脸架', 'Half a basin of water, frozen into one solid block.', '盆里还有半盆水，冻成了一整块冰。', 'The water froze where it stood.'];
 const WATCH_CARD = ['Night Table', 'Loft', '床头柜', 'In the drawer, a pocket-watch, an old compass, a few pine needles. The watch has stopped at seventeen minutes past three.', '抽屉里有怀表、旧罗盘、几根松针。怀表停在三点十七分。', 'The watch is still.']; // 和第 3 天 X_CARDS.xwatch 同一句式，只差「停了 / 在走」
 const LOG_CARD = ['Field Log', 'Parlour', '工作日志', 'His field log, bark paper stitched together: neat at the front, more and more disordered towards the back. Tonight there will be time to read it.', '他的工作日志，桦树皮纸订成的，前面工整，越往后越乱。今晚再细读。'];
 const NOTES_CARD = ['Inquiry Notes', 'Parlour', '调查记录', '', '', 'In the clerk\'s hand, the ink still wet. The page from this afternoon is gone.'];
@@ -2184,9 +2186,9 @@ function openingCard() { // 开场飞行被跳过：字幕没播完的话整段�
 $('opening').addEventListener('click', () => { if (opening && performance.now() - opening.card > 400) endOpening(); }); // 跳过的那一下点击不算
 function isClue(name) { // 第 1 天的线索物件（找到后再点也算）、夜里的书桌：卡片居中、要手动关
   const t = infoOf(name)?.[0];
-  if (game.day >= 3) return x3.on ? ['xcoat', 'xwatch', 'xnotes', 'xfire'].some((k) => X_CARDS[k][0] === t) || ['Coat Rail & Greatcoat', 'Boots & Bench', 'Lantern', 'Night Table', 'Writing Desk, Chair & Wall Lamp', 'Rocking Chair', 'The Fire', 'Cast-Iron Stove'].includes(t) || name === 'x_light' : t === 'Bookcase' || name === 'd3_spruce';
+  if (game.day >= 3) return x3.on ? ['xcoat', 'xwatch', 'xnotes', 'xfire'].some((k) => X_CARDS[k][0] === t) || ['Coat Rail & Greatcoat', 'Boots & Bench', 'Lantern', 'Night Table', 'Washstand & Hand Towel', 'Writing Desk, Chair & Wall Lamp', 'Rocking Chair', 'The Fire', 'Cast-Iron Stove'].includes(t) || name === 'x_light' : t === 'Bookcase' || name === 'd3_spruce';
   if (game.day >= 2) return name.startsWith('d2_') || (game.night && t === 'Writing Desk, Chair & Wall Lamp');
-  return name === 'stove_letter' || name === 'desk_page' || name.startsWith('desk_drawer') || ['Map', 'Night Table', 'Bookcase', 'Coat Rail & Greatcoat', 'Boots & Bench', 'Lantern'].includes(t)
+  return name === 'stove_letter' || name === 'desk_page' || name.startsWith('desk_drawer') || ['Map', 'Night Table', 'Washstand & Hand Towel', 'Bookcase', 'Coat Rail & Greatcoat', 'Boots & Bench', 'Lantern'].includes(t)
     || (game.night && t === 'Writing Desk, Chair & Wall Lamp');
 }
 function gameSeen(name) { // select 里调：这次点的东西算不算线索；返回要换上的卡片或 null
@@ -2203,6 +2205,7 @@ function gameSeen(name) { // select 里调：这次点的东西算不算线索�
   } else if (name === 'stove_letter') { add('letter'); over = LETTER_CARD; }
   else if ((title === 'Map' || name.startsWith('desk_drawer')) && !f.has('map')) { add('map'); over = MAP_CARD; } // 地图和抽屉合成一条
   else if ((title === 'Night Table' || name === 'bedside_drawer') && !f.has('watch')) { add('watch'); over = WATCH_CARD; const t = toggles.get('bedside_drawer'); if (t) t.on = true; } // 抽屉顺手拉开、看得见表（直接设 on，不走 toggle，免得算成房间变化）
+  else if (title === 'Washstand & Hand Towel' && !f.has('basin')) { add('basin'); over = BASIN_CARD; }
   else if (title === 'Bookcase') { add('log'); over = LOG_CARD; }
   else if (title === 'Coat Rail & Greatcoat') add('coat');
   else if (title === 'Boots & Bench') add('boots');
@@ -2235,6 +2238,8 @@ const HINTS = {
     ['A map on the wall of the Parlour.', '起居室墙上的地图。'], 'wall_map'],
   watch: [['Up in the loft, where he slept, his things are still about.', '楼上他睡觉的地方，还留着他的东西。'],
     ['The night table in the loft — open its drawer.', '阁楼的床头柜——拉开抽屉看看。'], 'loft_bedside_table'],
+  basin: [['Where did he wash, of a morning?', '他早上在哪儿洗脸？'],
+    ['The washstand in the Water Closet, by the door.', '门边卫生间里的洗脸架。'], 'entry_washstand'],
   drawer: [['A writing man keeps his unfinished pages close at hand.', '写东西的人，没写完的纸总放在手边。'],
     ['The writing desk — open its drawer.', '书桌——拉开抽屉看看。'], 'desk_drawer'],
   log: [['Thirty winters of work must be written down somewhere.', '三十个冬天的活儿，总得记在什么地方。'],
@@ -2246,7 +2251,7 @@ const HINTS = {
   boots: [['And on his feet?', '脚上呢？'], ['The boots by the bench in the Entry.', '玄关换鞋凳边的靴子。'], 'entry_bench_stool'],
   lantern: [['And a light to find the way home?', '还有回来时照路的灯呢？'], ['The lantern on its peg in the Entry.', '玄关钉子上的提灯。'], 'entry_lantern'],
 };
-const HINT_ORDER = ['page', 'fire', 'letter', 'map', 'watch']; // v2：只提示过关要的；日志、大衣靴子提灯是选看
+const HINT_ORDER = ['page', 'fire', 'letter', 'map', 'watch', 'basin']; // v2：只提示过关要的；日志、大衣靴子提灯是选看
 const HINT_IDLE = 90, HINT_IDLE_NIGHT = 20, HINT_IDLE_PAGE = 30, HINT_CLICKS = 6, HINT_GLOW = 5000; // 天黑只差点书记员 / 书桌：20 秒就提示，每 20 秒升一级；第一条（书桌上的纸）30 秒：玄关像死角，新玩家进门不知往哪走（11-01 评审）
 const hint = { idle: 0, clicks: 0, key: null, lvl: 0 };
 let hintGlow = null, hintGlowT = 0; // 三级提示时描边的图层（drawHighlight 当悬停画）
@@ -2464,7 +2469,22 @@ function watchSet() { // 停着：3:17:42；在走：照本地时间，碰巧是
   const A = [((h % 12) + m / 60) / 12, (m + s / 60) / 60, s / 60];
   watch.hands.forEach((p, i) => { p.rotation.y = -A[i] * Math.PI * 2; });
 }
-setInterval(watchSet, 1000);
+// 卫生间洗脸盆（盆底 y 0.86、沿 0.94，内沿 x −1.00…−0.70、z 1.53…1.69）：第 1 天半盆水冻成一整块冰；第 2 天起自家生过火，是水；✕ 那间是水上浮着几块碎冰
+const basin = { ice: null, water: null, chips: null };
+function makeBasin() {
+  const g = layers.get('entry_washstand'); if (!g || basin.ice) return;
+  const ice = new THREE.MeshStandardMaterial({ color: 0x9fbccb, roughness: 0.12, transparent: true, opacity: 0.9 }); // 偏蓝灰：白搪瓷盆里太白的冰看不出来
+  basin.ice = new THREE.Mesh(new THREE.BoxGeometry(0.27, 0.045, 0.13), ice); basin.ice.position.set(-0.85, 0.8825, 1.61);
+  basin.water = new THREE.Mesh(new THREE.PlaneGeometry(0.275, 0.135), new THREE.MeshStandardMaterial({ color: 0x2c3a40, roughness: 0.05, transparent: true, opacity: 0.75 }));
+  basin.water.rotation.x = -Math.PI / 2; basin.water.position.set(-0.85, 0.904, 1.61);
+  basin.chips = new THREE.Group();
+  for (const [x, z, w, d, r] of [[-0.93, 1.57, 0.05, 0.035, 0.4], [-0.86, 1.64, 0.04, 0.03, 1.2], [-0.79, 1.585, 0.06, 0.04, 2.1], [-0.74, 1.655, 0.03, 0.025, 0.7], [-0.9, 1.66, 0.025, 0.02, 2.6]]) {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(w, 0.008, d), ice); m.position.set(x, 0.905, z); m.rotation.y = r; basin.chips.add(m); }
+  for (const m of [basin.ice, basin.water, basin.chips]) g.add(m); // 不进 meshes：点到的还是洗脸架
+  basinSet();
+}
+function basinSet() { if (basin.ice) { const frozen = game.day === 1 && !x3.on; basin.ice.visible = frozen; basin.water.visible = !frozen; basin.chips.visible = x3.on; } }
+setInterval(() => { watchSet(); basinSet(); }, 1000);
 // 第 3 天早上门槛上的化雪（design v3「脚印只出不进、门槛有化雪」）：门槛木头上一摊湿印 + 几粒没化完的雪，门里地垫靠门那边也湿一块
 function makeMelt() {
   if (scene.getObjectByName('d3_melt')) return;
@@ -2484,7 +2504,7 @@ function gameInit() { // 模型和开关都建好后调（loadPeople 之前）�
   const f = toggles.get('stove_fire');
   if (f && !game.found.has('fire')) { f.on = false; f.k = 0; for (const q of f.parts) q(0); fire.smoke = 0; }
   if (!game.found.has('letter')) makeLetter();
-  makeWatch();
+  makeWatch(); makeBasin();
   document.fonts.load('18px "IM Fell English SC"').then(makeBook, makeBook); // 书架上那本工作日志（js/props3d.js；等字体好了再画书脊和封面的字）
   coatPad();
   if (game.day === 1 && !game.night) makePage(); // 天黑后（她坐下写了）那页纸就不在了
@@ -2788,6 +2808,7 @@ function updateDay2(dt) {
 const D3 = { s: 110, fork: 28, reach: 118, near: 3.2, shiftAt: 40, yard: 14, spruceX: [-9, 10], light: [0, 2.4, 80] }; // s = 老云杉在小路上的米数（D2.reach 最后一档 90 之后）
 const D3_LOGS = [[D3.fork + 32, 1, 0.35, 5.5], [D3.fork + 78, -1, -0.3, 6]]; // 倒木 [路线米数, 躺在哪边（右手 +）, 斜多少, 长]：挡住这边，另一边在 extendPath 里多清出一块好绕
 const X_NEED = ['xcoat', 'xwatch', 'xnotes', 'xfire'];
+const X_BASIN = ['Washstand', 'Water Closet', '洗脸架', 'Half a basin of water, a few pieces of broken ice afloat in it.', '半盆水，水面上浮着几块碎冰。', 'Ice afloat in the water.'];
 const X_HIDE = ['entry_coat', 'entry_boots', 'entry_lantern']; // ✕ 那间：他是穿戴整齐出的门
 const x3 = { on: false, wasIn: false, spruce: null, light: null };
 window.cabinX = x3; // 调试
@@ -2851,6 +2872,7 @@ function gameSeen3(name, title, add, got) {
   if (x3.on) {
     if (['Coat Rail & Greatcoat', 'Boots & Bench', 'Lantern'].includes(title)) { add('xcoat'); over = X_CARDS.xcoat; }
     else if (title === 'Night Table') { add('xwatch'); over = X_CARDS.xwatch; }
+    else if (title === 'Washstand & Hand Towel') over = X_BASIN; // 不算四处之一，只换卡片：和第 1 天那盆冰对上
     else if (title === 'Writing Desk, Chair & Wall Lamp') { add('xnotes'); over = X_CARDS.xnotes; }
     else if (/^stove_/.test(name) || title === 'Rocking Chair' || title === 'The Fire' || title === 'Cast-Iron Stove') { add('xfire'); over = X_CARDS.xfire; }
     else if (name === 'x_light') add('xlook');
