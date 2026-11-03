@@ -273,7 +273,7 @@ const CLIMB_TASKS = {
   climb: {
     start: (p) => { const a = p.acts.Climb_Ladder_Loop; if (p.cur !== a) p.play('Climb_Ladder_Loop', 0.2); a.timeScale = 0; },
     step: (p, T, dt) => { const v = CLIMB.cyc / p.acts.Climb_Ladder_Loop.getClip().duration, d = T[1] - p.S;
-      climbAt(p, p.S + Math.sign(d) * Math.min(Math.abs(d), v * dt)); return Math.abs(T[1] - p.S) < 1e-4; } },
+      climbAt(p, p.S + Math.sign(d) * Math.min(Math.abs(d), v * dt)); shared.npcRung?.(p, p.S); return Math.abs(T[1] - p.S) < 1e-4; } },
   top: {
     start: (p, T) => { T.lift = !shared.gateOpen(); T.a = snap(p, T.lift ? 'Ladder_Top_Lift' : 'Ladder_Top'); ladderRoot(CLIMB.top, p.root.position); },
     step: (p, T) => {
