@@ -3,8 +3,10 @@
 // 浏览器第一次点击 / 按键前不让出声：那一下才建 AudioContext、下载素材（约 770KB）。配音在念时环境音压低（duck）
 // 屋里屋外：相机在小屋方框里 = 屋里，屋外那几路（风、林子、雨、雷）过低通、压小，像隔着墙；窗上的雨和炉火只在屋里响
 // M 键静音（存 localStorage）
+// 背景音乐（2026-11-03）：每天一首，第 3 天那首结局也用；第一次点击后才下载（只下当天那首，约 0.4–0.9MB）；比环境声低，配音念时压得更低；静音键一起关
+// 乌鸦叫（birds.js 调 audioCaw）：从远处传来，走屋外那条总线，屋里隔着墙
 import { camera } from './core.js';
-import { share } from './state.js';
+import { share, shared } from './state.js';
 import { wx, cover } from './weather.js';
 import { fire } from './interact.js';
 import { sky } from './time-of-day.js';
@@ -12,7 +14,9 @@ import { sky } from './time-of-day.js';
 const LOOPS = { wind: 0.5, gale: 0.9, forest: 0.45, rain: 0.8, 'rain-window': 0.5, fire: 0.55 }; // 各路满音量
 const SHOTS = ['thunder', 'fire-light', 'door-open', 'door-close', 'drawer-open', 'drawer-close', 'stove-open', 'stove-close',
   'click', 'latch', 'creak', 'paper', 'book', 'pick', 'place', 'step-snow', 'step-ice', 'step-wood', 'step-dirt', 'step-wet'];
-let ctx = null, master, amb, outBus, outLP, steps = null, muted = false;
+let ctx = null, master, amb, outBus, outLP, musG, steps = null, muted = false;
+const MUSIC_VOL = 0.6, MUSIC_FADE = 6; // 满音量（文件已统一到约 -28 LUFS，乘 0.6 后比林子低约 4dB）、淡入秒数
+let music = null, mk = 0, mduck = 1; // music = { g, src }，mk = 淡入进度 0–1
 const buf = {}, loop = {}, lv = {}; // lv = 各路当前音量（平滑用）
 try { muted = localStorage.getItem('cabinMute') === '1'; } catch { /* 无痕模式 */ }
 
@@ -36,6 +40,14 @@ function unlock() {
     s.start(0, Math.random() * (b.duration - 0.2)); loop[n] = g; lv[n] = 0;
   });
   for (const n of SHOTS) load(n);
+  load('crow');
+  musG = ctx.createGain(); musG.gain.value = 0; musG.connect(master);
+  const day = Math.min(3, Math.max(1, shared.game?.day || 1)), mn = 'bgm-day' + day;
+  load(mn).then((b) => {
+    if (!b) return;
+    const s = ctx.createBufferSource(); s.buffer = b; s.loop = true; s.loopStart = 0.05; s.loopEnd = b.duration - 0.05; // 同环境声：跳过 mp3 首尾补的静音；文件首尾已交叉淡化
+    s.connect(musG); s.start(0, 0.05); music = { src: s, name: mn };
+  });
   fetch('sfx/steps.json').then((r) => r.json()).then((j) => { steps = j; }).catch(() => {});
 }
 for (const ev of ['pointerdown', 'keydown']) addEventListener(ev, unlock, true);
@@ -61,6 +73,7 @@ export function audioTick(dt, voice) {
   inK += ((isIn(camera.position) ? 1 : 0) - inK) * Math.min(1, dt * 4);
   duck += ((voice ? 0.4 : 1) - duck) * Math.min(1, dt * 5);
   amb.gain.value = duck;
+  if (music) { mk = Math.min(1, mk + dt / MUSIC_FADE); mduck += ((voice ? 0.3 : 1) - mduck) * Math.min(1, dt * 3); musG.gain.value = MUSIC_VOL * mk * mk * mduck; }
   outLP.frequency.value = 18000 * Math.pow(600 / 18000, inK); // 屋里：外面的声音只剩低频
   outBus.gain.value = 1 - 0.55 * inK;
   const day = Math.min(1, Math.max(0, Math.min(h - 5, 20 - h))); // 5–6 点鸟慢慢多起来，19–20 点慢慢没了
@@ -119,6 +132,13 @@ export function npcRung(p, S) {
   play('step-wood', v, { at, dur, rate: 1.1 + Math.random() * 0.15 });
 }
 
+// 远处的乌鸦叫：birds.js 每只鸟飞过时调；dist = 离相机的距离，越远越小、越闷，屋里再压一层（走 outBus）
+export function audioCaw(dist, delay = 0) {
+  if (!ctx || !buf.crow) return;
+  const v = 0.35 * Math.max(0.15, 1 - dist / 140);
+  play('crow', v, { delay, rate: 0.82 + Math.random() * 0.3, out: outBus });
+}
+
 // 开关：interact.js 的 toggle() 调（shared.sfxToggle）；on = 切换后的状态
 export function sfxToggle(name, on) {
   if (!ctx) return;
@@ -134,4 +154,4 @@ export function sfxToggle(name, on) {
 // 其它短音：paper 翻纸、book 开书、pick 拿起、place 放下
 export function sfx(n, vol = 0.6) { play(n, vol, { rate: 0.95 + Math.random() * 0.1 }); }
 share({ sfxToggle: () => sfxToggle, sfx: () => sfx, npcRung: () => npcRung });
-window.cabinAudio = { get ctx() { return ctx; }, buf, lv, get inK() { return inK; }, get duck() { return duck; }, onIce, get ice() { return ice; } }; // 调试 / 无头测试读状态
+window.cabinAudio = { get ctx() { return ctx; }, buf, lv, get inK() { return inK; }, get duck() { return duck; }, get music() { return music && { name: music.name, gain: musG.gain.value, mk, mduck, loop: music.src.loop, loopStart: music.src.loopStart, loopEnd: music.src.loopEnd, dur: music.src.buffer.duration }; }, get muted() { return muted; }, onIce, get ice() { return ice; } }; // 调试 / 无头测试读状态

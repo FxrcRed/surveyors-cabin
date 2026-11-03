@@ -18,3 +18,14 @@
 | `step-ice.mp3` | IceShatters_0.zip → LedasLuzta*.ogg（5 段碎冰，各取开头 0.28s 做踩冰「咯吱」，带通 300–5000Hz；脚本 `tools/sfx/make_ice.py`） | IgnasD | https://opengameart.org/content/ice-breakingshattering |
 
 `steps.json`：每种脚步文件里各下的起点和长度（秒），网页随机挑一下切着放。
+
+## 背景音乐与乌鸦叫（2026-11-03）
+
+同样全是 OpenGameArt.org 上的 **CC0 1.0**。`bgm-day1/2/3.mp3` 由 `tools/sfx/make_music.py` 处理：单声道 64kbps、调到统一响度、首尾 4 秒等功率交叉淡化成无缝循环；`crow.mp3` 是单声道 48kbps 转码。
+
+| 网页文件 | 原始素材 | 作者 | 链接 |
+|---|---|---|---|
+| `bgm-day1.mp3` | Contemplation.mp3 | Joth | https://opengameart.org/content/contemplation-0 |
+| `bgm-day2.mp3` | at.mp3（4 Atmospheric ghostly loops） | qubodup | https://opengameart.org/content/4-atmospheric-ghostly-loops |
+| `bgm-day3.mp3`（结局也用） | Snowfall (Looped ver.).ogg | Kistol | https://opengameart.org/content/snowfall |
+| `crow.mp3` | crow_caw.wav | zeroisnotnull | https://opengameart.org/content/crow-caw |
