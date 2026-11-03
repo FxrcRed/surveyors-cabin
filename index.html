@@ -751,8 +751,10 @@ float wH(vec2 p) { vec2 q = p + 3.0 * vec2(wNoise(p * 0.06 + uT * 0.03), wNoise(
     .map(([dx, dz]) => new THREE.Vector3(x0 + dx, 0, z0 + dz)), new THREE.Vector3(sp.x, 0, sp.z)]);
   trail3Curve.getSpacedPoints(240).forEach((c, i) => { const t = trail3Curve.getTangentAt(i / 240), o = 0.6 * Math.sin(i * 0.21) + 0.3 * Math.sin(i * 0.57 + 1);
     trailClear.push([c.x - t.z * o, c.z + t.x * o]); });
-  for (const [s, side] of D3_LOGS) { const u = Math.min(1, (s - D3.fork) / trail3Curve.getLength()), c = trail3Curve.getPointAt(u), t = trail3Curve.getTangentAt(u); // 倒木露出的那头多清一块，绕得过去
-    for (const a of [-1.5, 0, 1.5]) for (const o of [1.8, 3]) trailClear.push([c.x + t.x * a + t.z * side * o, c.z + t.z * a - t.x * side * o]); }
+  const logClear = (cv, l, side) => { const u = Math.min(1, l / cv.getLength()), c = cv.getPointAt(u), t = cv.getTangentAt(u); // 倒木露出的那头多清一块，绕得过去
+    for (const a of [-1.5, 0, 1.5]) for (const o of [1.8, 3]) trailClear.push([c.x + t.x * a + t.z * side * o, c.z + t.z * a - t.x * side * o]); };
+  for (const [s, side] of D3_LOGS) logClear(trail3Curve, s - D3.fork, side);
+  for (const [s, side] of D2_LOGS) logClear(trailCurve, s, side);
   // 种树前先定好第 2 天的烟、标记树的位置（烟升过树梢，不清视线通道）
   const tl = trailCurve.getLength(), on = (s, off = 0) => { const u = Math.min(1, s / tl), p = trailCurve.getPointAt(u), t = trailCurve.getTangentAt(u); return [p.x - t.z * off, p.z + t.x * off]; };
   [D2.lamp[0], D2.lamp[2]] = on(86, -18); // 傍晚的烟：踪迹往前、石堆再过去，离踪迹 18m 的林子里
@@ -2411,6 +2413,7 @@ const DAY2_NEED = ['d2block', 'd2stake', 'd2blaze', 'd2cairn'];
 const DAY2_MARKS = ['d2stake', 'd2blaze', 'd2cairn']; // 沿路的三样：每认出一样，雾里能走的那段就往前放一截（D2.reach）
 const D2 = { door: [-0.05, 3.4], block: [1.7, 5.4], yard: 13, width: 6.5, reach: [22, 39, 54, 90], lost: 2, lostAt: 30, lamp: [40, 2.4, -38], lampNear: 26 };
 const D2_SPOTS = { d2_stake: { s: 14, off: 1.8 }, d2_blaze: { s: 31, off: 3.0 }, d2_cairn: { s: 46, off: -2.4 } }; // s = 沿踪迹的米数，off = 离路中心（负 = 左手边）；间距、远近、左右故意不齐（11-01 评审：原 24/44/64 像节拍器）。11-03 挪近（原 21/41/66）：标桩离门口木桩约 12m，站在标桩边回头，雾里能同时看见两道刀口；云杉放在第 3 天岔路 D3.fork 28m 之后
+const D2_LOGS = [[22, -1, 0.3, 5], [38, 1, -0.35, 5.5]]; // 第 2 天踪迹上两根倒木（格式同 D3_LOGS）：标桩和云杉之间一根、云杉和石堆之间一根，路上不再只有雪；22m 那根在岔口 D3.fork 之前，第 3 天也会经过
 const d2 = { veil: false, lamp: null, lostT: 0, samples: null, lampSaid: false };
 window.cabinD2 = d2; // 调试
 const D2_CARDS = { // 图层 → [标题, 区域, 中文标题, 英, 中, 说明]
@@ -2598,8 +2601,10 @@ function day2Setup() {
   const lamp = makePlume(55);
   d2Add('d2_lamp', lamp, D2.lamp[0], D2.lamp[2]); lamp.position.y = gy + 6; lamp.visible = false; d2.lamp = lamp;
   // 脚印：出门沿卵石路走几步，拐进林间踪迹，一直到雾里（和你的一样大；只出不进）
-  { const pl = pathCurve.getLength(), tl = trailCurve.getLength(), at = (c, l, s) => c.getPointAt(Math.min(1, s / l));
-    d2.prints = makePrints('d2_prints', [new THREE.Vector3(D2.door[0], 0, D2.door[1]), at(pathCurve, pl, 0), at(pathCurve, pl, 2.5), ...[5, 9, 14, 20, 26, 32, 38].map((s) => at(trailCurve, tl, s))]);
+  addLogs(D2_LOGS);
+  { const pl = pathCurve.getLength(), at = (s) => pathCurve.getPointAt(Math.min(1, s / pl)), via = [];
+    for (let s = 5; s <= 38; s += 2.5) via.push(logDetour(s, D2_LOGS));
+    d2.prints = makePrints('d2_prints', [new THREE.Vector3(D2.door[0], 0, D2.door[1]), at(0), at(2.5), ...via]);
   }
   if (game.day >= 3) day3Setup(); // 小路尽头的老云杉、✕ 那边的灯
 }
@@ -2662,7 +2667,7 @@ function updateDay2(dt) {
   const lampOn = DAY2_NEED.every((k) => f.has(k)) && !game.night && sky.hour > 17.2 && outdoors(camera.position);
   d2.lamp.visible = lampOn;
   if (game.day === 2 && !d2.backPrints && DAY2_NEED.every((k) => f.has(k))) { // 四样找齐：你那行脚印旁边多出一行一样大的，从石堆往屋里走（你还没往回走）
-    const via = []; for (let s = D2_SPOTS.d2_cairn.s - 0.5; s > 3; s -= 3) { const [q, rt] = pathAt(s); via.push(q.addScaledVector(rt, 0.55)); }
+    const via = []; for (let s = D2_SPOTS.d2_cairn.s - 0.5; s > 3; s -= 3) { const [, rt] = pathAt(s); via.push(logDetour(s, D2_LOGS).addScaledVector(rt, 0.55)); }
     d2.backPrints = makePrints('d2_back', [...via, new THREE.Vector3(0.45, 0, 4.3), new THREE.Vector3(0.3, 0, 3.0)]); }
   if (lampOn) updatePlume(d2.lamp, dt, THREE.MathUtils.smoothstep(sky.hour, 17.2, 17.5));
   if (!fp || game.night) return;
@@ -2768,26 +2773,32 @@ function endDay2() { // 读完第 2 夜的调查记录：同 endDay，存成第 
   dialog(['The Second Day Ends', '第二天结束'], ['The clerk puts out the lamp. All night long the fog does not lift.', '书记员吹熄了灯。雾一夜都没有散。'],
     [['Next Morning', '第三天早上', () => { game.day = 3; saveGame(); try { sessionStorage.setItem('cabin.nextDay', '1'); } catch (e) { /* 存不了就照常问「继续上次」 */ } location.reload(); }]]);
 }
+function logDetour(s, logs) { // 踪迹 s 米处的点；到倒木跟前往露出的那头绕（脚印用）
+  const [q, rt] = pathAt(s), lg = logs.find(([ls]) => Math.abs(ls - s) < 4);
+  if (lg) q.addScaledVector(rt, -lg[1] * 1.5 * (1 - Math.abs(lg[0] - s) / 4));
+  return q;
+}
+function addLogs(logs, name = logs === D2_LOGS ? 'd2_log' : 'd3_log') { // 倒木斜躺着挡住大半条路，要从露出的那头绕过去（碰撞圈并进 TREE_XZ，跟树干一样推开人；脚印也绕着走）；按当前 d2.samples 摆
+  const logMat = d2Mat('#4a3a2c'), snowMat = d2Mat('#e9edf0');
+  for (const [s, side, yaw, L] of logs) {
+    const [p, rt] = pathAt(s), c = p.clone().addScaledVector(rt, side * (L / 2 - 0.4)); // 里头那端过中心线 0.4m
+    const dir = rt.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), yaw), lg = new THREE.Group();
+    const m = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.26, L, 9), logMat); m.rotation.z = Math.PI / 2; m.castShadow = m.receiveShadow = true; lg.add(m);
+    const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.2, L * 0.92, 9), snowMat); cap.rotation.z = Math.PI / 2; cap.scale.set(1, 1, 0.45); cap.position.y = 0.13; lg.add(cap); // 背上一层雪（第 3 天固定积雪）
+    for (const e of [-1, 1]) { const st = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.06, 0.7, 5), logMat); st.position.set(e * L * 0.2, 0.3, 0.1 * e); st.rotation.set(0.5 * e, 0, 0.4); lg.add(st); } // 断枝
+    lg.position.set(c.x, ground.position.y + 0.2, c.z); lg.rotation.y = Math.atan2(-dir.z, dir.x); lg.name = name; scene.add(lg); OUTDOOR.push(lg);
+    for (let u = -L / 2; u <= L / 2; u += 0.45) TREE_XZ.push(c.x + dir.x * u, c.z + dir.z * u);
+  }
+}
 function day3Setup() { // 小路尽头的老云杉 + 裂口 + 焦黑松针；✕ 那间屋往南看的灯（只在 ✕ 那边亮）
   // 第 3 天走岔路：samples 换成「踪迹 0..D3.fork + 岔路 trail3Curve」，pathAt / pathNear / 迷路 / 小地图揭雾都跟着走（三样记号已在 day2Setup 按旧踪迹摆好）
   const S0 = d2.samples, ds = S0.ds, t3 = trail3Curve.getSpacedPoints(Math.round(trail3Curve.getLength() / ds));
   d2.samples = [...S0.slice(0, Math.round(D3.fork / ds)), ...t3]; d2.samples.ds = ds; D3.end = (d2.samples.length - 1) * ds; D3.reach = D3.end + 8;
   scene.remove(d2.prints); OUTDOOR.splice(OUTDOOR.indexOf(d2.prints), 1); // 早上门口那行脚印改成一直通到老云杉跟前
   { const pl = pathCurve.getLength(), at = (s) => pathCurve.getPointAt(Math.min(1, s / pl)), via = [];
-    for (let s = 5; s < D3.end - 4; s += 2.5) { const [q, rt] = pathAt(s), lg = D3_LOGS.find(([ls]) => Math.abs(ls - s) < 4); // 到倒木跟前往露出的那头绕
-      if (lg) q.addScaledVector(rt, -lg[1] * 1.5 * (1 - Math.abs(lg[0] - s) / 4)); via.push(q); }
+    for (let s = 5; s < D3.end - 4; s += 2.5) via.push(logDetour(s, [...D3_LOGS, ...D2_LOGS.filter(([ls]) => ls < D3.fork)])); // 到倒木跟前往露出的那头绕
     d2.prints = makePrints('d2_prints', [new THREE.Vector3(D2.door[0], 0, D2.door[1]), at(0), at(2.5), ...via]); }
-  // 岔路上两根倒木，斜躺着挡住大半条路，要从露出的那头绕过去（碰撞圈并进 TREE_XZ，跟树干一样推开人；脚印也绕着走）
-  const logMat = d2Mat('#4a3a2c'), snowMat = d2Mat('#e9edf0');
-  for (const [s, side, yaw, L] of D3_LOGS) {
-    const [p, rt] = pathAt(s), c = p.clone().addScaledVector(rt, side * (L / 2 - 0.4)); // 里头那端过中心线 0.4m
-    const dir = rt.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), yaw), lg = new THREE.Group();
-    const m = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.26, L, 9), logMat); m.rotation.z = Math.PI / 2; m.castShadow = m.receiveShadow = true; lg.add(m);
-    const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.2, L * 0.92, 9), snowMat); cap.rotation.z = Math.PI / 2; cap.scale.set(1, 1, 0.45); cap.position.y = 0.13; lg.add(cap); // 背上一层雪（第 3 天固定积雪）
-    for (const e of [-1, 1]) { const st = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.06, 0.7, 5), logMat); st.position.set(e * L * 0.2, 0.3, 0.1 * e); st.rotation.set(0.5 * e, 0, 0.4); lg.add(st); } // 断枝
-    lg.position.set(c.x, ground.position.y + 0.2, c.z); lg.rotation.y = Math.atan2(-dir.z, dir.x); lg.name = 'd3_log'; scene.add(lg); OUTDOOR.push(lg);
-    for (let u = -L / 2; u <= L / 2; u += 0.45) TREE_XZ.push(c.x + dir.x * u, c.z + dir.z * u);
-  }
+  addLogs(D3_LOGS);
   const g = new THREE.Group(), bark = d2Mat('#3e3024');
   markTree(g, ...MARK_TREES.spruce); // 林子里同一种云杉，最高最粗的一棵
   for (let i = 0; i < 6; i++) { // 树根：几根斜插进土里的圆木
