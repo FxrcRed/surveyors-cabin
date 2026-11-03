@@ -1401,10 +1401,10 @@ loader.load('cabin.glb', async (gltf) => {
     else { const b = document.createElement('button'); b.id = 'startBtn'; b.innerHTML = lbl('Enter', '进入'); b.onclick = go; pct.replaceWith(b); } // 加载完先点「进入」再放开场：浏览器要先有一次点击才让配音出声
   });
 }, (e) => {
-  // GitHub Pages 用 gzip 传，e.total 是压缩后大小（约 16.9MB）而 e.loaded 是解压后字节 → 会超 100%；按解压后约 20.3MB 算（2026-11-02 贴图降到 512 后），并封顶 99%
-  const t = Math.max(e.total || 0, 20.3e6);
+  // GitHub Pages 用 gzip 传，e.total 是压缩后大小（约 16.9MB）而 e.loaded 是解压后字节 → 会超 100%；按解压后约 19.6MB 算（2026-11-03 摆设减面后；换模型要改这里），并封顶 99%
+  const t = Math.max(e.total || 0, 19.6e6);
   PROG.dl = Math.min(55, e.loaded / t * 55);
-  if (!window.__dl && e.loaded >= 20.3e6 * 0.995) { window.__dl = 1; T('downloaded'); }
+  if (!window.__dl && e.loaded >= 19.6e6 * 0.995) { window.__dl = 1; T('downloaded'); }
 }, (err) => { pct.innerHTML = lbl('Alas, it could not be loaded: ', '唉，没能加载：') + esc(err.message); console.error(err); });
 
 // 导出的模型有上万个小网格，逐个绘制太慢：按「子图层 + 材质」合并。
