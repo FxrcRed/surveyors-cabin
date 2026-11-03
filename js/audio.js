@@ -11,7 +11,7 @@ import { sky } from './time-of-day.js';
 
 const LOOPS = { wind: 0.5, gale: 0.9, forest: 0.45, rain: 0.8, 'rain-window': 0.5, fire: 0.55 }; // 各路满音量
 const SHOTS = ['thunder', 'fire-light', 'door-open', 'door-close', 'drawer-open', 'drawer-close', 'stove-open', 'stove-close',
-  'click', 'latch', 'creak', 'paper', 'book', 'pick', 'place', 'step-snow', 'step-wood', 'step-dirt', 'step-wet'];
+  'click', 'latch', 'creak', 'paper', 'book', 'pick', 'place', 'step-snow', 'step-ice', 'step-wood', 'step-dirt', 'step-wet'];
 let ctx = null, master, amb, outBus, outLP, steps = null, muted = false;
 const buf = {}, loop = {}, lv = {}; // lv = 各路当前音量（平滑用）
 try { muted = localStorage.getItem('cabinMute') === '1'; } catch { /* 无痕模式 */ }
@@ -87,7 +87,7 @@ export function audioStep(bob, moving, run) {
   const n = Math.floor(bob / Math.PI);
   if (n === stepN) return; stepN = n;
   if (!moving || !steps || !ctx) return;
-  const p = camera.position, kind = isIn(p) ? 'wood' : cover.uSnow.value > 0.5 ? 'snow' : cover.uWet.value > 0.3 ? 'wet' : 'dirt';
+  const p = camera.position, kind = onIce(p) ? 'ice' : isIn(p) ? 'wood' : cover.uSnow.value > 0.5 ? 'snow' : cover.uWet.value > 0.3 ? 'wet' : 'dirt';
   const cuts = steps[kind], [at, dur] = cuts[Math.floor(Math.random() * cuts.length)];
   play('step-' + kind, (run ? 0.55 : 0.4) * (0.85 + Math.random() * 0.3), { at, dur, rate: 0.92 + Math.random() * 0.16 });
 }
@@ -99,6 +99,24 @@ export function audioRung(y) {
   if (Math.abs(y - rungY) < 0.32) return; rungY = y;
   const [at, dur] = steps.wood[Math.floor(Math.random() * steps.wood.length)] || [0, 0.3];
   play('step-wood', 0.25, { at, dur, rate: 1.25 + Math.random() * 0.15 });
+}
+
+// 第 2 天路上的冻溪：踏过那一条冰面才咯吱响（q = 溪中点，t = 踪迹前进方向，溪横过踪迹宽 ±7m、前后各 0.7m）
+let ice = null;
+export function setIce(qx, qz, tx, tz) { ice = { qx, qz, tx, tz }; }
+function onIce(p) {
+  if (!ice) return false;
+  const dx = p.x - ice.qx, dz = p.z - ice.qz, a = dx * ice.tx + dz * ice.tz, l = dx * -ice.tz + dz * ice.tx;
+  return Math.abs(a) < 0.7 && Math.abs(l) < 7;
+}
+// NPC 爬梯子：characters.js 的 climb 每帧调，pos = 她的位置；隔 0.07 相位一档，离相机 >7m 听不到，相机在屋外几乎听不到
+const rungS = new WeakMap();
+export function npcRung(p, S) {
+  if (!ctx || !steps) return;
+  const last = rungS.get(p); if (last != null && Math.abs(S - last) < 0.07) return; rungS.set(p, S);
+  const d = camera.position.distanceTo(p.root.position), v = Math.max(0, 1 - d / 7) * (0.05 + 0.95 * inK) * 0.3; if (v < 0.01) return;
+  const [at, dur] = steps.wood[Math.floor(Math.random() * steps.wood.length)];
+  play('step-wood', v, { at, dur, rate: 1.1 + Math.random() * 0.15 });
 }
 
 // 开关：interact.js 的 toggle() 调（shared.sfxToggle）；on = 切换后的状态
@@ -115,5 +133,5 @@ export function sfxToggle(name, on) {
 }
 // 其它短音：paper 翻纸、book 开书、pick 拿起、place 放下
 export function sfx(n, vol = 0.6) { play(n, vol, { rate: 0.95 + Math.random() * 0.1 }); }
-share({ sfxToggle: () => sfxToggle, sfx: () => sfx });
-window.cabinAudio = { get ctx() { return ctx; }, buf, lv, get inK() { return inK; }, get duck() { return duck; } }; // 调试 / 无头测试读状态
+share({ sfxToggle: () => sfxToggle, sfx: () => sfx, npcRung: () => npcRung });
+window.cabinAudio = { get ctx() { return ctx; }, buf, lv, get inK() { return inK; }, get duck() { return duck; }, onIce, get ice() { return ice; } }; // 调试 / 无头测试读状态

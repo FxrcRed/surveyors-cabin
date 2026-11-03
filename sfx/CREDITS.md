@@ -15,5 +15,6 @@
 | `drawer-open/close`、`stove-open/close` | 100-CC0-wood-metal-SFX.zip（wood_squeak_01、wood_close_01、metal_open_01、metal_close_01） | rubberduck | https://opengameart.org/content/100-cc0-metal-and-wood-sfx |
 | `step-wood`、`step-wet` | sfx_100_v2.zip（footstep_wood_01–04、footstep_wet_01–03） | rubberduck | https://opengameart.org/content/100-cc0-sfx-2 |
 | `step-snow` | qubodup-wet_snow_steps.7z（snow_step_wet-01–09） | qubodup | https://opengameart.org/content/9-wet-snow-steps |
+| `step-ice.mp3` | IceShatters_0.zip → LedasLuzta*.ogg（5 段碎冰，各取开头 0.28s 做踩冰「咯吱」，带通 300–5000Hz；脚本 `tools/sfx/make_ice.py`） | IgnasD | https://opengameart.org/content/ice-breakingshattering |
 
 `steps.json`：每种脚步文件里各下的起点和长度（秒），网页随机挑一下切着放。
