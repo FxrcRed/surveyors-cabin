@@ -92,6 +92,15 @@ export function audioStep(bob, moving, run) {
   play('step-' + kind, (run ? 0.55 : 0.4) * (0.85 + Math.random() * 0.3), { at, dur, rate: 0.92 + Math.random() * 0.16 });
 }
 
+// 爬梯子（第一人称）：每爬 0.32m 一档，复用木地板脚步、音高拉高、更轻；y = 脚底高度
+let rungY = 0;
+export function audioRung(y) {
+  if (!steps || !ctx) return;
+  if (Math.abs(y - rungY) < 0.32) return; rungY = y;
+  const [at, dur] = steps.wood[Math.floor(Math.random() * steps.wood.length)] || [0, 0.3];
+  play('step-wood', 0.25, { at, dur, rate: 1.25 + Math.random() * 0.15 });
+}
+
 // 开关：interact.js 的 toggle() 调（shared.sfxToggle）；on = 切换后的状态
 export function sfxToggle(name, on) {
   if (!ctx) return;

@@ -450,7 +450,7 @@ import { shared, share } from './js/state.js';
 import { terrain, terrainH, terrainSlope, sstep, makeGroundGeometry, applyTerrain } from './js/terrain.js';
 import { paperMesh, agedPaper, makeBook, inspectTick, inspecting, inspectBusy, inspectKind, inspectStart, inspectRelease } from './js/props3d.js';
 import { WX_ZH, sky, skyEl, skyU, indoorU, indoorShade, PANELS, wallU, updateSky } from './js/time-of-day.js';
-import { audioTick, audioStep, sfx } from './js/audio.js';
+import { audioTick, audioStep, audioRung, sfx } from './js/audio.js';
 import { applyWeather, wsPos, WS, groundCover, cover, precipHole, setupRoofWeather, wx, roofWx, setWeather, wxTimer, slideSnow, updatePrecip, updateRoofWeather } from './js/weather.js';
 import { LAMPS, toggles, DOORS, swapSoftProps, splitParts, setupToggles, setupFire, setupWaterFx, toggle, fire, rocker, toggleOf, updateToggles, updateFire, updateLantern, updateRocker, updateWaterFx } from './js/interact.js';
 import { people, SEATS, wakePerson, loadPeople, seatTaken, goHome, SPOTS, routeTasks, NAV, MOODS, fpRise, sitTasks, CLIMB, moodOf, climbAt, WALK_SPEED, ladderRoot, floorBelow, goTasks, nearNode, navPath, updatePeople } from './js/characters.js';
@@ -3798,6 +3798,7 @@ function fpClimb(r, dt, f, run) {
   if (f <= 0) C.lock = false;
   r.position.y += (C.lock ? 0 : f) * LADDER.speed * dt;
   r.position.y = Math.min(r.position.y, LADDER.top - 0.2); // 拦杆放着上不去时停在梯子顶，别一直往上爬
+  if (!C.lock && f) audioRung(r.position.y);
   p.play('Walk_Loop', 0.25); p.cur.timeScale = f && !C.lock ? 0.7 * f : 0; // 没有爬梯动画：走路动画按爬的方向放，停下就定住
   const gq = fpProbe(LADDER.onX, 0.3, ladderZ()).floor, g = gq === null ? 0.16 : gq;
   if (r.position.y <= g && f <= 0) { r.position.y = g; fp.climb = null; }
