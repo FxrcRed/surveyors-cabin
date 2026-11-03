@@ -187,6 +187,7 @@ if (navigator.webdriver || /[?&]nolock\b/.test(location.search)) { let el = null
   #dlg p { margin: 12px 0 0; font-size: var(--fs-s); white-space: pre-line; }
   #mmap { position: fixed; left: 16px; bottom: 56px; z-index: 6; width: 124px; height: auto; pointer-events: none; border-radius: 4px; opacity: .88; box-shadow: 0 1px 4px rgba(0,0,0,.35); } /* 迷雾小地图 */
   @media (max-width: 600px) { #mmap { left: 8px; bottom: 52px; width: 92px; } }
+  body:has(#fpHud:not([hidden])) #mmap { width: 84px; } @media (max-width: 600px) { body:has(#fpHud:not([hidden])) #mmap { width: 72px; } } /* 第一人称缩小：原来压住左下角的标桩（评审④ v2 #11） */
   #dlg .row { display: flex; gap: 8px; margin-top: 14px; }
   #dlg button { font: inherit; font-size: var(--fs-xs); color: inherit; text-shadow: inherit; background: none; box-shadow: none; border: 1px solid rgba(244,239,230,.45); border-radius: 6px; padding: 5px 10px; cursor: pointer; }
   #dlg button:hover { background: rgba(255,255,255,.12); }
@@ -197,7 +198,7 @@ if (navigator.webdriver || /[?&]nolock\b/.test(location.search)) { let el = null
   #fpHud .dot { position: absolute; left: 50%; top: 50%; width: 6px; height: 6px; margin: -3px 0 0 -3px; border-radius: 50%; background: rgba(244,239,230,.85); box-shadow: 0 0 0 1px rgba(43,38,32,.5); }
   #fpHud .help { position: absolute; left: 50%; bottom: 20px; transform: translateX(-50%); padding: 6px 12px; border-radius: 6px; background: rgba(43,38,32,.6); color: #f4efe6; font-size: var(--fs-xs); text-align: center; white-space: nowrap; transition: opacity .6s; }
   #fpHud .help .zh { display: block; margin-top: 2px; font-size: var(--fs-xs); opacity: .9; }
-  #fpHud.live .help, #fpHud.seen .help { opacity: 0; } /* 只在开局显示一次：碰过画面（live）后加 seen，再退出/换天都不再出；位置在画面最下方（2026-10-31 用户要求），旁白在 bottom 150px，不叠 */
+  #fpHud.seen .help { opacity: 0; } /* 只在开局显示一次：电脑上锁住后第一次按方向键、满 6 秒加 seen，触屏碰过画面加 seen，再退出/换天都不再出；位置在画面最下方（2026-10-31 用户要求），旁白在 bottom 150px，不叠 */
   body:has(#enter.wait, #subs.on) #fpHud .help { opacity: 0; } /* 开场字幕和操作说明同在底部 150px：整段开场播完（#enter 去掉 wait）再出，句间空档也不闪（手机上叠成一行，2026-10-30） */
   #fpHud .hint { position: absolute; left: 50%; top: calc(50% + 48px); transform: translateX(-50%); font-size: var(--fs-xs); color: #f4efe6; text-shadow: 0 1px 2px rgba(0,0,0,.7); white-space: nowrap; }
   #fpHud .hint:not(:empty) { padding: 2px 8px; border-radius: 6px; background: rgba(43,38,32,.42); }
@@ -224,7 +225,7 @@ if (navigator.webdriver || /[?&]nolock\b/.test(location.search)) { let el = null
   /* 进屋：和时间按钮同款，在它上面；房间按钮在屏幕右侧竖排、竖直居中，按参观顺序从上到下，英文下一行小字中文 */
   #rooms { position: fixed; right: 16px; top: 50%; transform: translateY(-50%); z-index: 7; display: flex; flex-direction: column; align-items: flex-end; gap: 6px;
     color: #f4efe6; text-shadow: 0 1px 3px rgba(0,0,0,.75), 0 0 8px rgba(0,0,0,.45); }
-  #rooms[hidden] { display: none; }
+  #rooms[hidden], body:has(#fpHud:not([hidden])) #rooms, body:has(#card:not([hidden])) #tip { display: none; } /* 第一人称不要鸟瞰那份房间列表（触屏用右上「房间」）、卡片开着不出悬停名（评审④ v2 #5：手机上两样都叠在卡片正文上） */
   #rooms button { font: inherit; font-size: var(--fs-m); letter-spacing: 1px; color: inherit; text-shadow: inherit; background: none; box-shadow: none; border: 0; border-radius: 6px; padding: 3px 8px; text-align: right; opacity: .82; }
   #rooms button .zh { display: block; font-size: var(--fs-xs); letter-spacing: 2px; opacity: .8; }
   #rooms button { transition: color .2s, opacity .2s, transform .2s ease; transform-origin: right center; }
@@ -450,7 +451,7 @@ import { shared, share } from './js/state.js';
 import { terrain, terrainH, terrainSlope, sstep, makeGroundGeometry, applyTerrain } from './js/terrain.js';
 import { paperMesh, agedPaper, makeBook, inspectTick, inspecting, inspectBusy, inspectKind, inspectStart, inspectRelease } from './js/props3d.js';
 import { WX_ZH, sky, skyEl, skyU, indoorU, indoorShade, PANELS, wallU, updateSky } from './js/time-of-day.js';
-import { audioTick, audioStep, audioRung, setIce, sfx } from './js/audio.js';
+import { audioTick, audioStep, audioRung, setIce, sfx, sfxToggle } from './js/audio.js';
 import { updateBirds } from './js/birds.js';
 import { LOG } from './js/playlog.js';
 import { applyWeather, wsPos, WS, groundCover, cover, precipHole, setupRoofWeather, wx, roofWx, setWeather, wxTimer, slideSnow, updatePrecip, updateRoofWeather } from './js/weather.js';
@@ -1589,6 +1590,7 @@ for (const r of ROOMS) {
 function goRoom(r) {
   if (!home) return;
   endIntro(true); // 开场还没飞完就点进屋：先结束开场，否则下面的飞行会被开场覆盖
+  if (fp) return; // 第 1 天切片：endIntro 已把人交到门廊第一人称，玄关旁白等真走进门再念（评审④ v2 #1、#7：原来在门廊就念、压住任务条，进门又念一遍）
   inside = r; select(null); endClose(); enterBtn.innerHTML = lbl('Step Outside', '出门'); enterBtn.classList.remove('glow'); showQuest(); placeSpots(r);
   if (!game.entered) { game.entered = true; showQuest(); } // 「已找到 n · 还剩 m」进过屋才出现
   if (STOVE_ROOMS.includes(r.name) && !game.stoveSeen) { game.stoveSeen = true; showQuest(); } // 到了看得见炉子的房间才提「先生火」
@@ -2094,6 +2096,7 @@ const DAY1_TEXT = {
   notes1: ['Inquiry Notes, Night of Day 1', '调查记录 · 第 1 天夜里', GAME_TEXT.notes1[1], GAME_TEXT.notes1[2]],
 };
 const QUEST = { // 屏幕上那一行任务提示：[英, 中]
+  inside: ['Have a look around inside.', '往室内看看吧。'],
   page: ['There is a page lying on the writing desk.', '书桌上压着一页纸。'],
   fire: ['It is cold in here. Get the fire going first.', '有点冷，先把火升起来吧。'],
   look: ['Where did he go?', '他往哪儿去了？'],
@@ -2123,7 +2126,8 @@ function questNow() { const f = game.found; if (game.day >= 3) return quest3(); 
 const STOVE_ROOMS = ['Parlour']; // 「先生火」只在进起居室时提示（用户定的），屋外、厨房、第一人称都不提（让玩家自己摸索）
 function showQuest() {
   const el = $('quest'), k = questNow();
-  el.innerHTML = (k === 'fire' && !game.stoveSeen) || (k === 'page' && !game.deskSeen) ? '' : lbl(QUEST[k][0], QUEST[k][1]);
+  const q = k === 'page' && !game.deskSeen ? QUEST.inside : QUEST[k]; // 还没看到书桌：先说进屋看看（评审④ v2 #1：门廊上原来一行任务都没有）
+  el.innerHTML = k === 'fire' && !game.stoveSeen ? '' : lbl(q[0], q[1]);
   $('walkBtn').hidden = !(game.day >= 3 ? game.found.has('log3') && !game.found.has('ended') : game.day >= 2 && !game.night) || !!fp; // 第 2 天白天：「出门走走」直接站到门口、第一人称
   enterBtn.classList.toggle('nogo', !!inside && !(game.found.has('ended') || (game.day >= 3 ? game.found.has('log3') : game.day >= 2 && !game.night))); // 「出门」不常驻：剧情要出去时才有
   $('prog').innerHTML = ''; // v2 删掉「已找到 n · 还剩 m」：找线索不再像清单
@@ -2226,7 +2230,7 @@ function gameSeen(name) { // select 里调：这次点的东西算不算线索�
   return over;
 }
 // —— 卡关提示：屋里 90 秒没找到新线索、或连点 6 样东西都没进展，就提示下一条没找到的线索；同一条最多三级 ——
-// 一级只暗示，二级说在哪，三级让那件东西描边亮 5 秒。找到任何线索就从一级重新算。文字在 HINTS：[[英, 中] 一级, [英, 中] 二级, 图层]
+// 一级只暗示，二级说在哪，三级让那件东西一直描边到找到。找到任何线索就从一级重新算。文字在 HINTS：[[英, 中] 一级, [英, 中] 二级, 图层]
 const HINTS = {
   page: [['Someone has left a page on the writing desk.', '有人在书桌上留了一页纸。'],
     ['The writing desk under the wall lamp, in the Parlour.', '起居室壁灯下的书桌。'], 'desk_page'],
@@ -2252,9 +2256,9 @@ const HINTS = {
   lantern: [['And a light to find the way home?', '还有回来时照路的灯呢？'], ['The lantern on its peg in the Entry.', '玄关钉子上的提灯。'], 'entry_lantern'],
 };
 const HINT_ORDER = ['page', 'fire', 'letter', 'map', 'watch', 'basin']; // v2：只提示过关要的；日志、大衣靴子提灯是选看
-const HINT_IDLE = 90, HINT_IDLE_NIGHT = 20, HINT_IDLE_PAGE = 30, HINT_CLICKS = 6, HINT_GLOW = 5000; // 天黑只差点书记员 / 书桌：20 秒就提示，每 20 秒升一级；第一条（书桌上的纸）30 秒：玄关像死角，新玩家进门不知往哪走（11-01 评审）
+const HINT_IDLE = 90, HINT_IDLE_NIGHT = 20, HINT_IDLE_PAGE = 30, HINT_CLICKS = 6; // 天黑只差点书记员 / 书桌：20 秒就提示，每 20 秒升一级；第一条（书桌上的纸）30 秒：玄关像死角，新玩家进门不知往哪走（11-01 评审）
 const hint = { idle: 0, clicks: 0, key: null, lvl: 0 };
-let hintGlow = null, hintGlowT = 0; // 三级提示时描边的图层（drawHighlight 当悬停画）
+let hintGlow = null; // 三级提示时描边的图层（drawHighlight 当悬停画）
 function hintReset() { hint.idle = 0; hint.clicks = 0; }
 const HINT_Q = ['page', 'fire', 'look', 'out', 'out1', 'dusk2', 'night']; // 这几步任务里才提示
 function hintActive() { const q = questNow(); return game.entered && (inside || fp) && HINT_Q.includes(q) &&!opening && card.hidden && journal.hidden && $('dlg').hidden && document.visibilityState === 'visible'; }
@@ -2265,15 +2269,19 @@ function hintFire() { // 升一级并显示
   hint.lvl = Math.min(3, hint.lvl + 1); hintReset();
   const h = HINTS[key];
   LOG && LOG.ev('hint', `第${hint.lvl}级 ${key}：${hint.lvl < 3 ? h[hint.lvl - 1].join(' / ') : 'Look — there. / 看——就在那儿。'}`);
-  if (hint.lvl < 3) { showRoomNote(h[hint.lvl - 1], null, key); return; }
+  if (hint.lvl === 1 && game.day === 2 && DAY2_MARKS.includes(key) && d2.over && d2.over.n === DAY2_MARKS.filter((k) => game.found.has(k)).length) { showRoomNote(D2_SAYS.passed, null, key); return; } // 已经走过那样记号：别再催往前走（评审④ v2 #6）
+  if (hint.lvl < 3) { showRoomNote(key === 'page' && hint.lvl === 1 && fp && [null, 'Entry', 'Water Closet'].includes(roomAt(fp.p.root.position)) ? PAGE_WAY : h[hint.lvl - 1], null, key); return; } // 还在玄关：第一句先说往哪走（评审④ v2 #2）
   showRoomNote(['Look — there.', '看——就在那儿。']);
-  if (layers.get(h[2])) {
-    const prev = hintGlow; hintGlow = h[2]; if (prev) paint(prev); paint(hintGlow);
-    clearTimeout(hintGlowT); hintGlowT = setTimeout(() => { const n = hintGlow; hintGlow = null; paint(n); }, HINT_GLOW);
+  const g = layers.get(h[2]);
+  if (g) {
+    const prev = hintGlow; hintGlow = h[2]; if (prev) paint(prev); paint(hintGlow); // 描边一直留到找到（hintClick 里撤）；原来 5 秒就灭，东西不在视野里就白提示（评审④ v2 #10）
+    const w = people.get('person_woman'), c = new THREE.Box3().setFromObject(g).getCenter(new THREE.Vector3());
+    if (w && !w.player) { w.look = [c.x, c.y, c.z]; w.lookT = 5; if (!w.tasks.length && w.S == null && w.mode !== 'sit') w.tasks = [['face', c.x, c.z], ['look', c.x, c.y, c.z, 5], ['idle', 3]]; } // 她说完转头看着那样东西（闲着就整个人转过去）
   }
 }
+const PAGE_WAY = ['The rooms lie past the curtain.', '帘子后面就是屋里。'];
 function hintClick() { // select 里调：点了东西却没找到新线索
-  if (gameSeen.got) { hint.key = null; hint.lvl = 0; hintReset(); if (noteCur && noteCur.hint && game.found.has(noteCur.hint)) { endRoomNote(); pumpNote(); } return; } // 正挂着的提示已经解出来了：撤掉
+  if (gameSeen.got) { hint.key = null; hint.lvl = 0; hintReset(); if (hintGlow) { const n = hintGlow; hintGlow = null; paint(n); }if (noteCur && noteCur.hint && game.found.has(noteCur.hint)) { endRoomNote(); pumpNote(); } return; } // 正挂着的提示已经解出来了：撤掉
   const q = questNow(); if (!game.entered || !HINT_Q.includes(q) || hint.wait) return;
   if (++hint.clicks >= HINT_CLICKS) { hint.wait = true; setTimeout(() => { hint.wait = false; hintFire(); }, 1200); } // 等物件说明先读一眼
 }
@@ -2298,7 +2306,7 @@ function chgLine(c) { // 'chg:键:1' → 夜里记录那句 [英, 中]（1 = 变
   return open ? [`The inspector opened the ${n[0]} again after shutting it.`, `稽查把关上的${n[1]}又打开了。`] : [`The inspector shut the ${n[0]} again after opening it.`, `稽查把${n[1]}又关上了。`];
 }
 window.__voiceLines = () => [ // 要配音的句子（英文原句），tools/voice/make_voice.py 用；漏的靠 __said 补
-  ...OPENING, ...Object.values(ROOM_NOTES), PAGE_SAYS, LETTER_SAYS, CLERK_SAYS, ...Object.values(D2_SAYS), ...Object.values(D3_SAYS), [DAY1_TEXT.took[2]], ['Look — there.'],
+  ...OPENING, ...Object.values(ROOM_NOTES), PAGE_SAYS, LETTER_SAYS, CLERK_SAYS, ...Object.values(D2_SAYS), ...Object.values(D3_SAYS), [DAY1_TEXT.took[2]], ['Look — there.'], PAGE_WAY,
   ...Object.values(HINTS).flatMap((h) => [h[0], h[1]]), ...[...Object.keys(CHG_KEYS), 'wall_lamp'].flatMap((k) => [true, false].map((on) => { try { return chgSay(k, on); } catch (e) { return null; } })),
 ].filter(Boolean).map((l) => l[0]).concat(Object.values(STORY), Object.values(INFO).map((i) => i[2])).filter((t) => typeof t === 'string' && /[a-z]/i.test(t));
 function chgSay(key, on) {
@@ -2521,9 +2529,9 @@ function gameInit() { // 模型和开关都建好后调（loadPeople 之前）�
 // → 走回屋里读到工作日志中段 → 天黑，书记员在书桌写第 2 夜的记录 → 读完「第 3 天 · 待续」。物件都是 three.js 几何体，在 day2Setup 里建（要等地面高度和小路曲线）。
 const DAY2_NEED = ['d2block', 'd2stake', 'd2blaze', 'd2cairn'];
 const DAY2_MARKS = ['d2stake', 'd2blaze', 'd2cairn']; // 沿路的三样：每认出一样，雾里能走的那段就往前放一截（D2.reach）
-const D2 = { door: [-0.05, 3.4], block: [1.7, 5.4], yard: 13, width: 6.5, reach: [22, 39, 54, 90], lost: 2, lostAt: 30, lamp: [40, 2.4, -38] };
-const D2_SPOTS = { d2_stake: { s: 14, off: 1.8 }, d2_blaze: { s: 31, off: 3.0 }, d2_cairn: { s: 46, off: -2.4 } }; // s = 沿踪迹的米数，off = 离路中心（负 = 左手边）；间距、远近、左右故意不齐（11-01 评审：原 24/44/64 像节拍器）。11-03 挪近（原 21/41/66）：标桩离门口木桩约 12m，站在标桩边回头，雾里能同时看见两道刀口；云杉放在第 3 天岔路 D3.fork 28m 之后
-const D2_SCENE = { brook: 9, rabbit: 27, bush: 4.5, glade: 35 }, D3_SCENE = { arch: 45, stone: 80, stoneOff: -2.3, fire: 95, fireOff: 2.8 }; // 路上的小景（踪迹米数；d2Scene / d3Scene）：只看不点
+const D2 = { door: [-0.05, 3.4], block: [1.7, 5.4], yard: 13, width: 6.5, reach: [16, 39, 54, 90], lost: 2, lostAt: 30, lostAhead: 12, lamp: [40, 2.4, -38] };
+const D2_SPOTS = { d2_stake: { s: 8, off: 1.8 }, d2_blaze: { s: 31, off: 3.0 }, d2_cairn: { s: 46, off: -2.4 } }; // s = 沿踪迹的米数，off = 离路中心（负 = 左手边）；间距、远近、左右故意不齐（11-01 评审：原 24/44/64 像节拍器）。11-03 挪近（原 21/41/66）：标桩离门口木桩约 12m；11-03 v2 评审④ #11 又挪到 s 8、约 7m（小溪让到 11），站在标桩边回头，雾里能同时看见两道刀口；云杉放在第 3 天岔路 D3.fork 28m 之后
+const D2_SCENE = { brook: 11, rabbit: 27, bush: 4.5, glade: 35 }, D3_SCENE = { arch: 45, stone: 80, stoneOff: -2.3, fire: 95, fireOff: 2.8 }; // 路上的小景（踪迹米数；d2Scene / d3Scene）：只看不点
 const D2_LOGS = [[22, -1, 0.3, 5], [38, 1, -0.35, 5.5]]; // 第 2 天踪迹上两根倒木（格式同 D3_LOGS）：标桩和云杉之间一根、云杉和石堆之间一根，路上不再只有雪；22m 那根在岔口 D3.fork 之前，第 3 天也会经过
 const d2 = { veil: false, lamp: null, lostT: 0, samples: null, lampSaid: false };
 window.cabinD2 = d2; // 调试
@@ -2558,6 +2566,8 @@ const D2_SAYS = {
   clerk: ['The clerk: "He wrote that in fog you find the way by his marks."', '书记员：“他写过，雾里认路靠记号。”'],
   lost: ['The fog turned you round. The cabin is ahead of you again. Something stood by the path, and you did not stop for it.', '雾里绕了一圈，眼前又是小屋。路边好像有什么，你没停下来。'],
   lost0: ['The fog turned you round. The cabin is ahead of you again.', '雾里绕了一圈，眼前又是小屋。'],
+  lost2: ['The fog turned you round again. Turn about, and watch the wayside.', '雾里又绕了回来。回头看看路边。'],
+  passed: ['Something stood by the path back there.', '刚才路边好像立着什么。'], // 走过头以后的第 1 级提示（hintFire）
   change1: ['A second line of tracks runs to the door — going in. Boots the size of yours.', '门口多了一行脚印，往屋里走的，跟你的靴子一样大。'],
   change2: ['No smoke from the chimney. The fire was burning when you went out.', '烟囱不冒烟了。你出门时炉火还烧着。'],
   dusk: ['The light is going.', '天色暗下来了。'],
@@ -2565,7 +2575,7 @@ const D2_SAYS = {
 };
 Object.assign(HINTS, {
   d2block: [['Before the woods, look about the porch.', '进林子之前，先看看门廊边上。'], ['By the porch there is a chopping block.', '门廊边有一个劈柴木桩。'], 'd2_block'],
-  d2stake: [['Follow the path into the fog.', '顺着小路往雾里走。'], ['A stake stands beside the path, past the first bend.', '过了第一道弯，路边立着一根标桩。'], 'd2_stake'],
+  d2stake: [['Follow the path into the fog.', '顺着小路往雾里走。'], ['A few steps along the tracks, a stake stands beside the path.', '顺着脚印走几步，路边立着一根标桩。'], 'd2_stake'],
   d2blaze: [['Look at the trees along the path.', '看看路边的树。'], ['An old spruce by the path has a mark cut in its bark.', '路边一棵老云杉的树皮上刻了记号。'], 'd2_blaze'],
   d2cairn: [['Further on, where the path bends again.', '再往前，路又拐弯的地方。'], ['A heap of stones where the path bends.', '小路拐弯处有一堆石头。'], 'd2_cairn'],
   d2light: [['Look up, over the treetops.', '抬头看看树梢。'], ['East of north, past the cabin.', '北偏东，小屋那边过去。'], 'd2_lamp'],
@@ -2683,17 +2693,17 @@ function day2Setup() {
   d2.samples = pts.slice(0, Math.ceil((game.day >= 3 ? 140 : 120) / ds)); d2.samples.ds = ds;
   const gy = ground.position.y, bark = d2Mat('#5a4632'), wood = d2Mat('#9c7a52'), dark = d2Mat('#2a1f16');
   // 劈柴木桩：齐腰高一截圆木，靠上一道斜刀口——露出白木头的斜条 + 上沿一道深色阴影，十来米外也认得出（11-03：原来是顶上一根深色细条，站着看不见，「一样的刀口」只能靠卡片说）
-  const blk = new THREE.Group(), BH = 0.62, pale = d2Mat('#e6d3a6');
+  const blk = new THREE.Group(), BH = 0.62, pale = d2Mat('#e6d3a6'); // 评审④ v2 #11：标桩挪到离它约 7m（原 12m）、刀口加高加长，站标桩后回头两道刀口都看得清
   blk.add(new THREE.Mesh(new THREE.CylinderGeometry(0.23, 0.26, BH, 16), [bark, wood, wood]).translateY(BH / 2));
-  const gash = (len, z) => { const g = new THREE.Group(); g.add(new THREE.Mesh(new THREE.BoxGeometry(len, 0.07, 0.04), pale), new THREE.Mesh(new THREE.BoxGeometry(len, 0.016, 0.046), dark).translateY(0.042));
+  const gash = (len, z) => { const g = new THREE.Group(); g.add(new THREE.Mesh(new THREE.BoxGeometry(len, 0.13, 0.04), pale), new THREE.Mesh(new THREE.BoxGeometry(len, 0.022, 0.046), dark).translateY(0.074));
     g.position.set(0, BH - 0.13, z); g.rotation.z = 0.55; return g; }; // 斜度、高度、颜色两处一样，只有长短跟着木头粗细
-  blk.add(gash(0.3, 0.235));
+  blk.add(gash(0.4, 0.235));
   d2Add('d2_block', blk, ...D2.block, 1.9); // 刀口那面朝东、朝踪迹：出门沿踪迹走过它身边时看得见，站在标桩边回头也朝着你
   // 标桩：一样高的方木桩，靠上一样的斜刀口，系一条褪色红布（雾里好认）
   const stk = new THREE.Group();
-  stk.add(new THREE.Mesh(new THREE.BoxGeometry(0.14, BH, 0.14), wood).translateY(BH / 2));
-  stk.add(gash(0.15, 0.065));
-  const rag = new THREE.Mesh(new THREE.PlaneGeometry(0.08, 0.22), new THREE.MeshStandardMaterial({ color: '#8a3a2a', roughness: 1, side: THREE.DoubleSide })); rag.position.set(0.075, BH - 0.06, 0); rag.rotation.set(0, 0.4, 0.15); stk.add(rag);
+  stk.add(new THREE.Mesh(new THREE.BoxGeometry(0.2, BH, 0.2), wood).translateY(BH / 2));
+  stk.add(gash(0.22, 0.095));
+  const rag = new THREE.Mesh(new THREE.PlaneGeometry(0.08, 0.22), new THREE.MeshStandardMaterial({ color: '#8a3a2a', roughness: 1, side: THREE.DoubleSide })); rag.position.set(0.105, BH - 0.06, 0); rag.rotation.set(0, 0.4, 0.15); stk.add(rag);
   // 刻了记号的云杉：林子里同一种云杉模型（pine.glb）放大，齐眼高一块削白的树皮，canvas 画箭头和「7」
   const tree = new THREE.Group();
   const mark = d2Canvas(64, 96, (x, w, h) => { x.fillStyle = '#c9b48a'; x.fillRect(0, 0, w, h); x.strokeStyle = '#3a2a1a'; x.lineWidth = 5; x.lineCap = 'round';
@@ -2757,7 +2767,8 @@ function loopBack() { // 走进雾里太远：雾浓到看不见（不黑屏）�
     if (fp && x3.shifted && !x3.on) { const [p] = pathAt(45); placeMan(fp.p, p.x, p.z, 0); } // 世界挪过了：原点那间是 ✕ 那间，放回踪迹上，不放到它门口
     else if (fp && x3.on) { placeMan(fp.p, ...D2.door, 0); fp.yaw = 0; fp.pitch = -0.1; }
     else if (fp) { const [p] = pathAt(9); placeMan(fp.p, p.x, p.z, 0); fp.yaw = Math.atan2(-p.x, D2.door[1] - p.z); fp.pitch = -0.05; if (!game.found.has('d2light')) loopChange(); } // 在院子边上、面朝小屋
-    d2.fogGoal = 0; showRoomNote(!x3.shifted ? (d2.passed ? D2_SAYS.lost : D2_SAYS.lost0) : x3.on ? D3_SAYS.lostX : D3_SAYS.lost); hint.clicks++;
+    const n = DAY2_MARKS.filter((k) => game.found.has(k)).length; if (d2.passed && !x3.shifted) d2.over = { n, k: d2.over && d2.over.n === n ? d2.over.k + 1 : 1 }; // 同一样记号走过头几次了
+    d2.fogGoal = 0; showRoomNote(!x3.shifted ? (d2.passed ? (d2.over.k > 1 ? D2_SAYS.lost2 : D2_SAYS.lost) : D2_SAYS.lost0) : x3.on ? D3_SAYS.lostX : D3_SAYS.lost); hint.clicks++; // 第 2 次起换一句，别让人当成惩罚（评审④ v2 #6）
     setTimeout(() => { d2.veil = false; }, 1500);
   }, 1100);
 }
@@ -2799,7 +2810,7 @@ function updateDay2(dt) {
   // 没有墙：离踪迹（或走过还没认出的记号）越远雾越浓，偏出 D2.lostAt 米、再走 D2.lost 秒才绕回去
   const side = q.d - D2.width, ahead = q.s - (game.day >= 3 ? D3.reach : D2.reach[n]);
   d2.passed = ahead > side; // 是走过了记号（不是走偏）：绕回来时提一句「路边好像有什么」
-  lostFog(Math.hypot(r.x, r.z) < D2.yard ? 0 : Math.max(side, ahead), dt);
+  lostFog(Math.hypot(r.x, r.z) < D2.yard ? 0 : Math.max(side, game.day >= 3 ? ahead : ahead * D2.lostAt / D2.lostAhead), dt); // 第 2 天走过头：12m 就绕回（评审④ v2 #6：原来 30m，走过标桩还能走到 52m）
 }
 // —— 三日调查小游戏 · 第 3 天 + 结局（2026-10-27，灰盒）：读完第 2 夜记录 →「第二天结束」→ 重新载入成第三天早上（还是雾）→ 书架读工作日志后段 →「出门走走」，
 // 雾里的路一直放到 ✕（D3.s 米处一棵老云杉、树根下裂口、焦黑松针）→ 走到树跟前压黑，「放进」✕ 那间小屋：就是同一个模型换一套状态（applyX：大衣 / 靴子 / 提灯藏掉、
@@ -2901,10 +2912,10 @@ function addLogs(logs, name = logs === D2_LOGS ? 'd2_log' : 'd3_log') { // 倒�
   for (const [s, side, yaw, L] of logs) {
     const [p, rt] = pathAt(s), c = p.clone().addScaledVector(rt, side * (L / 2 - 0.4)); // 里头那端过中心线 0.4m
     const dir = rt.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), yaw), lg = new THREE.Group();
-    const m = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.26, L, 9), logMat); m.rotation.z = Math.PI / 2; m.castShadow = m.receiveShadow = true; lg.add(m);
-    const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.2, L * 0.92, 9), snowMat); cap.rotation.z = Math.PI / 2; cap.scale.set(1, 1, 0.45); cap.position.y = 0.13; lg.add(cap); // 背上一层雪（第 3 天固定积雪）
-    for (const e of [-1, 1]) { const st = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.06, 0.7, 5), logMat); st.position.set(e * L * 0.2, 0.3, 0.1 * e); st.rotation.set(0.5 * e, 0, 0.4); lg.add(st); } // 断枝
-    lg.position.set(c.x, ground.position.y + 0.2, c.z); lg.rotation.y = Math.atan2(-dir.z, dir.x); lg.name = name; scene.add(lg); OUTDOOR.push(lg);
+    const m = new THREE.Mesh(new THREE.CylinderGeometry(0.31, 0.4, L, 9), logMat); // 粗到背高约 0.8m：原来 0.5m 看着能跨，走中线直接被挡停（评审④ v2 #8） m.rotation.z = Math.PI / 2; m.castShadow = m.receiveShadow = true; lg.add(m);
+    const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.26, 0.31, L * 0.92, 9), snowMat); cap.rotation.z = Math.PI / 2; cap.scale.set(1, 1, 0.45); cap.position.y = 0.2; lg.add(cap); // 背上一层雪（第 3 天固定积雪）
+    for (const e of [-1, 1]) { const st = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.06, 0.7, 5), logMat); st.position.set(e * L * 0.2, 0.45, 0.1 * e); st.rotation.set(0.5 * e, 0, 0.4); lg.add(st); } // 断枝
+    lg.position.set(c.x, ground.position.y + 0.33, c.z); lg.rotation.y = Math.atan2(-dir.z, dir.x); lg.name = name; scene.add(lg); OUTDOOR.push(lg);
     for (let u = -L / 2; u <= L / 2; u += 0.45) TREE_XZ.push(c.x + dir.x * u, c.z + dir.z * u);
   }
 }
@@ -3082,7 +3093,7 @@ const MM_ROOM = { Entry: 'Entry', 'Water Closet': 'Water Closet', Kitchen: 'Kitc
 let mmDirty = true, mmT = 0, mmFar = 0, mmPath = 0; // mmFar / mmPath：沿踪迹 / 卵石路走过的最远米数
 function mmReveal(area) { const r = MM_ROOM[area]; if (r && !x3.on && !game.found.has('m:' + r)) { game.found.add('m:' + r); saveGame(); mmDirty = true; } }
 function deskCheck() { // 第 1 天：人在屋里、书桌那页纸进了画面中间才提「书桌上压着一页纸」
-  if (game.deskSeen || game.day > 1 || opening || (fp ? outdoors(fp.p.root.position) : !inside)) return;
+  if (game.deskSeen || game.day > 1 || opening || (fp ? [null, 'Entry', 'Water Closet'].includes(roomAt(fp.p.root.position)) : !inside)) return; // 玄关、门口隔着墙看不见书桌（只算投影会在门口就判成看见）
   const g = layers.get('desk_page'); if (!g) return;
   const c = deskCheck.c || (deskCheck.c = new THREE.Box3().setFromObject(g).getCenter(new THREE.Vector3())), v = c.clone().project(camera);
   if (v.z < 1 && Math.abs(v.x) < 0.85 && Math.abs(v.y) < 0.85 && camera.position.distanceTo(c) < 7) { game.deskSeen = true; showQuest(); }
@@ -3376,6 +3387,7 @@ function clueFly() { // 新线索卡关上：§ 从标题飞进遗稿按钮（�
 function cardMore() { card.classList.toggle('more', card.scrollTop + card.clientHeight < card.scrollHeight - 4); } // 卡片没滚到底：底部渐隐
 function cardOpen() { // 第一人称：放出鼠标，「走近看」「×」才点得到（同 dialog）
   if (document.pointerLockElement) document.exitPointerLock();
+  $('roomList').classList.add('shut'); // 触屏房间列表收起，别叠在卡片上
   card.hidden = cardBg.hidden = false; drawCard();
 }
 const inspectOn = () => !navigator.webdriver || window.cabinFly || /[?&]fly/.test(location.search); // 无头测试（webdriver）默认不飞，原来的流程脚本要求点了立刻出卡片；测飞行：页面里设 window.cabinFly = true
@@ -3384,6 +3396,7 @@ function bookText() { // 翻开的书页上的字 = 当天工作日志卡片的�
   return { en: T[0], zh: T[1] };
 }
 function select(name, direct) {
+  if (name && game.day === 1 && !game.night && !game.found.has('page') && !name.startsWith('desk_drawer') && infoOf(name)?.[0] === 'Writing Desk, Chair & Wall Lamp' && layers.get('desk_page')?.visible) name = 'desk_page'; // 白天还没看那页纸：点书桌本身也是看纸（评审④ v2 #3：手机上纸只有 42×11px）
   if (!direct && inspectOn()) { // 书架上的日志、桌上和炉里的纸：先飞到眼前（书还会翻开几页），飞完再出卡片；卡片关了飞回去（js/props3d.js）
     if (inspectBusy()) { if (name) return; inspectRelease(); } // 飞的途中点别处不理；按 Esc / × 直接收尾
     else if (inspecting()) inspectRelease(() => { if (game.found.has('letter')) { const l = layers.get('stove_letter'); if (l) l.visible = false; } });
@@ -3778,7 +3791,7 @@ function stopFP() {
 document.addEventListener('pointerlockchange', () => {
   if (!fp) return;
   fp.paused = document.pointerLockElement !== canvas;
-  fpHud.classList.toggle('live', !fp.paused); if (!fp.paused) fpHud.classList.add('seen');
+  fpHud.classList.toggle('live', !fp.paused); if (!fp.paused && !fp.liveAt) fp.liveAt = performance.now();
   if (fp.paused) fp.keys.clear();
 });
 canvas.addEventListener('mousemove', (e) => {
@@ -3803,6 +3816,7 @@ addEventListener('keydown', (e) => {
   if (!fp) return;
   if (e.key === 'Escape' && fp.paused && card.hidden && !e.cabinClosed) { stopFP(); return; } // 卡片开着（鼠标已放出）：Esc 只关卡片
   if (e.code === 'KeyE' && !e.repeat) { fpUse(); return; }
+  if (!fp.paused && fp.liveAt && !fpHud.classList.contains('seen') && /^(Key[WASD]|Arrow)/.test(e.code)) setTimeout(() => fpHud.classList.add('seen'), Math.max(1500, 6000 - (performance.now() - fp.liveAt))); // 操作说明：真走起来、且锁住满 6 秒才收起（评审④ v2 #1：原来一锁指针就收，「WASD 走动」从来没显示过）
   fp.keys.add(e.code);
 });
 addEventListener('keyup', (e) => { if (fp) fp.keys.delete(e.code); });
@@ -3999,7 +4013,7 @@ function updateFP(dt) {
 // —— 第一人称切片（2026-10-28，网址带 ?fp）：开场落在门廊，玩家就是稽查，推门进屋；书记员当同伴。手机：点哪走哪 + 拖动转头（不做摇杆）——
 // 2026-10-29 起是默认（用户：旧的环视版第 1 天不要了）；?nofp 只留给老的无头测试 day1.py。?touch：电脑上测触屏那套
 const SLICE = !/[?&]nofp\b/.test(location.search), touchFP = matchMedia('(pointer: coarse)').matches || /[?&]touch\b/.test(location.search);
-const SL = { man: [-0.05, 8.4], woman: [0.75, 8.15], door: [[-0.05, 2.45], [-0.05, 1.5]], sofa: [0.19, -0.17], seen: new Set(), room: undefined, t: 0, w: null, inT: 0 }; // man/woman：开场停步、第一人称起点（离前墙约 6.4m，定格时小屋约占画面宽 1/3，用户嫌 z 6.0 时屋子撑满画面）；door：门外 → 门里（门轴 x -0.49、z 1.9）；man/woman 离门 4m（2026-10-31，用户：原来 1.5m 只看到门板，门和门廊灯要整体入画）
+const SL = { man: [-0.05, 8.4], woman: [0.75, 8.15], door: [[-0.05, 2.45], [-0.05, 1.5]], sofa: [0.19, -0.17], seen: new Set(), room: undefined, t: 0, w: null, liveT: 0 }; // man/woman：开场停步、第一人称起点（离前墙约 6.4m，定格时小屋约占画面宽 1/3，用户嫌 z 6.0 时屋子撑满画面）；door：门外 → 门里（门轴 x -0.49、z 1.9）；man/woman 离门 4m（2026-10-31，用户：原来 1.5m 只看到门板，门和门廊灯要整体入画）
 const FP_DRAG = 0.006, _slO = new THREE.Vector3(), _slD = new THREE.Vector3();
 const fpT = { id: null, x: 0, y: 0, x0: 0, y0: 0, t: 0, drag: false, at: 0 };
 window.__slice = SL; // 调试 / 无头测试
@@ -4037,7 +4051,7 @@ function mornStart() {
   shadowDirty = true;
   const z = ladderZ(), B = ladderRoot(CLIMB.top), A = new THREE.Vector3(B.x - CLIMB.fwd, B.y + CLIMB.up, z);
   const D = new THREE.Vector3(NAV.ladder[0], (floorBelow(NAV.ladder[0], 0.3, z) ?? 0.16) + 0.01, z);
-  placeMan(w, A.x, A.z, LADDER.yaw); w.root.position.copy(A); w.roam = w.next = 1e9; w.tasks = [['topDown'], ['climb', 0], ['dismount'], ['face', ...MORN.stove]];
+  placeMan(w, A.x, A.z, LADDER.yaw); w.root.position.copy(A); w.roam = w.next = 1e9; w.tasks = [['topDown'], ['climb', 0], ['dismount'], ...goTasks(w, ...NAV.ladder, 'ne'), ['face', ...MORN.stove]]; // 下了梯子走到起居室这边（ne），别站在梯子脚堵出门的过道（评审④ v2 #9）
   placeMan(m, ...MORN.stove, 0); m.roam = m.next = 1e9; m.root.visible = false; // 镜头就是他的眼睛
   const eh = 1.62 * m.root.scale.x, fy = (x, z) => floorBelow(x, 0.3, z) ?? 0.16, [sx, sz] = SL.sofa, [tx, tz] = MORN.stove;
   const walk = new THREE.CatmullRomCurve3([new THREE.Vector3(sx, fy(sx, sz) + eh, sz), new THREE.Vector3(NAV.ne[0], fy(...NAV.ne) + eh, NAV.ne[1]), new THREE.Vector3(tx, fy(tx, tz) + eh, tz)]);
@@ -4053,14 +4067,15 @@ function mornTick(dt) {
   if (t < 1.6) P.y = THREE.MathUtils.lerp(M.sit, P.y, e(0, 1.6));
   else if (k < 1) P.y += Math.sin(k * 14) * 0.012;
   camera.position.copy(P);
-  M.lk.lerp(_slD.copy(w.position).setY(w.position.y + 1.45), Math.min(1, dt * 3));
+  const out = !M.w.tasks.length; if (out) M.out = (M.out || 0) + dt; // 她走到起居室这边了：镜头转向通高厅过道（出门的方向），再交给玩家
+  M.lk.lerp(out ? _slD.set(NAV.hall2[0], w.position.y + 1.45, NAV.hall2[1]) : _slD.copy(w.position).setY(w.position.y + 1.45), Math.min(1, dt * (out ? 2.5 : 3)));
   controls.target.copy(M.lk); camera.lookAt(M.lk);
-  if (t >= MORN.T && !M.w.tasks.length) mornEnd(); // 她下完梯子、转向炉子才交给玩家
+  if (t >= MORN.T && M.out > 1.2) mornEnd(); // 她下完梯子、走到起居室、镜头转向过道才交给玩家
 }
 function mornEnd() {
   if (!morn) return;
   const { m, w, D } = morn, dir = _slD.copy(morn.lk).sub(camera.position).normalize(); morn = null;
-  placeMan(w, D.x, D.z, Math.atan2(MORN.stove[0] - D.x, MORN.stove[1] - D.z)); w.root.position.copy(D); w.S = null; w.roam = 8; w.next = 4; // 之后照白天的样子在楼下转
+  const [wx, wz] = NAV.ne; placeMan(w, wx, wz, Math.atan2(MORN.stove[0] - wx, MORN.stove[1] - wz)); w.root.position.y = D.y; w.S = null; w.roam = 8; w.next = 4; // 之后照白天的样子在楼下转
   const yaw = Math.atan2(dir.x, dir.z); m.root.visible = true; placeMan(m, ...MORN.stove, yaw); m.root.position.y = floorBelow(MORN.stove[0], 0.3, MORN.stove[1]) ?? 0.16;
   startFP('person_man'); if (!fp) return;
   fp.yaw = yaw; fp.pitch = Math.asin(dir.y);
@@ -4076,6 +4091,7 @@ function sliceView() { // 右上角：第一人称时「看模型」（作品集
 }
 // 房间导览（2026-11-03，触屏第一人称）：右上「Rooms」点开 6 间，点一间沿路网走过去（fpGo；跨层自动爬梯子）
 const ROOM_GO = { 'Entry': [0.15, 1.7, 110, -0.2], 'Water Closet': [-0.62, 1.0, 293, -0.3], 'Hall': [...NAV.hall3, 185, 0.15], 'Parlour': [0.2, -1.0, 327, -0.2], 'Kitchen & Dining': [...NAV.hall, 180, -0.15], 'Loft': [...NAV.L_mid, 213, -0.1] }; // [x, z, 朝向°, 俯仰]：朝向照 ROOMS 的看屋视角，到了转过去（不然脸贴墙）
+const ROOM_GO_TALL = { 'Parlour': 275 }; // 竖屏横向视野只有约 37°：起居室改朝书桌和地图（评审④ v2 #4：327° 时只看到扶手椅和窗帘）
 const roomBtn = $('roomBtn'), roomList = $('roomList');
 roomBtn.innerHTML = lbl('Rooms', '房间');
 roomList.innerHTML = Object.keys(ROOM_GO).map((n) => { const r = ROOMS.find((q) => q.name === n); return `<button data-room="${n}">${lbl(r.name, r.zh)}</button>`; }).join('');
@@ -4089,7 +4105,7 @@ roomList.onclick = (e) => {
   if (!b || !fp || fp.climb || fp.lad) return;
   const p = fp.p; select(null);
   if (p.mode === 'sit') p.tasks = fpRise(p);
-  const [x, z, yaw, pitch] = ROOM_GO[b.dataset.room];
+  const [x, z, yaw0, pitch] = ROOM_GO[b.dataset.room], yaw = (innerHeight > innerWidth && ROOM_GO_TALL[b.dataset.room]) || yaw0;
   fpGo(x, z, null, b.dataset.room === 'Loft', [yaw * Math.PI / 180, pitch]);
 };
 function roomNavSync() { // 每帧（updateFP）：进过屋、不在梯子上才显示
@@ -4113,6 +4129,8 @@ function sliceTick(dt) {
   const rn = roomAt(fp.p.root.position);
   const dw0 = toggles.get('door_wood'), nr0 = toggles.get('entry_noren'); // 门被推开（on = false 是开）：先把门口帘子拉起来，再进屋
   if (dw0 && nr0 && !dw0.on && !SL.norenUp) { SL.norenUp = true; nr0.on = true; }
+  const w0 = people.get('person_woman');
+  if (dw0 && dw0.on && SL.w === 'in' && w0 && Math.hypot(w0.root.position.x - SL.door[0][0], w0.root.position.z - SL.door[0][1]) < 0.6) { dw0.on = false; dw0.ajar = 0; sfxToggle('door_wood', false); } // 她领路走到门前：推开虚掩的门（不然玩家按 W 贴着门扇滑到门轴卡住）
   if (rn !== SL.room) { // 原来 goRoom 里做的那几件，改成走进去时做
     SL.room = rn; inside = rn ? ROOMS.find((r) => r.name === rn) : null;
     if (rn) game.entered = true;
@@ -4121,8 +4139,8 @@ function sliceTick(dt) {
     showQuest();
   }
   const w = people.get('person_woman');
-  if (rn) SL.inT += 0.3;
-  if (w && SL.w === 'porch' && (SL.inT > 6 || (rn && rn !== 'Entry'))) { // 稽查进门走开了（或 6 秒后）她才跟进来，站到书架前看着书桌（不站路点 sw，挡稽查的路；之后照白天的样子在楼下转）；跟太紧会堵在玄关挡他的路
+  if (!fp.paused) SL.liveT += 0.3;
+  if (w && SL.w === 'porch' && (SL.liveT > 1.5 || rn)) { // 玩家一拿到操作她就先进屋领路：进门往右穿过帘子、一路开灯，站到书架前看着书桌（评审④ v2 #2：原来等他进门 6 秒才跟，玄关成了死角；不站路点 sw，挡稽查的路；之后照白天的样子在楼下转）
     SL.w = 'in'; w.tasks = [['walk', ...SL.door[0]], ['walk', ...SL.door[1]], ...goTasks(w, ...SL.door[1], 'entry'), ...lampTasks('ceiling_light_entry'), ...goTasks(w, ...NAV.entry, 'hall'), ...lampTasks('hall_pendant_south'), ...lampTasks('hall_pendant_north'), ...goTasks(w, ...NAV.hall, 'ne'), ...lampTasks('ceiling_light_living'), ...goTasks(w, ...NAV.ne, 'books'), ['walk', ...NAV.books], ['face', -1.4, -1.15]]; w.roam = 25; w.next = 8;
   }
 }
@@ -4147,13 +4165,18 @@ for (const ev of ['pointerup', 'pointercancel']) canvas.addEventListener(ev, (e)
   if (fp && !fpT.drag && ev === 'pointerup' && performance.now() - fpT.t < 600) fpTap(e);
   fpT.drag = false;
 });
+function pickNear(e) { // 触屏：手指点偏 20px 以内也算点中线索（评审④ v2 #3：书桌那页纸夹在梯子两根立柱中间，一点就点成梯子）
+  const n0 = pick(e); if (n0 && isClue(n0)) return n0;
+  for (const r of [10, 20]) for (let i = 0; i < 8; i++) { const a = i * Math.PI / 4, n = pick({ clientX: e.clientX + Math.cos(a) * r, clientY: e.clientY + Math.sin(a) * r }); if (n && isClue(n)) return n; }
+  return pick(e); // 附近没有线索：照原来那一点（也把射线摆回去，下面点地面要用）
+}
 function fpTap(e) {
   if (!roomList.classList.contains('shut')) { roomList.classList.add('shut'); return; } // 房间列表开着：点画面 = 收起
   if (!card.hidden) { select(null); return; } // 卡片开着：点画面 = 关
   const p = fp.p, P = p.root.position;
   if (p.tasks.length || fp.climb || fp.lad) return; // 起身、爬梯中
   if (p.mode === 'sit') { p.tasks = fpRise(p); return; }
-  let name = pick(e); if (name && /_rug$|doormat/.test(name)) name = null; // 地毯、门垫当地面
+  let name = pickNear(e); if (name && /_rug$|doormat/.test(name)) name = null; // 地毯、门垫当地面
   if (name && name !== 'roof_snow' && name !== p.id) {
     const g = layers.get(name) || people.get(name)?.root; if (!g) return;
     const box = new THREE.Box3().setFromObject(g), c = box.getCenter(new THREE.Vector3());
