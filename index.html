@@ -214,6 +214,10 @@ if (navigator.webdriver || /[?&]nolock\b/.test(location.search)) { let el = null
   #fpHud .dot { transition: width .12s, height .12s, margin .12s, background-color .12s; }
   #fpHud.aim .dot { width: 14px; height: 14px; margin: -7px 0 0 -7px; background-color: transparent; box-shadow: inset 0 0 0 1.5px rgba(244,239,230,.9), 0 0 0 1px rgba(43,38,32,.5); } /* 准星对着 2m 内能点的东西：点变成环（UX3） */
   body:has(#card:not([hidden])) #fpHud :is(.dot, .hint) { visibility: hidden; } /* 卡片开着视角冻结：准星和 E 提示先收起 */
+  #fpHud .resume { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); padding: 4px 12px; border-radius: 6px; background: rgba(43,38,32,.6); color: #f4efe6; font-size: var(--fs-xs); text-align: center; white-space: nowrap; opacity: 0; transition: opacity .2s; }
+  #fpHud .resume .zh { display: block; margin-top: 2px; opacity: .9; }
+  #fpHud:not(.live, .touch) .resume { opacity: 1; transition-delay: .4s; } /* 指针锁放开了（Esc、切窗口）：准星处提示点画面继续（UX1）；不跟 seen、提示条走；刚请求锁的一瞬间不闪 */
+  body:has(#card:not([hidden]), #dlg:not([hidden]), #journal:not([hidden])) #fpHud .resume { opacity: 0; transition-delay: 0s; } /* 弹层开着时先让给弹层 */
   #tip:not([hidden]) { animation: tipIn .2s ease-out; } @keyframes tipIn { from { opacity: 0; } }
   @media (min-width: 601px) and (max-width: 1200px) { #fpHud .help { bottom: 128px; } body:has(#note.on, #roomNote.on) #fpHud .help { opacity: 0; } } /* 窄窗口：操作说明挪到任务行上面，别压在左下「遗稿」上（UX10，英文「§ Journal」右沿到 356px，让不开）；旁白、说明出来时先让开 */
   /* 时间面板：底部居中，无底框，白字 + 深色阴影，在亮暗画面上都看得清；面板往上展开 */
@@ -256,7 +260,7 @@ if (navigator.webdriver || /[?&]nolock\b/.test(location.search)) { let el = null
   #skyPanel select { flex: 1; }
   #skyPanel select option { color: var(--ink); text-shadow: none; }
   /* 天气：按钮和时间按钮并排，面板同款往上展开 */
-  #skyL .btns { display: flex; gap: 10px; align-items: baseline; }
+  #skyL .btns { display: flex; gap: 10px; align-items: baseline; border-radius: 6px; background: rgba(43,38,32,.7); } /* 提示条同款深底、再深一档（.6 压雪地只到 4.4:1）：第 2、3 天白字压雪地只有 1.3:1（UX2） */
   #skyL .btns button { white-space: nowrap; }
   #skyClock { display: inline-block; text-align: right; font-variant-numeric: tabular-nums; }
   #skyL #wxBtn { border: 0; font-size: var(--fs-m); letter-spacing: 1px; }
@@ -3775,7 +3779,8 @@ function pick(e) {
   raycaster.setFromCamera(pointer, camera);
   const hit = raycaster.intersectObjects(meshes.filter((m) => isShown(m) && m.parent.name !== 'wall_fixings').concat(roofWx.sides.filter((S) => S.s < 0 && S.slab.visible).map((S) => S.slab)), false).find((h) => !(h.distance < 0.5 && /^person_/.test(h.object.parent.name))); // 墙上的钉子、支架（wall_fixings）不挡点选：点挂钩等于点挂着的东西
   pick.side = hit && hit.object.userData.side; // 点到屋顶积雪：记下是哪一坡
-  pick.dist = hit ? hit.distance : Infinity; // 第一人称悬停只认 2m 内（fpHover）
+  pick.dist = hit ? hit.distance : Infinity;
+  pick.hd = hit ? Math.hypot(hit.point.x - camera.position.x, hit.point.z - camera.position.z) : Infinity; // 第一人称悬停按水平距离算（fpHover；UX3：地上矮的木桩按眼睛到落点量，走到 1.6m 才出名字）
   let name = pick.side ? 'roof_snow' : hit && hit.object.parent.name;
   if (name === 'entry_toilet_room') return null; // 卫生间隔墙、门框、门柱、门锁都算房屋结构，不可点（2026-10-22 用户定；挡射线照旧）
   if (name === 'toilet_door_B') name = 'toilet_door_A'; // 两扇折叠门算一个：点哪扇都选 A（B 挂在 A 下，描边一起）
@@ -4049,18 +4054,18 @@ canvas.addEventListener('pointermove', (e) => {
 });
 canvas.addEventListener('pointerleave', () => setHovered(null));
 // —— 第一人称：操控人物在屋里走（卡片上「Take His Place」进入）——
-// 电脑：点画面锁定鼠标 → 鼠标转头，WASD/方向键走，Shift 小跑，左键点准星对着的东西（门、灯照常开关），Esc 先松开鼠标、再按一次退出。
+// 电脑：点画面锁定鼠标 → 鼠标转头，WASD/方向键走，Shift 小跑，左键点准星对着的东西（门、灯照常开关），Esc 只松开鼠标（准星处提示点画面继续），退出走右上「看模型」。
 // 头（glb 里单独的 HeadSkin）、头发胡子眉毛眼睛藏起来，相机在眼高、往前 12cm，低头看得到身子和靴子；阁楼里头顶矮就自动弯腰；梯子见 LADDER。
 // 碰撞：膝、胸两个高度各 8 条短射线，碰到东西就往回推（每帧步长远小于身体半径，薄门也穿不过去）；脚下往下打射线贴地，台阶 ≤ 0.22m 能上。
 const FP = { R: 0.17, STEP: 0.22, RUN: 2.6, SENS: 0.0022, HIDE: /^(HeadSkin|Eyebrows|Eyes|Hair_)/ }; // 头和头发眉毛眼睛（three 去掉了名字里的点：她的是 HeadSkin001、Eyes001）
 let fp = null; // { p, yaw, pitch, keys, solid, floors, solidT, eye, paused, climb, crouch, bob, inspect }
 const fpRay = new THREE.Raycaster(); fpRay.firstHitOnly = true;
 const fpHud = document.createElement('div'); fpHud.id = 'fpHud'; fpHud.hidden = true;
-const FP_HELP = '<span class="en"><b>Click</b> to look about · <b>WASD</b> to walk · <b>Shift</b> to hurry · <b>Esc</b> to stop'
+const FP_HELP = '<span class="en"><b>Click</b> to look about · <b>WASD</b> to walk · <b>Shift</b> to hurry'
   + '<br><b>E</b> to take a thing · <b>E</b> again to put it back or drop it · hold <b>right button</b> to turn it over</span>'
-  + '<span class="zh">点画面开始 · WASD 走动 · Shift 快走 · E 拿取，再按 E 放回原处或丢在地上 · 按住右键翻看 · Esc 结束</span>';
+  + '<span class="zh">点画面开始 · WASD 走动 · Shift 快走 · E 拿取，再按 E 放回原处或丢在地上 · 按住右键翻看</span>';
 const FP_HELP_TOUCH = '<span class="en"><b>Tap</b> where to go, or a thing to use it · <b>Drag</b> to look about</span><span class="zh">点哪走到哪，点物件走过去用 · 拖动转头</span>';
-fpHud.innerHTML = '<div class="dot"></div><div class="help">' + FP_HELP + '</div><div class="hint"></div>';
+fpHud.innerHTML = '<div class="dot"></div><div class="help">' + FP_HELP + '</div><div class="hint"></div><div class="resume"><span class="en">Click to continue</span><span class="zh">点画面继续</span></div>';
 document.body.append(fpHud);
 const fpHint = fpHud.querySelector('.hint');
 // 不挡路的：墙上的挂件（贴着墙，墙本身会挡）、门帘、挂着的大衣、卫生纸架、毛巾架、地毯、正端在手里的东西
@@ -4331,7 +4336,7 @@ function startFP(id) {
   controls.enabled = false;
   camera.fov = 72; camera.updateProjectionMatrix();
   roomsBox.hidden = true; enterBtn.hidden = true; fpHud.hidden = false; fpHud.classList.remove('live');
-  fpHud.querySelector('.help').innerHTML = touchFP ? FP_HELP_TOUCH : FP_HELP;
+  fpHud.querySelector('.help').innerHTML = touchFP ? FP_HELP_TOUCH : FP_HELP; fpHud.classList.toggle('touch', touchFP); // 触屏没有指针锁：不出「点画面继续」
   if (touchFP) fp.paused = false; else if (document.pointerLockElement === canvas) { fp.paused = false; fpHud.classList.add('live'); fp.liveAt = performance.now(); } else canvas.requestPointerLock?.()?.catch?.(() => {}); // 已经锁着（换天点「继续」时锁上的）：直接能走 // 早上那段自然结束时没有用户手势，锁不上就等玩家点画面； 触屏没有指针锁：点哪走哪 + 拖动转头（fpTap），头一次碰屏幕才收起说明
   if (SLICE) sliceView();
 }
@@ -4378,7 +4383,7 @@ canvas.addEventListener('mousedown', (e) => {
 });
 addEventListener('keydown', (e) => {
   if (!fp) return;
-  if (e.key === 'Escape' && fp.paused && card.hidden && !e.cabinClosed) { stopFP(); return; } // 卡片开着（鼠标已放出）：Esc 只关卡片
+  if (e.key === 'Escape' && card.hidden) return; // Esc 不退出第一人称（UX1：关卡片时浏览器顺手放锁，再按一下就被踢回鸟瞰）；放锁后准星处出「点画面继续」，退出走右上「看模型」
   if (e.cabinClosed) return; // 这一下已经用来关弹窗 / 遗稿
   if (!card.hidden && !touchFP) { fpCardKey(e); return; }
   if (e.code === 'KeyE' && !e.repeat) { fpUse(); return; }
@@ -4925,17 +4930,20 @@ function updateHover() {
   const n = fly || intro || spotHot || (fp && !card.hidden) ? null : pick(pointer.lastEvent);
   if (fp) fpHover(n); else setHovered(n);
 }
-// 第一人称悬停分三级（11-04 交互评审 UX3，原来转一圈弹十几次名字）：2m 内能点的东西准星点立刻变环；同一件停 0.45 秒才出名字和描边，离开后多留 0.3 秒防闪；转头快于 90°/秒不出。
+// 第一人称悬停分三级（11-04 交互评审 UX3，原来转一圈弹十几次名字）：2m 内能点的东西准星点变环；同一件停 0.45 秒才出名字和描边，离开后多留 0.3 秒防闪；转头快于 90°/秒不出。
 // hovered 只管显示（名字、描边、E 提示），E 拿取 / 坐下按准星实际对着的 aim 算，不用等名字出来
-const HOV = { near: 2, wait: 450, keep: 300, turn: Math.PI / 2 }, hv = { cand: null, since: 0, lost: 0, yaw: 0, pitch: 0, t: 0 };
+// 11-04 复测：距离按水平量、屋外记号（d2_）放宽到 3m（UX3）；环也要同一件稳住 0.1 秒才出、离开多留 0.15 秒（UX5，原来一帧一闪）；准星换到别的东西上旧名字立刻收（UX6，原来多挂 0.3 秒，点到的和名字不是一件）
+const HOV = { near: 2, clue: 3, wait: 450, keep: 300, turn: Math.PI / 2, ring: 100, ringKeep: 150 }, hv = { cand: null, since: 0, lost: 0, yaw: 0, pitch: 0, t: 0, ring: -1e9 };
 let aim = null;
 function fpHover(n) {
-  const now = performance.now(), dt = Math.max(1, now - hv.t) / 1000, near = n && pick.dist <= HOV.near ? n : null;
+  const now = performance.now(), dt = Math.max(1, now - hv.t) / 1000, near = n && pick.hd <= (n.startsWith('d2_') ? HOV.clue : HOV.near) ? n : null;
   const w = Math.hypot(angDiff(hv.yaw, fp.yaw) * Math.cos(fp.pitch), fp.pitch - hv.pitch) / dt; hv.yaw = fp.yaw; hv.pitch = fp.pitch; hv.t = now;
   aim = n; window.__hv = { near, w }; // 调试 / 无头测试
   if (near !== hv.cand || w > HOV.turn) { hv.cand = near; hv.since = now; }
-  fpHud.classList.toggle('aim', !!near);
+  if (hv.cand && now - hv.since >= HOV.ring) hv.ring = now;
+  fpHud.classList.toggle('aim', now - hv.ring <= HOV.ringKeep);
   if (near && near === hovered) hv.lost = 0;
+  else if (n && hovered && n !== hovered) { hv.lost = 0; setHovered(null); } // 点击、E 作用在 aim 上：名字不能还写着上一件
   else if (hv.cand && now - hv.since >= HOV.wait) { hv.lost = 0; setHovered(hv.cand); }
   else if (hovered) { if (!hv.lost) hv.lost = now; else if (now - hv.lost > HOV.keep) { hv.lost = 0; setHovered(null); } }
 }
