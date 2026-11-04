@@ -205,12 +205,15 @@ const go = (o, k, v, dur, delay = 0) => tw.push({ o, k, v, dur, at: clock + dela
 const after = (delay, fn) => cbs.push({ at: clock + delay, fn });
 let V = null; // 正在看的：{ kind, name, g, home:{p,q}, read:{p,q}, f（0 在原位，1 在相机前）, busy, onHome }
 const _q = new THREE.Quaternion(), _e = new THREE.Euler(), _v = new THREE.Vector3();
-function readPose(wd, ht, mQ) { // 相机前方：纸/书占画面约 60%；mQ = 网格自己的朝向（要抵消）
-  const vf = THREE.MathUtils.degToRad(camera.fov), hf = 2 * Math.atan(Math.tan(vf / 2) * camera.aspect);
-  const d = Math.max(0.3, ht / (0.6 * 2 * Math.tan(vf / 2)), wd / (0.7 * 2 * Math.tan(hf / 2)));
+const SIDE = matchMedia('(min-width: 900px) and (min-aspect-ratio: 11/10)'); // 同 index.html #card.side：宽屏纸在左、卡片在右；否则纸在上、卡片在下
+function readPose(wd, ht, mQ) { // 相机前方：纸/书停在画面一侧，不压在卡片的字下面（11-04 交互评审 UX4）；mQ = 网格自己的朝向（要抵消）
+  const vf = THREE.MathUtils.degToRad(camera.fov), hf = 2 * Math.atan(Math.tan(vf / 2) * camera.aspect), tv = Math.tan(vf / 2), th = Math.tan(hf / 2);
+  const [fw, fh, nx, ny] = SIDE.matches ? [0.36, 0.6, -0.5, 0] : [0.8, 0.3, 0, 0.5]; // 占画面宽、高的比例上限；中心在画面上的位置（-1…1）
+  const d = Math.max(0.3, ht / (fh * 2 * tv), wd / (fw * 2 * th));
   const q = camera.quaternion.clone().multiply(_q.setFromEuler(_e.set(-0.22, 0, 0)));
   const fwd = _v.set(0, 0, -1).applyQuaternion(camera.quaternion).clone();
-  return { p: camera.position.clone().addScaledVector(fwd, d), q: mQ ? q.multiply(mQ.clone().invert()) : q };
+  const p = camera.position.clone().addScaledVector(fwd, d).addScaledVector(_v.set(1, 0, 0).applyQuaternion(camera.quaternion), nx * d * th).addScaledVector(_v.set(0, 1, 0).applyQuaternion(camera.quaternion), ny * d * tv);
+  return { p, q: mQ ? q.multiply(mQ.clone().invert()) : q };
 }
 function applyView() {
   if (!V) return;
