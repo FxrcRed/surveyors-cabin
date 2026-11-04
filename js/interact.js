@@ -180,6 +180,18 @@ const LAMPS = {
 };
 const GLOW_COLOR = new THREE.Color(0xffc27a);
 const toggles = new Map(); // 图层名 → { on, k(动画进度 0→1), apply(k) }
+// 灯挂在图层下，图层一藏，three.js 就不数这盏灯，可见灯数一变所有受光材质重编译（第 3 天 ✕ 那间藏起提灯，一路连卡 5 次共 17s）。
+// 所以每次渲染前数一数藏着的灯，点亮同样多盏 0 亮度的替身灯（亮度 0 着色器里直接跳过），总数不变。
+const lampLights = [], spareLights = [];
+function trackLight(light) {
+  lampLights.push(light);
+  const s = new THREE.PointLight(0, 0, 0.01, 2); s.visible = false; s.position.set(0, -500, 0); scene.add(s); spareLights.push(s);
+}
+scene.onBeforeRender = () => {
+  let n = 0;
+  for (const l of lampLights) { let o = l.parent; while (o && o.visible) o = o.parent; if (o) n++; } // 一路往上都 visible 才算数
+  for (let i = 0; i < spareLights.length; i++) spareLights[i].visible = i < n;
+};
 function setupToggles() {
   const pivots = {};
   for (const [name, d] of Object.entries(DOORS)) {
@@ -210,7 +222,7 @@ function setupToggles() {
     if (!g) continue;
     const light = new THREE.PointLight(0xffb46b, 0, l.range, 2);
     light.position.set(...l.pos); // 一直 visible，只调强度：可见灯数变了会让所有材质重编译着色器（开灯卡顿）
-    g.add(light); // 挂在灯的图层下：揭开屋顶藏灯时光也一起灭
+    g.add(light); trackLight(light); // 挂在灯的图层下：揭开屋顶藏灯时光也一起灭
     const mats = g.children.filter((m) => m.isMesh && m.material.userData.glow).map((m) => m.material);
     toggles.set(name, { on: false, k: 0, parts: [(k) => {
       light.intensity = l.power * k;
@@ -545,7 +557,7 @@ function setupFire() {
     }
     fire.mats = [...clones.values()];
     fire.light = new THREE.PointLight(0xff8a3c, 0, 4.5, 2);
-    fire.light.position.copy(g.worldToLocal(new THREE.Vector3(...FIRE_LIGHT))); g.add(fire.light); // 一直 visible，只调强度
+    fire.light.position.copy(g.worldToLocal(new THREE.Vector3(...FIRE_LIGHT))); g.add(fire.light); trackLight(fire.light); // 一直 visible，只调强度
     toggles.set('stove_fire', { on: true, k: 1, parts: [(k) => { fire.k = k; }] });
     shared.layers.get('stove_firebox')?.traverse((o) => { if (o.isMesh && o.material.name === 'stove_embers_glow') { fire.embers = o.material; fire.emberCol = o.material.color.clone(); } }); // 炉膛底的余烬板：火灭了变炉灰
   }
