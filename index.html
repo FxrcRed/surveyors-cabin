@@ -5091,14 +5091,14 @@ function updateHover() {
 // 第一人称悬停分三级（11-04 交互评审 UX3，原来转一圈弹十几次名字）：2m 内能点的东西准星点变环；同一件停 0.45 秒才出名字和描边，离开后多留 0.3 秒防闪；转头快于 90°/秒不出。
 // hovered 只管显示（名字、描边、E 提示），E 拿取 / 坐下按准星实际对着的 aim 算，不用等名字出来
 // 11-04 复测：距离按水平量、屋外记号（d2_）放宽到 3m（UX3）；环也要同一件稳住 0.1 秒才出、离开多留 0.25 秒（UX5，原来一帧一闪；r3 #6：0.15 秒时慢转偶尔灭一下又亮）；准星换到别的东西上旧名字立刻收（UX6，原来多挂 0.3 秒，点到的和名字不是一件）
-const HOV = { near: 2, clue: 3, wait: 450, keep: 300, turn: Math.PI / 2, ring: 100, ringKeep: 300, ringGap: 300 }, hv = { cand: null, since: 0, lost: 0, yaw: 0, pitch: 0, t: 0, ring: -1e9, on: false, off: -1e9 };
+const HOV = { near: 2, clue: 3, wait: 450, keep: 250, turn: Math.PI / 2, ring: 100, ringKeep: 250, ringGap: 300 }, hv = { cand: null, since: 0, lost: 0, yaw: 0, pitch: 0, t: 0, ring: -1e9, on: false, off: -1e9 };
 let aim = null;
 function fpHover(n) {
   const now = performance.now(), dt = Math.max(1, now - hv.t) / 1000, near = n && pick.hd <= (n.startsWith('d2_') ? HOV.clue : HOV.near) ? n : null;
   const w = Math.hypot(angDiff(hv.yaw, fp.yaw) * Math.cos(fp.pitch), fp.pitch - hv.pitch) / dt; hv.yaw = fp.yaw; hv.pitch = fp.pitch; hv.t = now;
   aim = n; window.__hv = { near, w }; // 调试 / 无头测试
   if (near !== hv.cand || w > HOV.turn) { hv.cand = near; hv.since = now; }
-  if (hv.cand && now - hv.since >= HOV.ring && (hv.on || now - hv.off >= HOV.ringGap || hv.cand === hovered)) hv.ring = now; // 灭了至少 0.3 秒才再亮（r3 #6：只加长 ringKeep 只是把「灭一下又亮」挪到更宽的空隙上）；名字还挂着的这件移回来立刻亮，名字和环别对不上（r4 #5）
+  if (hv.cand && now - hv.since >= HOV.ring && (hv.on || now - hv.off >= HOV.ringGap)) hv.ring = now; // 灭了至少 0.3 秒才再亮（r3 #6：只加长 ringKeep 只是把「灭一下又亮」挪到更宽的空隙上）；名字多挂的时间 keep 和 ringKeep 一样长，不会名字还在环却被 ringGap 锁着（r4 #5）
   const on = now - hv.ring <= HOV.ringKeep; if (hv.on && !on) hv.off = now; hv.on = on;
   fpHud.classList.toggle('aim', on);
   if (near && near === hovered) hv.lost = 0;
