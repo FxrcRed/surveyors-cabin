@@ -945,7 +945,7 @@ function barkMaterial() {
     sh.vertexShader = 'varying vec3 vBarkP; varying vec3 vBarkN; varying float vBarkH;\n' + sh.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>
       { vec4 bp = vec4(position, 1.0); vec3 bn = objectNormal; float hs = 1.0;
       #ifdef USE_INSTANCING
-        bp = instanceMatrix * bp; bn = mat3(instanceMatrix) * bn; hs = length(instanceMatrix[1].xyz);
+        bp = instanceMatrix * bp; mat3 im = mat3(instanceMatrix); bn = im * (bn / vec3(dot(im[0], im[0]), dot(im[1], im[1]), dot(im[2], im[2]))); hs = length(instanceMatrix[1].xyz);
       #endif
         vBarkP = (modelMatrix * bp).xyz + vec3(uWShift.x, 0.0, uWShift.y); vBarkN = normalize(mat3(modelMatrix) * bn); vBarkH = position.y * hs; }`); // 世界坐标（挪世界后照旧按家的坐标，纹理不跳）、高出树根多少米
     sh.fragmentShader = 'uniform sampler2D uBark; uniform float uSnow; varying vec3 vBarkP; varying vec3 vBarkN; varying float vBarkH;\n' + sh.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>
@@ -1379,7 +1379,7 @@ function makeBrook() {
     for (let i = 0; i < n; i++) { const [x, z, s, w, k] = P[i], [tx, tz] = tan(i), lv = lvlAt(i), ww = k > 0 ? w + 0.3 : w, al = Math.min(sstep(0, 2, s), 1 - sstep(BROOK.sEnd - 7, BROOK.sEnd, s));
       rows.push([-1, -0.5, 0, 0.5, 1].map((f) => { const d = f * ww, px = x + tz * d, pz = z - tx * d; aB.push(d, s, w, al); aD.push(tx, tz); return [px, k > 0 ? lv : gAt(px, pz) + 0.05, pz]; })); }
     const geo = strip(rows); geo.setAttribute('aB', new THREE.Float32BufferAttribute(aB, 4)); geo.setAttribute('aDir', new THREE.Float32BufferAttribute(aD, 2));
-    const m = new THREE.MeshStandardMaterial({ color: '#121a1d', roughness: 0.85, metalness: 0, envMapIntensity: 0.05, transparent: true }); // 11-04 r3 #6：环境反射 0.25 → 0.05、粗糙 0.55 → 0.85（scene.environment 是一间亮屋子，林荫里照样映出一条银带，像锡纸）；原来就糙一点、环境反射压低：晴天俯看原来太阳高光连成一片白，像急流 // 不加 polygonOffset：斜看时深度偏移大到把水推到岸前面（下游贴地段已抬 5cm）
+    const m = new THREE.MeshStandardMaterial({ color: '#161a10', roughness: 0.85, metalness: 0, envMapIntensity: 0, transparent: true }); // 11-04 r4 #6：环境反射 0.05 → 0（掠射角还映出约 33 级灰，晴天整条溪成灰带；天和树的倒影由下面 fog_fragment 那段 fresnel 管）；11-04 r3 #6：环境反射 0.25 → 0.05、粗糙 0.55 → 0.85（scene.environment 是一间亮屋子，林荫里照样映出一条银带，像锡纸）；原来就糙一点、环境反射压低：晴天俯看原来太阳高光连成一片白，像急流 // 不加 polygonOffset：斜看时深度偏移大到把水推到岸前面（下游贴地段已抬 5cm）
     m.onBeforeCompile = (sh) => {
       Object.assign(sh.uniforms, { uT: WATER.mat.userData.u.uT, uSnow: cover.uSnow });
       sh.vertexShader = 'attribute vec4 aB;\nattribute vec2 aDir;\nvarying vec4 vB;\nvarying vec2 vDir;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\nvB = aB; vDir = aDir;');
@@ -1399,14 +1399,14 @@ float bF(vec2 p) { return 0.6 * bN(p) + 0.4 * bN(p * 2.7 + 5.2); }
   diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.05, 0.035, 0.022), 0.6 * smoothstep(bW - 0.3, bW, abs(bA))); // 近岸浅水透出褐色河床
   diffuseColor.rgb = mix(diffuseColor.rgb * (0.8 + 0.4 * fl) + 0.05 * streak, vec3(0.14, 0.17, 0.2), thin * 0.7);
   diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.6, 0.66, 0.72) * (0.9 + 0.1 * bN(vec2(bA * 9.0, bS * 2.0))), ice);`)
-        .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\n  roughnessFactor = mix(roughnessFactor, 0.45, ice);')
+        .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\n  roughnessFactor = mix(mix(roughnessFactor, 1.0, smoothstep(0.4, 0.7, bN(vec2(bA * 5.0, bS * 0.8 - uT * 0.6)))), 0.45, ice);') // 11-04 r4 #6：太阳高光按顺流漂的噪声一段段打散（原来两岸各一道连续的细白线，像车道线）
         .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
   { float e = 0.12, h0 = bF(fq), ha = bF(fq + vec2(e * 1.6, 0.0)), hs = bF(fq + vec2(0.0, e * 0.55));
     vec2 g = vec2(ha - h0, hs - h0) / e * 0.14 * (1.0 - ice), gw = vec2(vDir.y, -vDir.x) * g.x + vDir * g.y; // 噪声坡度：横向（同 aB.x 的正向）+ 顺流向 → 世界 xz
     normal = normalize((viewMatrix * vec4(normalize(vec3(-gw.x, 1.0, -gw.y)), 0.0)).xyz); }`)
         .replace('#include <fog_fragment>', `{ float fr = pow(1.0 - clamp(dot(normal, normalize(vViewPosition)), 0.0, 1.0), 4.0);
 #ifdef USE_FOG
-    gl_FragColor.rgb = mix(gl_FragColor.rgb, mix(vec3(0.02, 0.026, 0.02), fogColor, 0.3 + 0.3 * uSnow), fr * 0.6 * (1.0 - ice)); // 斜看映出的多半是两岸的树（暗），一点天色（雪天两岸白，多映一点）
+    gl_FragColor.rgb = mix(gl_FragColor.rgb, mix(vec3(0.035, 0.05, 0.025), fogColor, 0.15 + 0.45 * uSnow), fr * 0.6 * (1.0 - ice)); // 斜看映出的多半是两岸的树（暗绿），一点天色（雪天两岸白，多映一点；11-04 r4 #6：晴天原来映 30% 天色，整条溪成灰带）
 #endif
     gl_FragColor.a = vB.w; }
 #include <fog_fragment>`);
@@ -3130,7 +3130,7 @@ function d2Add(name, g, x, z, yaw = 0) {
 }
 // 雾里跟着人走的两圈林墙（11-04 环境评审 #5，复测时还没做）：30m、45m 两个竖圆筒贴云杉剪影，颜色按雾色压暗偏蓝，15m 外不再是一张白纸、看得出后面还有几层林子。
 // 只在第一人称有雾时显示（FOG_L），每圈 1 次绘制、96 个三角面；不吃 scene.fog（26m 外早就盖满），近处的树照常挡住它
-let fogWalls = null; const _fwc = new THREE.Color();
+let fogWalls = null; const FW = { tree: { value: new THREE.Color() } }, FW_TREE = new THREE.Color(0.2, 0.24, 0.17), FW_SNOW = new THREE.Color(0.5, 0.53, 0.58);
 function makeFogWalls() {
   // 剪影按米画（11-04 r3 #4：原来 1024 宽转 7/10 次，树横向压扁到 1/3–1/4，像一排冰锥，转半圈重复两三次）：每圈一张 2048×256、各用各的种子，转 3/4 次；
   // sq = 贴图上横竖每米像素之比，树宽乘它才不扁。树高 8–20m、冠宽 0.3–0.5 倍树高，层数、下垂、歪斜各不一样，两三棵挤成一丛
@@ -3141,16 +3141,20 @@ function makeFogWalls() {
           x.moveTo(t - rr, y0 + rr / sq * droop * 0.3); x.quadraticCurveTo(t - rr * 0.35, y0 - (y0 - y1) * 0.25, t, y1); x.quadraticCurveTo(t + rr * 0.35, y0 - (y0 - y1) * 0.25, t + rr, y0 + rr / sq * droop * 0.3); x.lineTo(t, y0 - (y0 - y1) * 0.15); }
         x.fill(); x.fillRect(c - 0.18 * k * sq, h - th * 0.12, 0.36 * k * sq, th * 0.12); } } }); };
   const g = fogWalls = new THREE.Group(); g.visible = false;
-  // 深浅照 fogLayer 里同样距离的一棵雪云杉：30m 还剩 13% 树色、45m 剩 5%，再偏蓝（a = 剪影不透明度，k = 雾色的倍数；雾 26m 就到底，更深就不像雾了）
-  for (const [r, H, rep, seed, a, k] of [[30, 22, 3, 19, 0.9, [0.75, 0.8, 0.88]], [45, 30, 4, 23, 0.75, [0.85, 0.88, 0.93]]]) {
+  // 颜色照 fogLayer 逐像素算（11-04 r4 #3）：一棵树的颜色（uTree，updateFogWalls 按天光、积雪给）按视线深度叠雾色，和同样远的真树一样深浅；
+  // 不走色调映射和 sRGB 编码——真物体的雾是在那两步之后叠的，原来墙多过一道 ACES，比天还亮。再按「这个颜色 ÷ 雾色」（封顶 1）乘到身后的天上：
+  // 天是雾色时就是那棵树的颜色，天比雾色暗（晴天的蓝天、黄昏的紫天）时一样按比例压暗、跟着天的色相，墙永远不比同方向的天亮；雾浓（走偏 8–12m）时比值是 1，墙自己就没了（a = 剪影不透明度）
+  for (const [r, H, rep, seed, a] of [[30, 22, 3, 19, 0.9], [45, 30, 4, 23, 0.75]]) {
     const sil = silOf(seed, r, H, rep); sil.wrapS = THREE.RepeatWrapping;
-    // 放进不透明队列（11-04 r3 #2：原来是透明材质，three.js 最后才画，renderOrder 只在透明队列里排，墙盖在 30m 外的真树前面）：天穹（−1）之后、别的不透明物体之前画，写深度——
-    // 近处的树照常画在它前面，30m 外的树被剪影挡住；剪影之间的空隙和半透明的边都 discard（边写了深度会把后面的远树打掉、露出天色，成一圈白边）
-    const m = new THREE.ShaderMaterial({ uniforms: { uMap: { value: sil }, uCol: { value: new THREE.Color() }, uA: { value: a }, uRep: { value: rep } }, side: THREE.BackSide,
-      blending: THREE.CustomBlending, blendSrc: THREE.SrcAlphaFactor, blendDst: THREE.OneMinusSrcAlphaFactor,
-      vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
-      fragmentShader: 'uniform sampler2D uMap; uniform vec3 uCol; uniform float uA, uRep; varying vec2 vUv;\nvoid main() { float t = texture2D(uMap, vec2(vUv.x * uRep, vUv.y)).a; if (t < 0.5) discard; float a = uA; gl_FragColor = vec4(uCol, a);\n#include <tonemapping_fragment>\n#include <colorspace_fragment>\n}' });
-    const o = new THREE.Mesh(new THREE.CylinderGeometry(r, r, H, 48, 1, true).translate(0, H / 2, 0), m); o.userData.k = k; o.renderOrder = -0.5; o.frustumCulled = false; o.layers.set(OUT_LAYER); g.add(o); }
+    // 放进不透明队列（11-04 r3 #2：原来是透明材质，three.js 最后才画）：天穹（−1）之后、别的不透明物体之前画，不写深度（11-04 r4 #4：写深度时 30m 外的真树被剪影剪成浮空碎片、远处那柱烟被切掉下半截）——
+    // 别的东西（真树、地面、烟）不管远近都画在它上面，墙只填天空的空当；剪影之间的空隙和半透明的边 discard
+    const m = new THREE.ShaderMaterial({ uniforms: { ...THREE.UniformsUtils.clone(THREE.UniformsLib.fog), uMap: { value: sil }, uTree: FW.tree, uA: { value: a }, uRep: { value: rep } }, fog: true, side: THREE.BackSide, depthWrite: false, // fog：渲染时 three.js 填当帧的 fogColor/fogNear/fogFar（雾远在 updateDay2 里才设，比 updateFogWalls 晚）
+      blending: THREE.CustomBlending, blendSrc: THREE.DstColorFactor, blendDst: THREE.ZeroFactor, // 乘到天上
+      vertexShader: 'varying vec2 vUv; varying float vD; void main() { vUv = uv; vec4 mv = modelViewMatrix * vec4(position, 1.0); vD = -mv.z; gl_Position = projectionMatrix * mv; }',
+      fragmentShader: 'uniform sampler2D uMap; uniform vec3 uTree, fogColor; uniform float fogNear, fogFar, uA, uRep; varying vec2 vUv; varying float vD;\nvoid main() { float t = texture2D(uMap, vec2(vUv.x * uRep, vUv.y)).a; if (t < 0.5) discard;\n' +
+        '  float f = 0.86 * smoothstep(fogNear, fogFar, vD) + 0.14 * smoothstep(fogFar, fogFar * 2.2, vD); vec3 tint = mix(vec3(0.8, 0.86, 0.95), vec3(1.0), smoothstep(fogFar * 0.5, fogFar * 2.2, vD));\n' +
+        '  gl_FragColor = vec4(mix(vec3(1.0), clamp(mix(uTree, fogColor * tint, f) / max(fogColor, vec3(0.001)), 0.0, 1.0), uA), 1.0); }' }); // 雾同 fogLayer（FOG_L = 1）
+    const o = new THREE.Mesh(new THREE.CylinderGeometry(r, r, H, 48, 1, true).translate(0, H / 2, 0), m); o.renderOrder = -0.5; o.frustumCulled = false; o.layers.set(OUT_LAYER); g.add(o); }
   scene.add(g);
 }
 // 第一人称雾里离小屋超过「雾远 + 屋子半径」：整栋不画（11-04 r3 #3：第 3 天挪世界后 ✕ 屋在 25–77m 外、早被雾盖白，还在画，s60–s120 是 3.0–3.4M 面，藏掉 1.1M）。
@@ -3166,7 +3170,8 @@ function fogCullHouse() {
 function updateFogWalls() { // 每帧（updateDay2）：跟着人、颜色跟着雾
   const on = FOG_L.value > 0 && outdoors(camera.position); fogWalls.visible = on; if (!on) return;
   fogWalls.position.set(camera.position.x, camera.position.y - 4, camera.position.z);
-  for (const o of fogWalls.children) o.material.uniforms.uCol.value.copy(scene.fog.color).multiply(_fwc.setRGB(...o.userData.k));
+  const day = Math.min(1, hemi.intensity / 0.8);
+  FW.tree.value.copy(FW_TREE).lerp(FW_SNOW, cover.uSnow.value * 0.5).multiplyScalar(0.3 + 0.7 * day); // 树色（出屏的值，雾在它上面叠）：晴天暗绿，下雪冠上积雪偏灰白，傍晚跟天光暗下去
 }
 // 远处的烟：一柱炊烟升到树冠以上（树照样挡住下半截，不用在林子里清视线通道）。Points，位置在顶点着色器里按「出生后多久」算，同炉子的烟
 const PLUME_N = 110, PLUME_LIFE = 24, PLUME_GRAY = new THREE.Color(0xd8d4cc), PLUME_WARM = new THREE.Color(0xffb070);
@@ -3209,7 +3214,7 @@ function updatePlume(g, dt, amt) { // amt 0..1；每帧调（可见时）
   const day = Math.min(1, hemi.intensity / 0.8);
   u.uColor.value.copy(PLUME_GRAY).multiplyScalar(0.35 + 0.65 * day).lerp(scene.fog.color, 0.25); // 比雾色亮一点，傍晚压在暗下来的天上
   u.uWarm.value.copy(PLUME_WARM).lerp(u.uColor.value, day * 0.7); u.uFogC.value.copy(scene.fog.color);
-  if (g.userData.far) { u.uColor.value.copy(scene.fog.color).multiply(_plC.setRGB(0.7, 0.74, 0.8)).multiplyScalar(0.4 + 0.6 * day); u.uWarm.value.copy(u.uColor.value); u.uNear.value = scene.fog.far * 0.8; u.uScale.value *= 1.35; } // 远处那柱：雾色 × 偏冷的中灰（11-04 r3 #8：原来 PLUME_GRAY × 0.6，雪雾里像天上一块褐色污渍），点放大 35% 边更散；根部的火光本来就被树挡着；雾在 80% 远处已看不清树，拉到那儿以内（鸟瞰雾远，等于不拉）
+  if (g.userData.far) { const c = u.uColor.value.copy(scene.fog.color).multiply(_plC.setRGB(0.7, 0.74, 0.8)).multiplyScalar(0.4 + 0.6 * day), l = (c.r + c.g + c.b) / 3; c.lerp(_plC.setRGB(l, l, l), 0.6); u.uWarm.value.copy(c); u.uFogC.value.lerp(_plC.setRGB(l, l, l), 0.6); u.uNear.value = scene.fog.far * 0.8; u.uScale.value *= 1.35; } // 远处那柱：雾色 × 偏冷的中灰（11-04 r3 #8：原来 PLUME_GRAY × 0.6，雪雾里像天上一块褐色污渍），点放大 35% 边更散；根部的火光本来就被树挡着；雾在 80% 远处已看不清树，拉到那儿以内（鸟瞰雾远，等于不拉）；远处那柱去掉六成饱和度（11-04 r4 #5：黄昏雾色偏橙，烟成了树梢上一团暗红）
 }
 function markTree(g, H, W) { // 标记树：林子里的云杉模型（pine.glb）放大，不另建模型；→ 「离地 y 米处的树干半径」函数，贴刻痕用
   return loadTree('trees/pine.glb').then((parts) => {
@@ -3357,7 +3362,7 @@ function updateDay2(dt) {
   if (fogWalls) updateFogWalls();
   if (fp && !game.night) { scene.fog.near = 2 * (1 - d2.fogV); scene.fog.far = 26 + 12 * (game.day === 2 && d2.glade ? 1 - THREE.MathUtils.smoothstep(Math.hypot(camera.position.x - d2.glade.x, camera.position.z - d2.glade.z), 4, 10) : 0) - 24 * d2.fogV; } // 第一人称在雾里：二十来米外就看不见，走偏越远越浓
   // 傍晚林子那头冒烟：四样找齐、天色到傍晚才有；人在屋里看不到
-  const lampOn = DAY2_NEED.every((k) => f.has(k)) && !game.night && sky.hour > 17.2 && outdoors(camera.position);
+  const lampOn = DAY2_NEED.every((k) => f.has(k)) && !game.night && sky.hour > 17.2 && outdoors(camera.position) && !x3.shifted; // 挪世界后（✕ 那边）不画：它就在 ✕ 门廊望自家烟的方向上 40m，根部的火光成了树梢上一块橙色（11-04 r4 #5）
   d2.lamp.visible = lampOn;
   if (game.day === 2 && !d2.backPrints && DAY2_NEED.every((k) => f.has(k))) { // 四样找齐：你那行脚印旁边多出一行一样大的，从石堆往屋里走（你还没往回走）
     const via = []; for (let s = D2_SPOTS.d2_cairn.s - 0.5; s > 3; s -= 3) { const [, rt] = pathAt(s); via.push(logDetour(s, D2_LOGS).addScaledVector(rt, 0.55)); }
@@ -4389,7 +4394,7 @@ function heldPutBack() { // 退出第一人称时手里的东西直接回原处
 // —— 第 2、3 天出门带上大衣和提灯（11-04 用户定）：早上在门口点 / E 拿大衣（穿上，衣帽架上那件藏起）和提灯（提在手里，画面右下角）；没拿就出了门，自动取下、补一句。
 // 提灯 = 衣帽架那个图层整个挪到镜头前（同 held 的 setPose），画在 HELD_LAYER 上不穿墙；它自带的点光源跟着走，灯数不变（不在第一人称时图层藏起，trackLight 补替身灯）。
 // 第 2 天傍晚（看到烟以后）回屋挂回原处；第 3 天到 ✕ 那间也提着（X_HIDE 不藏它）。第 1 天不碰：他什么都没带，衣帽架是满的
-const gear = { coat: false, lantern: false, t: 0, k: 0, from: null, c0: null };
+const gear = { coat: false, lantern: false, t: 0, k: 0, from: null, c0: null, home: null };
 window.cabinGear = gear; // 调试
 const GEAR_SAYS = {
   both: ['You take the greatcoat and the lantern down from their pegs.', '你从钉子上取下大衣和提灯。'],
@@ -4422,6 +4427,7 @@ function gearOn(k) { // 穿上大衣 / 提起提灯（不查能不能拿、不�
     const g = layers.get('entry_lantern'), t = toggles.get('entry_lantern');
     if (!gear.c0) gear.c0 = new THREE.Box3().setFromObject(g).getCenter(new THREE.Vector3()); // 原位中心（第一次拿时还挂在钉子上）
     gear.from = poseOf(g, gear.c0); gear.t = 0; gear.k = 1;
+    if (!gear.home) gear.home = g.parent; scene.attach(g); // 提在手里就挂到场景下（env r4 #1）：fogCullHouse 雾外藏整栋小屋时它不跟着藏、灯不灭；上面一串父级都是单位变换，世界姿态不变
     g.traverse((o) => { if (o.isMesh) o.castShadow = false; }); heldLayer(g, true);
     if (t) t.on = true; // 点上蜡烛（updateToggles 慢慢亮）
   }
@@ -4444,7 +4450,7 @@ function gearHang() { // 挂回原处
   if (gear.coat) { const c = layers.get('entry_coat'); if (c) c.visible = true; }
   if (gear.lantern) {
     const g = layers.get('entry_lantern'), t = toggles.get('entry_lantern');
-    g.position.set(0, 0, 0); g.quaternion.identity(); g.visible = true; heldLayer(g, false); g.traverse((o) => { if (o.isMesh) o.castShadow = true; });
+    if (gear.home) gear.home.attach(g); g.position.set(0, 0, 0); g.quaternion.identity(); g.visible = true; heldLayer(g, false); g.traverse((o) => { if (o.isMesh) o.castShadow = true; });
     if (t) t.on = false;
   }
   gear.coat = gear.lantern = false; shadowDirty = true; if (fp) fp.solidT = 0; gearSave();
