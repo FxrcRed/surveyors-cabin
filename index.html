@@ -410,7 +410,7 @@ if (navigator.webdriver || /[?&]nolock\b/.test(location.search)) { let el = null
 
   <h3>测绘员是谁</h3>
   <p>小屋的主人没有留下名字。山林里的老猎人管他叫<em class="k">“测绘员”</em>。</p>
-  <p>三十年前，他是帝国地图局派来的人，带着官方的空白地图、猎枪、斧头、折叠桌和一整箱仪器，沿着那条卵石小路走进针叶林。任务很简单：勘定这片北方山林的边界，标出等高线，画完图，走人。他原计划只待一个夏天。</p>
+  <p>三十年前，他是测绘局派来的人，带着官方的空白地图、猎枪、斧头、折叠桌和一整箱仪器，沿着那条卵石小路走进针叶林。任务很简单：勘定这片北方山林的边界，标出等高线，画完图，走人。他原计划只待一个夏天。</p>
   <p>夏天过去，他没有回来。局里收到一封短信：图还没画完，请准许留下过冬。第二年开春，寄来的是第一份年度报告。</p>
   <p>从此三十年，每年开春化冻，他自己走两天出林子，到林边驿站寄一份，再背回一年的补给。报告字迹工整，写的都是等高线、林木和雪量，从来没写过为什么不回来。局里没有人问。</p>
 
@@ -2131,9 +2131,10 @@ for (const ev of ['pointerdown', 'keydown']) addEventListener(ev, unlockVoice, t
 let noteTimer = 0, pumpT = 0, noteQ = [], noteEnd = 0, noteCur = null;
 const roomNoteStale = (it) => !!it && !!it.room && (!inside || inside.name !== it.room);
 function endRoomNote() { clearTimeout(noteTimer); $('roomNote').classList.remove('on'); stopVoice('room'); noteEnd = 0; noteCur = null; }
-function showRoomNote(text, room, hintKey) { // hintKey：这句是找某样线索的提示，找到了就不再念（评审④ #8）
+function showRoomNote(text, room, hintKey, jump) { // hintKey：这句是找某样线索的提示，找到了就不再念（评审④ #8）；jump：插队马上念，正在念的剧情句排到它后面从头再念（出门取大衣提灯那句不能晚，叙事 r4 #6）
   if (!text) { clearTimeout(pumpT); noteQ = []; endRoomNote(); return; }
-  noteQ.push({ text, room: room || null, t: performance.now(), hint: hintKey });
+  const it = { text, room: room || null, t: performance.now(), hint: hintKey };
+  if (jump) { if (noteCur && !noteCur.room) noteQ.unshift(noteCur); noteQ.unshift(it); endRoomNote(); } else noteQ.push(it);
   if (roomNoteStale(noteCur)) endRoomNote(); // 正在念的那句人已经走开了：不念完，让位
   pumpNote();
 }
@@ -2420,7 +2421,7 @@ const STORY_ZH = {
   'Pendant & Ceiling Lamp|Parlour': ['吊灯和顶灯', '吊灯从屋梁上吊下来，照着沙发。链子上被他缠了一圈铜线，让灯罩歪了一个角度——他嫌灯太亮照眼睛，歪一点，光就落到书上去了。\n\n顶灯是全屋主灯，他平时嫌太亮不开。只有摊开大图、对比例尺、描等高线的时候才开，一开就是一整夜。'],
   'Ladder & Railing|Loft': ['木梯和栏杆', '上阁楼的木梯平时收在滑轨上，沿滑轨推到阁楼口下面架好才能上去。阁楼口有一根横杆，可以放下拦住开口，也可以竖起。\n\n他最后一次从阁楼下来，把梯子滑回了原位，把横杆放了下来。不必再上了。'],
   'Bed|Loft': ['床', '在屋顶下面，暖空气都聚在这里，全屋最舒服的地方。被子叠得整整齐齐——像他知道今晚不会回来了，但还是把床铺弄好才走，像是在跟一张睡了三十年的床告别。'],
-  'Night Table|Loft': ['床头柜', '抽屉可以拉出来。抽屉里有一个停摆的怀表、一个旧指南针和几根松针。怀表停在凌晨三点十七分——也许是他最后离开阁楼的时间。指南针的指针卡住了，指向东北偏东。他不修它，说：“坏掉的指南针比好的更诚实——它至少承认自己找不着北了。”'],
+  'Night Table|Loft': ['床头柜', '抽屉可以拉出来。抽屉里有一个停摆的怀表、一个旧罗盘和几根松针。怀表停在凌晨三点十七分——也许是他最后离开阁楼的时间。罗盘的指针卡住了，指向东北偏东。他不修它，说：“坏掉的罗盘比好的更诚实——它至少承认自己找不着北了。”'],
   'Wardrobe & Coat Hooks|Loft': ['矮柜和衣钩', '五扇小门，按季节放衣服，冬衣最厚，占了两格。衣钩上什么都没挂——以前挂着睡袍和换下来的旧衣服，后来全收进了柜里。这间阁楼是按很久不再用的样子收拾的。'],
   'Rocking Chair|Loft': ['摇椅', '阁楼角落，屋顶最低的地方。这把摇椅曾被搬到楼下，后来又搬了回来——楼下是干活的地方，想事要上楼。\n\n他想不通的事都是在这把椅子上想的：坐着慢慢摇，听风刮过木瓦，听雪压得屋顶咯吱响。屋里没有窗，看不见林子，他说这样反倒听得清。\n\n走之前的最后一夜，他也坐在这里，摇了一整夜。'],
   'Rug|Loft': ['地毯', '阁楼也铺了地毯，比客厅那块厚。冬天他赤脚踩上去也不会冷。地毯边缘有一块颜色特别深——那是他常年放脚的位置，被松脂和汗水染成了深琥珀色。'],
@@ -2507,7 +2508,7 @@ const GAME_TEXT = {
   letter: ['Unburnt Letter · Kitchen, Day 1', 'Under the ashes lies half a sheet of paper, scorched at the edges. Only a few lines can be made out:\n\n"…east-north-east, about four miles. Beneath an old spruce the ground has split; the compass spins; the needles are scorched black, as if by fire — yet there is no fire there. Marked ✕. This place is not fit…"\n\n"…bearings enclosed; I beg the Office…"\n\nThe rest is burnt away. He wrote it, did not send it, and put it in at the stove door.', '炉灰底下压着半张纸，边上烧焦了。能认出来的只有几行：\n\n“……东北偏东，约四里。老云杉根下地面开裂，罗盘打转，松针焦黑，像被火燎过，可那里没有火。已标 ✕。此处不宜……”\n\n“……附坐标，请局里……”\n\n后面烧没了。他写了，没寄，又塞进了炉门。'],
   logIntro: ['Field Log · Parlour bookcase, bottom left', 'A book of bark paper, stitched together; neat at the front, more and more disordered towards the back. The inspector knows the hand: he watched it sign the commission.', '树皮纸订成的本子，前面工整，后面越写越乱。老稽查认得这笔迹，委任状上的签名是他看着签的。'],
   log1: ['Field Log, first part · Day 1', 'July 19th. East-north-east, about four miles. Beneath an old spruce the ground split open; the compass spins; the needles scorched black. Marked ✕, Do Not Enter. Report written; to be posted at the post-house come spring.\n\nAugust 2nd. Went to look again. The rift no wider. Cannot say why I wished to go again.\n\nSeptember. The map not yet finished. Wrote to the Office, begging leave to stay the winter.', '七月十九。东北偏东，约四里。老云杉根下地面开裂，罗盘打转，松针焦黑。已标 ✕，勿入。报告写好了，开春去驿站寄。\n\n八月二日。又去看了一次，裂口没变大。说不清为什么想再去。\n\n九月。图还没画完。写信给局里，请准许留下过冬。'],
-  log2: ['Field Log, middle part · Day 2, on coming back', 'Eleventh year. There is a stake in the woods with a slanting cut. I do not remember setting it.\n\nNineteenth year, winter. Smoke over the trees at dusk. I stood under the porch and watched it: east-north-east, the wrong way. There is no house out there.\n\nTwenty-fourth year. On the way to the ✕, a heap of stones that was never there before, stacked as I stack mine. On the topmost, words in charcoal, in my own hand. I never wrote them.', '第十一年。林子里有一根桩子，刀口斜着。我不记得立过它。\n\n第十九年，冬。傍晚树梢上有一柱烟。我站在门廊下看，烟在东北偏东，方向不对，那边没有人家。\n\n第二十四年。去 ✕ 的路上多了一堆石头，码法跟我的一样。最上面那块有炭笔写的字，是我的笔迹，可我没写过。'],
+  log2: ['Field Log, middle part · Day 2, on coming back', 'Eleventh year. There is a stake in the woods with a slanting cut. I do not remember setting it.\n\nNineteenth year. On the way to the ✕, a heap of stones that was never there before, stacked as I stack mine. On the topmost, words in charcoal, in my own hand. I never wrote them.\n\nTwenty-fourth year, winter. Smoke over the trees at dusk. I stood under the porch and watched it: east-north-east, the wrong way. There is no house out there.', '第十一年。林子里有一根桩子，刀口斜着。我不记得立过它。\n\n第十九年。去 ✕ 的路上多了一堆石头，码法跟我的一样。最上面那块有炭笔写的字，是我的笔迹，可我没写过。\n\n第二十四年，冬。傍晚树梢上有一柱烟。我站在门廊下看，烟在东北偏东，方向不对，那边没有人家。'],
   log3: ['Field Log, last part · Day 3, at the ✕', 'Thirtieth year. I draw it, and it draws me.\n\nIt draws slowly, a little each year. First the stake, then the cairn, then the roof. This spring it has drawn its way indoors. I sit here, and over there its rocking chair is rocking too.\n\nTonight I go to see whether the likeness is good. The fire is banked, the door left a crack, the lamp left burning. I shall not go to the post-house this year; the Office will have no report, and will send someone. One must leave them a light.', '第三十年。我画它，它也在画我。\n\n它画得很慢，一年一点。先是桩子，后是石堆，后是屋顶。今年开春，它画到屋里了。我在这边坐着，它那边的摇椅也在摇。\n\n今晚我去看看画得像不像。炉火压好了，门留条缝，灯留着。今年不去驿站了，局里收不到报告，会派人来，总得给他们留个亮处。'],
   notes1: ['Inquiry Notes · Night of Day 1', 'Arrived. Door ajar, porch lamp burning, no one in the house. Stove stone cold, the ash cold; gone a month at least. His greatcoat, boots and lantern all in their places. Lit the fire. We stop here.\n\nThe house is newer than the reports made it. Timber thirty years old ought not to be this colour. Perhaps his reports exaggerated.', '到达。大门虚掩，门廊灯亮着，屋里无人。炉子冷透了，灰是凉的，少说走了一个月。他的大衣、靴子、提灯都在原处。生了火，住下。\n\n这屋子比报告里写的新。三十年的木头，不该是这个颜色。也许是他报告写得夸张。'],
   notes2: ['Inquiry Notes · Night of Day 2', 'A survey stake in the woods. The inspector stood before it a long while. He says he set it himself, as a matter of course.\n\nAt dusk, smoke over the trees, east-north-east. The inspector says I was mistaken. I was not mistaken.', '林子里有一根标桩，稽查在它跟前站了很久。他说是他自己立的，顺手。\n\n傍晚东北偏东的树梢上有一柱烟。稽查说是看错了。我没有看错。'],
@@ -4401,7 +4402,7 @@ const GEAR_RAIL = { // 衣帽架空了：换名字和说明（交互 r2 UX4、�
   coat: ['Coat Rail', 'Entry', 'The greatcoat\'s peg is bare: you have it on.', '挂大衣的钉子空了，大衣穿在你身上。'],
   both: ['Coat Rail', 'Entry', 'The pegs are bare: the greatcoat is on your back, the lantern in your hand.', '钉子上空了：大衣穿在你身上，提灯在你手里。'],
   gone: ['Coat Rail', 'Entry', 'The pegs are bare. The greatcoat and the lantern went with you.', '钉子上空了。大衣和提灯，你都带走了。'], // 「留下」结局（endHome）
-  orbitCoat: ['Coat Rail', 'Entry', "The greatcoat's peg is bare: the inspector has it with him.", '挂大衣的钉子空了，大衣稽查带在身上。'], // 鸟瞰（不在第一人称）
+  orbitCoat: ['Coat Rail', 'Entry', "The greatcoat's peg is bare: the inspector has it with him.", '挂大衣的钉子空了，大衣在稽查身上。'], // 鸟瞰（不在第一人称）
   orbitBoth: ['Coat Rail', 'Entry', 'The pegs are bare. The inspector has the greatcoat and the lantern with him.', '钉子上空了。大衣和提灯，稽查带在身上。'],
 };
 for (const r of Object.values(GEAR_RAIL)) LEAD_ZH[r[2]] = r[3];
@@ -4459,7 +4460,7 @@ const GEAR_YAW = 0;
 function updateGear(dt) {
   if (fp && !morn && gearDay() && (!gear.coat || !gear.lantern) && outdoors(fp.p.root.position)) { // 没拿就出了门：自动取下，补一句
     const say = !gear.coat && !gear.lantern ? GEAR_SAYS.both : !gear.coat ? GEAR_SAYS.coat : GEAR_SAYS.lantern;
-    gearTake('entry_coat', true); gearTake('entry_lantern', true); showRoomNote(say);
+    gearTake('entry_coat', true); gearTake('entry_lantern', true); showRoomNote(say, null, null, true);
   }
   if (fp && game.day === 2 && game.found.has('d2light') && (gear.coat || gear.lantern) && !outdoors(fp.p.root.position)) { gearHang(); showRoomNote(GEAR_HANG); } // 傍晚回到屋里
   if (!gear.lantern) return;
