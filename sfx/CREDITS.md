@@ -29,3 +29,11 @@
 | `bgm-day2.mp3` | at.mp3（4 Atmospheric ghostly loops） | qubodup | https://opengameart.org/content/4-atmospheric-ghostly-loops |
 | `bgm-day3.mp3`（结局也用） | Snowfall (Looped ver.).ogg | Kistol | https://opengameart.org/content/snowfall |
 | `crow.mp3` | crow_caw.wav | zeroisnotnull | https://opengameart.org/content/crow-caw |
+
+## 屋旁小溪（2026-11-04）
+
+同样是 OpenGameArt.org 上的 **CC0 1.0**。`brook.mp3` 由 `tools/sfx/make_brook.py` 剪出：取原录音 118–136s（全段最平稳、没有鸟叫人声的一段），首尾 1.5 秒交叉淡化成无缝循环，单声道 48kbps，响度同其它环境声（RMS −20dB）。
+
+| 网页文件 | 原始素材 | 作者 | 链接 |
+|---|---|---|---|
+| `brook.mp3` | park_ambience_river.wav（「3 recordings of ambience in different parts of a public park」里的河边那段） | thimras | https://opengameart.org/content/park-ambiences |
