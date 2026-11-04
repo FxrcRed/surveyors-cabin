@@ -1427,10 +1427,10 @@ float bF(vec2 p) { return 0.6 * bN(p) + 0.4 * bN(p * 2.7 + 5.2); }
 // 溪里、岸上不留树和林下物件：实例缩成 0（不动随机序列、别的树不挪），碰撞点、灌木、树坑一起去掉。种完树、cullHidden 之后调
 function brookClear() {
   const m4 = new THREE.Matrix4(), zero = new THREE.Matrix4().makeScale(0, 0, 0), gone = new Set(), q = (x, z) => brookAt(x + terrain.ox, z + terrain.oz);
-  const wet = (x, z, r) => { const b = q(x, z); return b.d < b.w + r; };
+  const wet = (x, z, r) => { const b = q(x, z); return b.d < b.w + r; }, A = BROOK.wireA;
   for (const o of scene.children) if (o.isInstancedMesh && /^(forest|floor)$/.test(o.name)) { let ch = false;
     for (let i = 0; i < o.count; i++) { o.getMatrixAt(i, m4); const x = m4.elements[12], z = m4.elements[14];
-      if (m4.elements[5] && wet(x, z, o.name === 'floor' ? 1.6 : 1.1)) { o.setMatrixAt(i, zero); gone.add(Math.fround(x) + ',' + Math.fround(z)); ch = true; } }
+      if (m4.elements[5] && (wet(x, z, o.name === 'floor' ? 1.6 : 1.1) || (o.name === 'forest' && A && Math.hypot(x - A.x, z - A.z) < 3))) { o.setMatrixAt(i, zero); gone.add(Math.fround(x) + ',' + Math.fround(z)); ch = true; } } // 水轮小棚 3m 内也不留树（11-04 复测 ENV5：棚压在两棵大松树的帽檐底下，电线一出棚就擦着树冠）
     if (ch) { o.instanceMatrix.needsUpdate = true; o.computeBoundingSphere(); } }
   for (let i = TREE_XZ.length - 2; i >= 0; i -= 2) if (gone.has(Math.fround(TREE_XZ[i]) + ',' + Math.fround(TREE_XZ[i + 1])) || wet(TREE_XZ[i], TREE_XZ[i + 1], 0.2)) TREE_XZ.splice(i, 2);
   for (let i = PITS.length - 3; i >= 0; i -= 3) if (gone.has(Math.fround(PITS[i]) + ',' + Math.fround(PITS[i + 1]))) PITS.splice(i, 3);
@@ -1446,27 +1446,58 @@ function brookWire() {
     let p = prof.get(geo); if (!p) { const pos = geo.attributes.position, lo = new THREE.Box3(); for (let i = 0; i < pos.count; i++) if (pos.getY(i) < 0.2) lo.expandByPoint(v.fromBufferAttribute(pos, i)); p = { geo, cx: (lo.min.x + lo.max.x) / 2, cz: (lo.min.z + lo.max.z) / 2 }; prof.set(geo, p); }
     const pos = geo.attributes.position; let r = 0.02; for (let i = 0; i < pos.count; i++) if (Math.abs(pos.getY(i) - y) < 0.08) r = Math.max(r, Math.hypot(pos.getX(i) - p.cx, pos.getZ(i) - p.cz)); return [r, p.cx, p.cz]; };
   // 走哪几棵树：附近高 ≥ 4m 的树干实例当节点（不在溪里、离小屋中心 ≥ 4m），从小棚到墙找最短路；一段超过 8.5m 要补杆子，每根杆子算多走 10m（宁可绕到树上）
-  const nodes = [{ p: A }], mid = A.clone().add(B).multiplyScalar(0.5);
-  for (const o of scene.children) if (o.isInstancedMesh && o.name === 'forest' && !o.instanceColor) for (let i = 0; i < o.count; i++) {
-    o.getMatrixAt(i, m4); m4.decompose(v, qt, sc); if (sc.y < 4) continue;
-    const p = v.clone().sub(G.position), b = brookAt(p.x, p.z);
-    if (Math.hypot(p.x - mid.x, p.z - mid.z) < L / 2 + 6 && Math.hypot(p.x - home.target.x, p.z - home.target.z) > 4 && b.d > b.w + 0.8) nodes.push({ o, p, sc: sc.clone(), qt: qt.clone() }); }
+  // 11-04 复测 ENV5：线不穿树冠。松树冠是一层层空心的「帽子」（0.12 树高起），钉在帽子里线必从帽面穿出去：只钉在 3.1m 上下、±0.12m 内没有树冠的层间空当（松树 0.66–0.72 树高，4–4.7m 的小树）；
+  // 选出的路线逐段照电线的垂度打射线（帽子是空心的，射线要双面；离树冠留 0.15–0.2m，不然像擦着枝尖），穿了树冠、树干的段加 1000 再找，直到整条不穿
+  const NB = 100, occ = new Map(), occOf = (geo) => { // 这个部件哪些高度有三角面（0–1 归一化高度分 100 档）
+    let r = occ.get(geo); if (r) return r; r = new Uint8Array(NB); occ.set(geo, r); const pos = geo.attributes.position, ix = geo.index, n = ix ? ix.count : pos.count;
+    for (let t = 0; t < n; t += 3) { let y0 = 1, y1 = 0; for (let k = 0; k < 3; k++) { const y = pos.getY(ix ? ix.getX(t + k) : t + k); y0 = Math.min(y0, y); y1 = Math.max(y1, y); } for (let k = Math.max(0, Math.floor(y0 * NB)); k <= Math.min(NB - 1, Math.floor(y1 * NB)); k++) r[k] = 1; }
+    return r; };
+  const nodes = [{ p: A }], mid = A.clone().add(B).multiplyScalar(0.5), obs = [], crowns = new Map(), keyOf = (p) => Math.round(p.x * 100) + ',' + Math.round(p.z * 100), toG = new THREE.Matrix4().makeTranslation(-G.position.x, -G.position.y, -G.position.z);
+  for (const o of scene.children) if (o.isInstancedMesh && o.name === 'forest') { const geo = o.geometry; if (!geo.boundingBox) geo.computeBoundingBox(); if (!geo.boundingSphere) geo.computeBoundingSphere();
+    const crown = !!o.instanceColor || geo.boundingBox.max.x - geo.boundingBox.min.x > 0.3; // 树冠，或带枝的枯树干
+    for (let i = 0; i < o.count; i++) { o.getMatrixAt(i, m4); if (!m4.elements[5]) continue; m4.decompose(v, qt, sc); const p = v.clone().sub(G.position); if (Math.hypot(p.x - mid.x, p.z - mid.z) > L / 2 + 12) continue;
+      const m = toG.clone().multiply(m4); obs.push({ geo, m, crown, c: geo.boundingSphere.center.clone().applyMatrix4(m), r: geo.boundingSphere.radius * m.getMaxScaleOnAxis() }); // 障碍：本地坐标同 nodes
+      if (crown) { const k = keyOf(p); (crowns.get(k) || crowns.set(k, []).get(k)).push(occOf(geo)); continue; }
+      const b = brookAt(p.x, p.z); if (sc.y < 4 || Math.hypot(p.x - mid.x, p.z - mid.z) > L / 2 + 6 || Math.hypot(p.x - home.target.x, p.z - home.target.z) < 4 || b.d < b.w + 0.8) continue;
+      nodes.push({ o, p, sc: sc.clone(), qt: qt.clone() }); } }
+  for (let i = nodes.length - 1; i > 0; i--) { const n = nodes[i], cs = crowns.get(keyOf(n.p)) || []; n.y = 0; // 挂点高度（离树根）
+    for (let d = 0; d <= 0.5 && !n.y; d += 0.05) for (const y of [3.1 - d, 3.1 + d]) { const k0 = Math.floor((y - 0.15) / n.sc.y * NB), k1 = Math.floor((y + 0.15) / n.sc.y * NB);
+      if (k1 < NB && cs.every((r) => !r.subarray(k0, k1 + 1).some((x) => x))) { n.y = y; break; } }
+    if (!n.y) { nodes.splice(i, 1); continue; }
+    const [r, cx, cz] = trunkAt(n.o.geometry, n.y / n.sc.y); n.ax = new THREE.Vector3(cx, 0, cz).multiply(n.sc).applyQuaternion(n.qt).add(n.p); n.rr = r * n.sc.x; } // 树干轴、半径
   nodes.push({ p: B });
-  const N = nodes.length, len = (a, b) => Math.hypot(a.p.x - b.p.x, a.p.z - b.p.z), cost = (a, b) => { const l = len(a, b); return l + 10 * (Math.ceil(l / 8.5) - 1); };
-  const dist = nodes.map(() => Infinity), prev = nodes.map(() => -1), done = nodes.map(() => false); dist[0] = 0;
-  for (;;) { let u = -1; for (let i = 0; i < N; i++) if (!done[i] && (u < 0 || dist[i] < dist[u])) u = i;
-    if (u < 0 || u === N - 1) break; done[u] = true;
-    for (let j = 0; j < N; j++) if (!done[j] && dist[u] + cost(nodes[u], nodes[j]) < dist[j]) { dist[j] = dist[u] + cost(nodes[u], nodes[j]); prev[j] = u; } }
-  const route = []; for (let i = N - 1; i >= 0; i = prev[i]) route.unshift(nodes[i]);
+  const rc = new THREE.Raycaster(), hm = new THREE.Mesh(undefined, new THREE.MeshBasicMaterial({ side: THREE.DoubleSide })), ln = new THREE.Line3(), cl = new THREE.Vector3();
+  const off = [new THREE.Vector3(), new THREE.Vector3(0, 0.15, 0), new THREE.Vector3(0, -0.15, 0), new THREE.Vector3(), new THREE.Vector3()]; // 线本身 + 上下左右各偏一点（只对树冠）
+  const clips = (a, b) => { const sag = 0.08 + 0.015 * a.distanceTo(b); let p0 = a; // 同下面电线的垂度，分 10 小段
+    for (let j = 1; j <= 10; j++) { const u = j / 10, p1 = a.clone().lerp(b, u).setY(a.y + (b.y - a.y) * u - sag * 4 * u * (1 - u)), dir = p1.clone().sub(p0).normalize(); ln.set(p0, p1); rc.far = p0.distanceTo(p1);
+      off[3].set(-dir.z, 0, dir.x).setLength(0.2); off[4].copy(off[3]).negate();
+      for (const q of obs) if (ln.closestPointToPoint(q.c, true, cl).distanceTo(q.c) < q.r + 0.2) { hm.geometry = q.geo; hm.matrixWorld.copy(q.m);
+        for (const o of q.crown ? off : off.slice(0, 1)) { rc.set(cl.addVectors(p0, o), dir); if (rc.intersectObject(hm, false).length) return true; } }
+      p0 = p1; } return false; };
+  const N = nodes.length, len = (a, b) => Math.hypot(a.p.x - b.p.x, a.p.z - b.p.z), bad = new Set(), seen = new Set(), eid = (i, j) => Math.min(i, j) * N + Math.max(i, j);
+  const cost = (i, j) => { const l = len(nodes[i], nodes[j]); return l + 10 * (Math.ceil(l / 8.5) - 1) + (bad.has(eid(i, j)) ? 1000 : 0); };
+  const polePos = (x, z) => { for (const k of [0, 1.5, -1.5, 3, -3]) { const px = x - ab.z * k, pz = z + ab.x * k; if (!nearAny(pathClear, px, pz, 1.4) && !nearAny(trailClear, px, pz, 1.4)) { x = px; z = pz; break; } } // 杆子不立在路上
+    return new THREE.Vector3(x, gy + terrainH(x + G.position.x, z + G.position.z) + 3.25, z); }; // 杆顶
+  const tip = (n, to) => n.o ? n.ax.clone().addScaledVector(new THREE.Vector3(to.x - n.ax.x, 0, to.z - n.ax.z).normalize(), n.rr + 0.09).setY(n.p.y + n.y) : n.p; // 估的挂点（定线后按两头的中间再摆）
+  const spans = (a, b) => { const l = len(a, b), k = Math.ceil(l / 8.5) - 1, s = [tip(a, b.p)]; for (let j = 1; j <= k; j++) { const u = j / (k + 1); s.push(polePos(a.p.x + (b.p.x - a.p.x) * u, a.p.z + (b.p.z - a.p.z) * u)); } s.push(tip(b, a.p)); return s; };
+  let ri = [];
+  for (let pass = 0; pass < 20; pass++) { const dist = nodes.map(() => Infinity), prev = nodes.map(() => -1), done = nodes.map(() => false); dist[0] = 0;
+    for (;;) { let u = -1; for (let i = 0; i < N; i++) if (!done[i] && (u < 0 || dist[i] < dist[u])) u = i;
+      if (u < 0 || u === N - 1) break; done[u] = true;
+      for (let j = 0; j < N; j++) if (!done[j] && dist[u] + cost(u, j) < dist[j]) { dist[j] = dist[u] + cost(u, j); prev[j] = u; } }
+    ri = []; for (let i = N - 1; i >= 0; i = prev[i]) ri.unshift(i);
+    let fresh = false;
+    for (let k = 1; k < ri.length; k++) { const e = eid(ri[k - 1], ri[k]); if (seen.has(e)) continue; seen.add(e); const s = spans(nodes[ri[k - 1]], nodes[ri[k]]); if (s.some((p, j) => j && clips(s[j - 1], p))) { bad.add(e); fresh = true; } }
+    if (!fresh) break; }
+  const route = ri.map((i) => nodes[i]);
   const pts = [A.clone()], ins = [], br = [], poles = [];
-  const pole = (x, z) => { for (const k of [0, 1.5, -1.5, 3, -3]) { const px = x - ab.z * k, pz = z + ab.x * k; if (!nearAny(pathClear, px, pz, 1.4) && !nearAny(trailClear, px, pz, 1.4)) { x = px; z = pz; break; } } // 杆子不立在路上
-    const y = gy + terrainH(x + G.position.x, z + G.position.z); poles.push(new THREE.CylinderGeometry(0.07, 0.1, 3.6, 7).translate(x, y + 1.6, z)); TREE_XZ.push(x + G.position.x, z + G.position.z); return new THREE.Vector3(x, y + 3.25, z); };
+  const pole = (x, z) => { const t = polePos(x, z); poles.push(new THREE.CylinderGeometry(0.07, 0.1, 3.6, 7).translate(t.x, t.y - 1.65, t.z)); TREE_XZ.push(t.x + G.position.x, t.z + G.position.z); return t; };
   for (let i = 1; i < route.length; i++) { const a = route[i - 1], b = route[i], l = len(a, b), k = Math.ceil(l / 8.5) - 1;
     for (let j = 1; j <= k; j++) { const u = j / (k + 1); pts.push(pole(a.p.x + (b.p.x - a.p.x) * u, a.p.z + (b.p.z - a.p.z) * u)); }
     if (!b.o) continue;
-    const y = Math.min(3.2, 0.75 * b.sc.y), [r, cx, cz] = trunkAt(b.o.geometry, y / b.sc.y), ax = new THREE.Vector3(cx, 0, cz).multiply(b.sc).applyQuaternion(b.qt).add(b.p); // 树干轴
+    const ax = b.ax; // 树干轴
     const c = route[i + 1], dir = new THREE.Vector3((a.p.x + c.p.x) / 2 - ax.x, 0, (a.p.z + c.p.z) / 2 - ax.z); if (dir.lengthSq() < 1e-4) dir.set(-ab.z, 0, ab.x); dir.normalize(); // 绝缘子钉在朝两头的那一面
-    const rr = r * b.sc.x, att = ax.clone().addScaledVector(dir, rr + 0.09); att.y = b.p.y + y;
+    const rr = b.rr, att = ax.clone().addScaledVector(dir, rr + 0.09); att.y = b.p.y + b.y;
     br.push(new THREE.BoxGeometry(0.025, 0.025, rr + 0.09).translate(0, 0, (rr + 0.09) / 2).lookAt(dir).translate(ax.x, att.y - 0.05, ax.z)); pts.push(att); }
   pts.push(B);
   for (const p of pts.slice(1)) ins.push(new THREE.CylinderGeometry(0.03, 0.04, 0.09, 8).translate(p.x, p.y - 0.06, p.z)); // 白瓷绝缘子（电线搭在顶上）
@@ -1477,7 +1508,7 @@ function brookWire() {
   const dark = new THREE.MeshStandardMaterial({ color: '#1b1815', roughness: 0.7 }), add = (gs, mat) => { if (!gs.length) return; const o = new THREE.Mesh(mergeGeometries(gs), mat); o.layers.set(OUT_LAYER); o.name = 'brook_wire'; G.add(o); return o; };
   add([...wire, ...br], dark); add(ins, new THREE.MeshStandardMaterial({ color: '#e9e3d6', roughness: 0.3 }));
   const pl = add(poles, woodMats().pale); if (pl) pl.castShadow = true;
-  window.__brookWire = { spans: pts.length - 1, trees: route.length - 2, poles: poles.length }; // 调试
+  window.__brookWire = { spans: pts.length - 1, trees: route.length - 2, poles: poles.length, clips: pts.filter((p, i) => i && clips(pts[i - 1], p)).length, pts, nodes: N - 2, bad: bad.size }; // 调试（clips：穿树冠的段数；nodes：有空当能钉的树；bad：试过穿冠的边）
 }
 function fpShrubs(o) { // 灌木也是 InstancedMesh：和 fpTrees 一样按位置往外推
   if (Math.abs(o.x) < 4 && Math.abs(o.z) < 4) return;
@@ -3061,35 +3092,36 @@ function d2Add(name, g, x, z, yaw = 0) {
 }
 // 远处的烟：一柱炊烟升到树冠以上（树照样挡住下半截，不用在林子里清视线通道）。Points，位置在顶点着色器里按「出生后多久」算，同炉子的烟
 const PLUME_N = 110, PLUME_LIFE = 24, PLUME_GRAY = new THREE.Color(0xd8d4cc), PLUME_WARM = new THREE.Color(0xffb070);
-function makePlume(H) { // H = 烟升多高（米）；→ Group（原点 = 烟囱口），带看不见的点选柱（树冠以上那段）
-  const u = { uTime: { value: Math.random() * 50 }, uWind: { value: 0 }, uAmt: { value: 0 }, uScale: { value: 1 }, uColor: { value: new THREE.Color() }, uWarm: { value: new THREE.Color() }, uFogC: { value: new THREE.Color() } };
+function makePlume(H, far) { // H = 烟升多高（米）；far：隔着林子远看的那柱（✕ 门廊往西南，11-04 复测 S4）：树梢以下不画、雾里看不见的树不挡它、压暗加浓（雾和阴天的天是浅灰，浅灰的烟认不出）；→ Group（原点 = 烟囱口），带看不见的点选柱（树冠以上那段）
+  const u = { uTime: { value: Math.random() * 50 }, uWind: { value: 0 }, uAmt: { value: 0 }, uScale: { value: 1 }, uColor: { value: new THREE.Color() }, uWarm: { value: new THREE.Color() }, uFogC: { value: new THREE.Color() },
+    uNear: { value: 1e5 }, uLow: { value: far ? 16 : -1e3 }, uK: { value: new THREE.Vector2(far ? 1.5 : 1, far ? 0.6 : 1) } }; // uNear：顶点拉到这个距离以内（updatePlume 按雾设）；uLow：烟升过这个高度才看得见；uK = (浓淡倍数, 明暗倍数)
   const geo = new THREE.BufferGeometry(), seed = new Float32Array(PLUME_N * 2);
   for (let i = 0; i < PLUME_N; i++) { seed[i * 2] = i / PLUME_N; seed[i * 2 + 1] = Math.random(); }
   geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(PLUME_N * 3), 3));
   geo.setAttribute('seed', new THREE.BufferAttribute(seed, 2));
   const mat = new THREE.ShaderMaterial({ uniforms: u, transparent: true, depthWrite: false,
-    vertexShader: `uniform float uTime, uWind, uAmt, uScale; attribute vec2 seed; varying float vA, vAge, vFog;
+    vertexShader: `uniform float uTime, uWind, uAmt, uScale, uNear, uLow; uniform vec2 uK; attribute vec2 seed; varying float vA, vAge, vFog;
       void main() {
         float age = fract(uTime / ${PLUME_LIFE.toFixed(1)} + seed.x), r = seed.y, w = min(uWind, 6.0), a = r * 6.2832 + age * 2.0;
         vec3 p = vec3(0.0, ${H.toFixed(1)} * (1.0 - pow(1.0 - age, 1.8)), 0.0); // 先直升、到顶慢下来摊开（冷天傍晚的炊烟）
         p.x += (1.0 + w * 0.6) * pow(age, 1.5) * 5.0; // 越高越往下风偏
         p.xz += vec2(cos(a), sin(a)) * (0.3 + age * 3.0 + age * age * 12.0) * (0.4 + 0.6 * r);
         vec4 mv = modelViewMatrix * vec4(p, 1.0);
-        gl_Position = projectionMatrix * mv;
+        gl_Position = projectionMatrix * vec4(mv.xyz * min(1.0, uNear / -mv.z), 1.0); // 沿视线拉近：屏幕上位置不变，只是更远的树不再挡它
         gl_PointSize = (2.0 + age * 18.0) * uScale / -mv.z;
         vAge = age; vFog = smoothstep(30.0, 260.0, -mv.z) * 0.6; // 不吃 scene.fog（第 2 天雾 26m 就到底）：只稍微淡进雾色
-        vA = uAmt * smoothstep(0.0, 0.06, age) * pow(1.0 - age, 1.1) * 0.8;
+        vA = uK.x * smoothstep(uLow - 6.0, uLow, p.y) * uAmt * smoothstep(0.0, 0.06, age) * pow(1.0 - age, 1.1) * 0.8;
       }`,
-    fragmentShader: `uniform vec3 uColor, uWarm, uFogC; varying float vA, vAge, vFog;
+    fragmentShader: `uniform vec3 uColor, uWarm, uFogC; uniform vec2 uK; varying float vA, vAge, vFog;
       void main() {
         float a = vA * smoothstep(1.0, 0.15, length(gl_PointCoord - 0.5) * 2.0);
         if (a < 0.004) discard;
-        gl_FragColor = vec4(mix(mix(uWarm, uColor, smoothstep(0.0, 0.25, vAge)), uFogC, vFog), a); // 根部带一点火光
+        gl_FragColor = vec4(mix(mix(uWarm, uColor, smoothstep(0.0, 0.25, vAge)), uFogC, vFog) * uK.y, min(a, 0.9)); // 根部带一点火光
       }` });
   const pts = new THREE.Points(geo, mat); pts.frustumCulled = false; pts.renderOrder = 2;
   const g = new THREE.Group(); g.add(pts);
   const pad = pickPad(new THREE.CylinderGeometry(6, 3, H * 0.6, 8)); pad.position.set(5, H * 0.6, 0); g.add(pad);
-  g.userData.plume = u; return g;
+  g.userData.plume = u; g.userData.far = far; return g;
 }
 function updatePlume(g, dt, amt) { // amt 0..1；每帧调（可见时）
   const u = g.userData.plume;
@@ -3098,6 +3130,7 @@ function updatePlume(g, dt, amt) { // amt 0..1；每帧调（可见时）
   const day = Math.min(1, hemi.intensity / 0.8);
   u.uColor.value.copy(PLUME_GRAY).multiplyScalar(0.35 + 0.65 * day).lerp(scene.fog.color, 0.25); // 比雾色亮一点，傍晚压在暗下来的天上
   u.uWarm.value.copy(PLUME_WARM).lerp(u.uColor.value, day * 0.7); u.uFogC.value.copy(scene.fog.color);
+  if (g.userData.far) { u.uWarm.value.copy(u.uColor.value); u.uNear.value = scene.fog.far * 0.8; } // 远处那柱根部的火光本来就被树挡着；雾在 80% 远处已看不清树，拉到那儿以内（鸟瞰雾远，等于不拉）
 }
 function markTree(g, H, W) { // 标记树：林子里的云杉模型（pine.glb）放大，不另建模型；→ 「离地 y 米处的树干半径」函数，贴刻痕用
   return loadTree('trees/pine.glb').then((parts) => {
@@ -3412,6 +3445,10 @@ function d2Scene() { // 第 2 天路上的小景：只看，不点、不算线�
     FLOOR_U.uGlade.value = 1;
     const beam = d2Canvas(4, 128, (c, w, h) => { const v = c.createLinearGradient(0, 0, 0, h); v.addColorStop(0, 'rgba(255,240,205,0)'); v.addColorStop(0.6, 'rgba(255,240,205,.32)'); v.addColorStop(0.93, 'rgba(255,240,205,.55)'); v.addColorStop(1, 'rgba(255,240,205,.15)'); c.fillStyle = v; c.fillRect(0, 0, w, h); });
     const sh = new THREE.Mesh(new THREE.CylinderGeometry(3.4, 4.6, 20, 28, 1, true), new THREE.MeshBasicMaterial({ map: beam, transparent: true, opacity: 0.35, side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending }));
+    sh.material.onBeforeCompile = (s) => { // 11-04 复测 ENV1：人走进筒壁时画面被劈成一半发白 → 离相机 3–8m 渐隐、相机离光柱轴 5–11m 渐隐（站进空地就看不见），侧对着人的筒壁也淡掉（外看没有竖直硬边）
+      for (const k of ['vertexShader', 'fragmentShader']) s[k] = s[k].replace('void main() {', 'varying vec3 vBw, vBn; varying vec2 vBa;\nvoid main() {');
+      s.vertexShader = s.vertexShader.replace('#include <project_vertex>', '#include <project_vertex>\nvBw = (modelMatrix * vec4(transformed, 1.0)).xyz; vBn = mat3(modelMatrix) * normal; vBa = modelMatrix[3].xz;');
+      s.fragmentShader = s.fragmentShader.replace('#include <map_fragment>', '#include <map_fragment>\nvec3 bv = cameraPosition - vBw; float bd = length(bv);\ndiffuseColor.a *= smoothstep(3.0, 8.0, bd) * smoothstep(5.0, 11.0, length(cameraPosition.xz - vBa)) * smoothstep(0.05, 0.5, abs(dot(normalize(vBn), bv / bd)));'); };
     sh.position.y = 9; sh.renderOrder = 3; g.add(sh);
     putScene('d2_scene', g, q, rt); g.updateMatrixWorld(true);
     const hit = (x, z) => { const v = g.localToWorld(new THREE.Vector3(x, 0, z)); TREE_XZ.push(v.x, v.z); }; // 本地 x = 路右手，z = 沿路；离中线 2.6m 外才放东西
@@ -3480,7 +3517,7 @@ function day3Setup() { // 小路尽头的老云杉 + 裂口 + 焦黑松针；✕
     const a = i * 0.9 + 0.3, d = new THREE.Vector3(Math.cos(a), -0.4, Math.sin(a)).normalize(), m = new THREE.Mesh(new THREE.ConeGeometry(0.42, 1.4, 6), W.root);
     m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), d); m.position.copy(d).multiplyScalar(0.8).setY(0.3); m.scale.z = 0.55; g.add(m);
   }
-  const flat = (geo, mat, y, off) => { mat.polygonOffset = true; mat.polygonOffsetFactor = mat.polygonOffsetUnits = off; const m = new THREE.Mesh(geo, mat); m.rotation.x = -Math.PI / 2; m.position.y = y; g.add(m); return m; };
+  const flat = (geo, mat, y, off) => { mat.polygonOffset = true; mat.polygonOffsetFactor = mat.polygonOffsetUnits = off; const m = new THREE.Mesh(geo, mat); m.rotation.x = -Math.PI / 2; m.position.y = y; m.userData.noHL = true; g.add(m); return m; }; // noHL：贴地的方片不描边（11-04 复测 ENV6：悬停老云杉时焦黑那张 7.6m 方片描出一圈白方框，雪化了才看得出）
   const burnt = d2Canvas(256, 256, (x) => { const R = rng(37), sh = []; for (let i = 0; i < 40; i++) { const a = i / 40 * 6.283, k = 92 + 30 * R() * R() + 14 * Math.sin(a * 3 + 1); sh.push([128 + Math.cos(a) * k, 128 + Math.sin(a) * k]); } // 焦黑的松针：边不规则、往外散成点，里面是散乱的针
     x.fillStyle = 'rgba(28,22,18,.95)'; x.beginPath(); sh.forEach(([px, py], i) => i ? x.lineTo(px, py) : x.moveTo(px, py)); x.closePath(); x.fill();
     for (let i = 0; i < 260; i++) { const a = R() * 6.283, d = 100 + 26 * Math.sqrt(R()); x.fillStyle = `rgba(28,22,18,${0.8 - (d - 100) / 34})`; x.beginPath(); x.arc(128 + Math.cos(a) * d, 128 + Math.sin(a) * d, 1 + 2.5 * R(), 0, 7); x.fill(); }
@@ -3492,8 +3529,9 @@ function day3Setup() { // 小路尽头的老云杉 + 裂口 + 焦黑松针；✕
   flat(new THREE.PlaneGeometry(1.1, 4.4), new THREE.MeshBasicMaterial({ map: rift, transparent: true, depthWrite: false, color: '#000' }), 0.04, -4).position.set(1.7, 0.04, 0.4);
   const [p] = pathAt(D3.end);
   x3.spruce = d2Add('d3_spruce', g, p.x, p.z); x3.home = [p.x, p.z];
-  const lamp = makePlume(55); // ✕ 那间屋门廊下往西南看：自家烟囱的烟在树梢上（挪世界后自家在 -XSHIFT，这柱烟不跟着挪，所以直接放在那儿）
-  x3.light = d2Add('x_light', lamp, 2.42 - XSHIFT.x, -1.52 - XSHIFT.y); lamp.position.y = ground.position.y + 4; lamp.visible = false;
+  const lamp = makePlume(65, true); // ✕ 那间屋门廊下往西南看：自家烟囱的烟在树梢上（挪世界后自家在 -XSHIFT，这柱烟不跟着挪，所以直接放在那儿）
+  { const hx = 2.42 - XSHIFT.x, hz = -1.52 - XSHIFT.y - 4, hd = Math.hypot(hx, hz), hb = Math.min(Math.atan2(hx, hz), Math.atan2(D3.spruceX[0], D3.spruceX[1] - 4) - 0.4); // 从门廊 (0, 4) 看，自家烟囱只比院子西南的老云杉偏 7°，整柱烟在它树冠后面：方位往西挪到离老云杉 ≥ 0.4 rad（23°，比自家实际方位偏西 15°）
+    x3.light = d2Add('x_light', lamp, Math.sin(hb) * hd, 4 + Math.cos(hb) * hd); } lamp.position.y = ground.position.y + 4; lamp.visible = false;
   // ✕ 那间屋的烟囱：屋子还没「到」之前，先看见树梢上一柱烟（原来是不吃雾、不被挡的门廊灯光晕），跟着世界一起平移
   x3.glow = makePlume(55); x3.glow.visible = false;
   x3.glow.position.set(2.42 + XSHIFT.x, ground.position.y + 3.6, -1.52 + XSHIFT.y); scene.add(x3.glow); OUTDOOR.push(x3.glow); // 烟囱口同 interact.js SMOKE_AT
@@ -3817,7 +3855,7 @@ function setHL(name, on) { // 把这个图层的网格加进/移出高亮 layer
   // 折叠门：B 板的转轴组挂在 A 的转轴组下（和 A 图层是兄弟，不在 A 图层里），只描 A 就只亮半扇 → 两扇一起描
   for (const n of name === 'toilet_door_A' ? [name, 'toilet_door_B'] : [name]) {
     const g = n && layers.get(n);
-    if (g) g.traverse((o) => { if (o.isMesh && !o.userData.pad) on ? o.layers.enable(HL_LAYER) : o.layers.disable(HL_LAYER); }); // pad：看不见的大点选块，不描边
+    if (g) g.traverse((o) => { if (o.isMesh && !o.userData.pad && !o.userData.noHL) on ? o.layers.enable(HL_LAYER) : o.layers.disable(HL_LAYER); }); // pad：看不见的大点选块，不描边；noHL：贴地的贴图方片
   }
 }
 function drawHighlight() {
