@@ -191,6 +191,7 @@ if (navigator.webdriver || /[?&]nolock\b/.test(location.search)) { let el = null
   #dlg p { margin: 12px 0 0; font-size: var(--fs-s); white-space: pre-line; }
   #mmap { position: fixed; left: 16px; bottom: 56px; z-index: 6; width: 124px; height: auto; pointer-events: none; border-radius: 4px; opacity: .88; box-shadow: 0 1px 4px rgba(0,0,0,.35); } /* 迷雾小地图 */
   @media (max-width: 600px) { #mmap { left: 8px; bottom: 52px; width: 92px; } }
+  @media (max-width: 600px) { body:not(:has(#fpHud:not([hidden]))) #mmap { display: none; } } /* 手机鸟瞰：左下竖排的时间、天气、遗稿盖住小地图 65%（交互 r4 #1），鸟瞰本来就看得到全图，藏起来 */
   @media (max-width: 600px) { body:has(#fpHud:not([hidden])) #skyL .btns { flex-direction: row; gap: 10px; } } /* 手机第一人称：时间、天气、遗稿横排在最底下一行，小地图在它上面露全（交互 r3 #1：竖排加深底盖住小地图 89%） */
   body:has(#fpHud:not([hidden])) #mmap { width: 84px; } @media (max-width: 600px) { body:has(#fpHud:not([hidden])) #mmap { width: 72px; } } /* 第一人称缩小：原来压住左下角的标桩（评审④ v2 #11） */
   #dlg .row { display: flex; gap: 8px; margin-top: 14px; }
@@ -221,6 +222,7 @@ if (navigator.webdriver || /[?&]nolock\b/.test(location.search)) { let el = null
   #fpHud:not(.live, .touch) .resume { opacity: 1; transition-delay: .4s; } /* 指针锁放开了（Esc、切窗口）：准星处提示点画面继续（UX1）；刚请求锁的一瞬间不闪 */
   #fpHud:not(.live, .touch) .help { opacity: 0; } /* 放锁时只留准星处那一句：操作说明开头也写着「点画面开始」，两句同时出（交互 r3 #4）；说明行还可能被旁白、提示条藏掉，不能反过来只留它 */
   body:has(#card:not([hidden]), #dlg:not([hidden]), #journal:not([hidden])) #fpHud .resume { opacity: 0; transition-delay: 0s; } /* 弹层开着时先让给弹层 */
+  body:has(#note.on) #tip.dup { display: none; }
   #tip:not([hidden]) { animation: tipIn .2s ease-out; } @keyframes tipIn { from { opacity: 0; } }
   @media (min-width: 601px) and (max-width: 1200px) { #fpHud .help { bottom: 128px; } body:has(#note.on, #roomNote.on) #fpHud .help { opacity: 0; } } /* 窄窗口：操作说明挪到任务行上面，别压在左下「遗稿」上（UX10，英文「§ Journal」右沿到 356px，让不开）；旁白、说明出来时先让开 */
   /* 时间面板：底部居中，无底框，白字 + 深色阴影，在亮暗画面上都看得清；面板往上展开 */
@@ -233,6 +235,7 @@ if (navigator.webdriver || /[?&]nolock\b/.test(location.search)) { let el = null
   #sky #enter:hover, #sky #walkBtn:hover { background: none; }
   #sky #enter.nogo { display: none; }
   #sky #walkBtn { font-size: var(--fs-l); letter-spacing: 3px; padding: 4px 20px; border: 0; }
+  #sky:has(#walkBtn:not([hidden])) #enter { font-size: var(--fs-s); letter-spacing: 2px; padding: 2px 20px; } #sky:has(#walkBtn:not([hidden])) #walkBtn { font-size: var(--fs-xl); letter-spacing: 4px; padding: 8px 30px; } /* 刷新回来的第 2、3 天：该点的是「出门走走」，「进屋」只是镜头飞进去看模型，缩小让位（交互 r4 #7） */
   #sky #enter.glow { text-shadow: 0 0 6px rgba(0,0,0,.35), 0 1px 3px rgba(0,0,0,.6); }
   #sky .wait, #skyL .wait { visibility: hidden; opacity: 0; pointer-events: none; }
   /* 时间、天气：左下角，面板往上展开 */
@@ -278,7 +281,7 @@ if (navigator.webdriver || /[?&]nolock\b/.test(location.search)) { let el = null
   #wxPanel[hidden] { display: none; }
   #wxPanel button { padding: 5px 2px; font-size: var(--fs-xs); }
   #wxPanel button.on { background: rgba(232,200,154,.3); border-color: #e8c89a; }
-  @media (max-width: 600px) { #subs, #note, #roomNote, #quest:not(.end) { z-index: 7; bottom: 96px; font-size: var(--fs-s); } #quest.end { bottom: 96px; } #fpHud .help { bottom: 150px; } #fpHud .help { width: calc(100vw - 32px); box-sizing: border-box; white-space: normal; } #prog { z-index: 7; bottom: 70px; } #opening .box { font-size: var(--fs-s); } }
+  @media (max-width: 600px) { #subs, #note, #roomNote, #quest:not(.end) { z-index: 7; bottom: 106px; font-size: var(--fs-s); } #quest.end { bottom: 106px; } #fpHud .help { bottom: 150px; } #fpHud .help { width: calc(100vw - 32px); box-sizing: border-box; white-space: normal; } #prog { z-index: 7; bottom: 70px; } #opening .box { font-size: var(--fs-s); } }
   @media (max-width: 600px) { body:has(#card:not([hidden])) :is(#quest, #prog) { opacity: 0; } }
   @media (max-width: 600px) { #card { left: 16px; top: 50%; transform: translateY(-50%); width: calc(100vw - 32px); max-height: calc(100vh - 160px); } #rooms { right: 8px; gap: 2px; } #rooms button { font-size: var(--fs-s); padding: 2px 6px; } #rooms button .zh { font-size: var(--fs-xs); } #rooms.bottom { gap: 0 4px; } #skyPresets { grid-template-columns: repeat(3, 1fr); } #skyL .btns { flex-direction: column; align-items: flex-start; gap: 0; } #skyName { display: none; } }
 </style>
@@ -331,7 +334,7 @@ if (navigator.webdriver || /[?&]nolock\b/.test(location.search)) { let el = null
     <label><span class="en">Strength of the Sun</span><span class="zh">日光强弱</span><input type="range" id="skyStrength" min="0" max="2" step="0.05"></label>
   </div>
   <div id="wxPanel" hidden></div>
-  <div class="btns"><button id="skyBtn"><span id="skyClock">9:00</span> · <span id="skyName"><span class="en">Forenoon</span><span class="zh">上午</span></span></button>
+  <div class="btns"><button id="skyBtn"><span id="skyClock">9:00</span><span id="skyName"> · <span class="en">Forenoon</span><span class="zh">上午</span></span></button>
     <button id="wxBtn"><span id="wxIco" aria-hidden="true"></span><span id="wxName"><span class="en">Fair</span><span class="zh">晴</span></span></button>
     <button id="jBtn" class="wait"><span class="sec">§</span><span class="en">Journal</span><span class="zh">遗稿</span></button></div>
 </div>
@@ -4005,7 +4008,9 @@ function setHovered(name) {
   renderer.domElement.style.cursor = name ? 'pointer' : ''; document.documentElement.classList.toggle('cur-hot', !!name); // 自定义鼠标的环放大
   tip.hidden = !name;
   if (name) tip.textContent = nameOf(infoOf(name));
+  tipDup();
 }
+function tipDup() { const t = $('note').querySelector('.t'); tip.classList.toggle('dup', !tip.hidden && !!t && t.textContent === tip.textContent); } // 说明开着、标题和准星旁的名字是同一件：藏名字（手机横屏两行说明顶到名字，「木板大门」叠两遍，r4 #3）
 function clueFly() { // 新线索卡关上：§ 从标题飞进遗稿按钮（遗稿还没出来就飞到任务行）
   const to = [$('jBtn'), $('quest')].find((e) => e && !e.hidden && e.getBoundingClientRect().width), h = card.querySelector('h2').getBoundingClientRect();
   if (!to) return;
@@ -4060,7 +4065,7 @@ function showNote(d) {
   showRoomNote(null); // 和进房间那句在同一块地方
   const zh = lang() === 'zh', t = zh ? d.zt || d.t : d.t, x = zh ? d.ztext || d.text : d.text;
   el.innerHTML = (t ? `<span class="t">${esc(t)}</span>` : '') + `<p>${esc(x)}</p>`;
-  el.classList.add('on');
+  el.classList.add('on'); tipDup();
   noteTimer2 = setTimeout(() => el.classList.remove('on'), say(d.text, 'note') || Math.min(20000, zh ? 2600 + x.length * 120 : 2600 + x.length * 45));
 }
 const isPaper = (g) => [PAGE_CARD, LETTER_CARD, NOTES_CARD, LOG2_CARD, NOTES2_CARD, LOG3_CARD, X_CARDS.xnotes].includes(g); // 纸上写着字的线索：先只给标题，「走近看」在卡片里展开字（不拉镜头，信拿出来后炉膛里已经没有了）
@@ -4838,7 +4843,7 @@ roomList.onclick = (e) => {
   if (!b || !fp || fp.climb || fp.lad) return;
   const p = fp.p; select(null);
   if (p.mode === 'sit') p.tasks = fpRise(p);
-  const [x, z, yaw, pitch] = (innerHeight > innerWidth && ROOM_GO_TALL[b.dataset.room]) || ROOM_GO[b.dataset.room];
+  const [x, z, yaw, pitch] = ((innerHeight > innerWidth || (touchFP && b.dataset.room === 'Entry')) && ROOM_GO_TALL[b.dataset.room]) || ROOM_GO[b.dataset.room]; // 触屏横屏的玄关也用退到门边那组（交互 r4 #2：原来朝东墙）
   fpGo(x, z, null, b.dataset.room === 'Loft', [yaw * Math.PI / 180, pitch]);
 };
 function roomNavSync() { // 每帧（updateFP）：进过屋、不在梯子上才显示
@@ -5085,14 +5090,14 @@ function updateHover() {
 // 第一人称悬停分三级（11-04 交互评审 UX3，原来转一圈弹十几次名字）：2m 内能点的东西准星点变环；同一件停 0.45 秒才出名字和描边，离开后多留 0.3 秒防闪；转头快于 90°/秒不出。
 // hovered 只管显示（名字、描边、E 提示），E 拿取 / 坐下按准星实际对着的 aim 算，不用等名字出来
 // 11-04 复测：距离按水平量、屋外记号（d2_）放宽到 3m（UX3）；环也要同一件稳住 0.1 秒才出、离开多留 0.25 秒（UX5，原来一帧一闪；r3 #6：0.15 秒时慢转偶尔灭一下又亮）；准星换到别的东西上旧名字立刻收（UX6，原来多挂 0.3 秒，点到的和名字不是一件）
-const HOV = { near: 2, clue: 3, wait: 450, keep: 300, turn: Math.PI / 2, ring: 100, ringKeep: 250, ringGap: 300 }, hv = { cand: null, since: 0, lost: 0, yaw: 0, pitch: 0, t: 0, ring: -1e9, on: false, off: -1e9 };
+const HOV = { near: 2, clue: 3, wait: 450, keep: 300, turn: Math.PI / 2, ring: 100, ringKeep: 300, ringGap: 300 }, hv = { cand: null, since: 0, lost: 0, yaw: 0, pitch: 0, t: 0, ring: -1e9, on: false, off: -1e9 };
 let aim = null;
 function fpHover(n) {
   const now = performance.now(), dt = Math.max(1, now - hv.t) / 1000, near = n && pick.hd <= (n.startsWith('d2_') ? HOV.clue : HOV.near) ? n : null;
   const w = Math.hypot(angDiff(hv.yaw, fp.yaw) * Math.cos(fp.pitch), fp.pitch - hv.pitch) / dt; hv.yaw = fp.yaw; hv.pitch = fp.pitch; hv.t = now;
   aim = n; window.__hv = { near, w }; // 调试 / 无头测试
   if (near !== hv.cand || w > HOV.turn) { hv.cand = near; hv.since = now; }
-  if (hv.cand && now - hv.since >= HOV.ring && (hv.on || now - hv.off >= HOV.ringGap)) hv.ring = now; // 灭了至少 0.3 秒才再亮（r3 #6：只加长 ringKeep 只是把「灭一下又亮」挪到更宽的空隙上）
+  if (hv.cand && now - hv.since >= HOV.ring && (hv.on || now - hv.off >= HOV.ringGap || hv.cand === hovered)) hv.ring = now; // 灭了至少 0.3 秒才再亮（r3 #6：只加长 ringKeep 只是把「灭一下又亮」挪到更宽的空隙上）；名字还挂着的这件移回来立刻亮，名字和环别对不上（r4 #5）
   const on = now - hv.ring <= HOV.ringKeep; if (hv.on && !on) hv.off = now; hv.on = on;
   fpHud.classList.toggle('aim', on);
   if (near && near === hovered) hv.lost = 0;
