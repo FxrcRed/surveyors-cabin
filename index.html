@@ -364,7 +364,7 @@ if (navigator.webdriver || /[?&]nolock\b/.test(location.search)) { let el = null
   <h3>Epilogue · Where He Went</h3>
   <p>Gather up all the threads, and look —</p>
   <p><em class="k">His way out of the door never varied:</em> gloves and cap from the shelf → greatcoat from the rail → boots on at the bench → the lantern → the axe from the wall → out. Every time, for thirty years.</p>
-  <p><em class="k">But the last time, he took nothing.</em> The greatcoat hangs on its peg, creased still; the boots stand by the tray, their tops agape; gloves and cap lie on the shelf as they were; the lantern has not been moved, nor the three matches; the axe hangs on the wall.</p>
+  <p><em class="k">But the last time, he took nothing.</em> On the day the two of you came, the greatcoat hung on its peg, creased still; the boots stood by the tray, their tops agape; gloves and cap lay on the shelf as they were; the lantern had not been moved, nor the three matches; the axe hung on the wall.</p>
   <p>He did two things only. <em class="k">He banked the fire and shut the stove door tight, to let it smoulder.</em> Then <em class="k">he left the door a crack ajar, and the porch lamp burning.</em></p>
   <p>In his house slippers, he walked along the forest trail into the fog.</p>
   <p>The words on the end of the topmost log were written long before: <em>If I am gone, there is wood here to last till spring.</em></p>
@@ -415,7 +415,7 @@ if (navigator.webdriver || /[?&]nolock\b/.test(location.search)) { let el = null
   <h3>终章：他去了哪里</h3>
   <p>把所有线索收拢来看——</p>
   <p><em class="k">平时出门的动线是固定的</em>：搁板上拿手套帽子 → 衣帽架取大衣 → 换鞋凳穿靴子 → 提灯 → 墙上取斧头 → 出门。三十年来每一次都这样。</p>
-  <p><em class="k">但最后一次，他什么都没带</em>：大衣挂在架上还带着褶皱，靴子在托盘边筒口微张，手套帽子在搁板上原样放着，提灯没动，三根火柴没动，斧头挂在墙上。</p>
+  <p><em class="k">但最后一次，他什么都没带</em>：你们到的那天，大衣挂在架上还带着褶皱，靴子在托盘边筒口微张，手套帽子在搁板上原样放着，提灯没动，三根火柴没动，斧头挂在墙上。</p>
   <p>他只做了两件事——</p>
   <p><em class="k">把火压好，炉门关严，让火闷着烧。</em> 然后<em class="k">把大门留了条缝，让门廊灯亮着。</em></p>
   <p>他穿着屋里的便鞋，沿着林间踪迹，走进了雾里。</p>
@@ -1881,7 +1881,7 @@ loader.load('cabin.glb', async (gltf) => {
   const peopleReady = loadPeople().catch(console.error); // 和种树一起加载，预热前要到齐（材质一起编译）
   await yieldFrame();
   // 树种好再揭开加载页、开始开场动画，免得飞行中树一棵棵冒出来
-  plantForest(center, ground.position.y).catch(console.error).then(clearOrbitView).then(() => { brookWire(); FLOOR_U.uFloor.value = floorMap(); makeFogWalls(); if (x3.pending) { x3.pending = false; applyX(); } }).then(() => peopleReady).finally(async () => { // 地面雪坑图等树都定下来（删掉挡视线的）再画
+  plantForest(center, ground.position.y).catch(console.error).then(clearOrbitView).then(() => { brookWire(); FLOOR_U.uFloor.value = floorMap(); makeFogWalls(); if (x3.pending) { x3.pending = false; applyX(); } gearRestore(); }).then(() => peopleReady).finally(async () => { // 地面雪坑图等树都定下来（删掉挡视线的）再画
     T('forest');
     await prewarm(); const w0 = performance.now(); await Promise.all(bvhJobs); window.__bvhWait = performance.now() - w0; sceneReady = true; // __bvhWait 调试用：后台 BVH 没赶上时多等了多久
     T('prewarm');
@@ -2509,7 +2509,7 @@ const GAME_TEXT = {
   xNote: ['Day 3 · The page on the other desk', 'Day three. The inspector went out early, east-north-east. I stayed in the house. He did not take the lantern.', '第三天。稽查一早出门，往东北偏东。我留在屋里。他没带提灯。'],
   xLook: ['Day 3 · From the other porch', 'Standing under this porch and looking west-south-west, far off over the trees, there is smoke rising.', '站在这间屋的门廊下往西南偏西看，很远的树梢上升着一柱烟。'],
   endBack: ['Ending · Going Back', 'You back out of the door and go the way you came. Slowly the compass settles, and points north again. At the end of the fog the porch lamp is burning, the fire is lit, and the clerk is waiting in the rocking chair.\n\nShe hears you out, thinks a long while, and writes in the report: "No irregularity found. The Surveyor\'s whereabouts unknown." Then she puts his field log back on the shelf.', '你退出门，沿着来路走。罗盘慢慢停下来，指回北方。雾的尽头，门廊灯亮着，炉火在烧，书记员在摇椅上等你。\n\n她听你说完，想了很久，在报告上写：“未发现异常。测绘员下落不明。”然后把他的工作日志放回书架。'],
-  endStay: ['Ending · Staying', 'You sit down under the porch of that house.\n\nBack in your own cabin, the clerk looks up from his papers, goes out under the porch, and looks to the north-east. Deep in the woods there is one more light.\n\nShe does not go out to look for you. She finishes that day\'s notes, and the last line reads: "The inspector stayed. Someone must watch it."', '你在那间屋的门廊下坐下。\n\n画面回到你们的小屋。书记员从遗稿上抬起头，走到门廊下，看向东北。林子深处多了一盏灯。\n\n她没有出门找你。她把那天的调查记录写完，最后一行是：“稽查留下了。总得有人看着它。”'],
+  endStay: ['Ending · Staying', 'You sit down under the porch of that house.\n\nBack in your own cabin, the clerk looks up from the Surveyor\'s papers, goes out under the porch, and looks to the east-north-east. Deep in the woods there is one more light.\n\nShe does not go out to look for you. She finishes that day\'s notes, and the last line reads: "The inspector stayed. Someone must watch it."', '你在那间屋的门廊下坐下。\n\n画面回到你们的小屋。书记员从遗稿上抬起头，走到门廊下，看向东北偏东。林子深处多了一盏灯。\n\n她没有出门找你。她把那天的调查记录写完，最后一行是：“稽查留下了。总得有人看着它。”'],
   endHidden: ['Hidden Ending · only when all four differences are found', 'You come back to the cabin and stamp the snow from your boots. The clerk looks at you, and says:\n\n"You didn\'t take the lantern when you went out."\n\nYou look down. Your hand is empty. The lantern hangs on its peg of the coat rail, just as it did before you left.\n\nYet you remember carrying it into the fog.', '你回到小屋，跺掉靴子上的雪。书记员看着你，说：\n\n“你出门的时候没带提灯。”\n\n你低头看。手上是空的。提灯挂在衣帽架的钉子上，和你出门前一样。\n\n可你记得，你是提着它走进雾里的。'],
 };
 const LIGHT_ROOMS = { living: 'Parlour', entry: 'Entry', toilet: 'Water Closet', loft_bed: 'Loft', loft_rocker: 'Loft' };
@@ -2538,14 +2538,14 @@ const DAY1_NEED = ['page', 'fire', 'letter', 'map', 'watch', 'basin']; // watch�
 const game = (() => {
   if (/[?&]reset\b/.test(location.search)) try { localStorage.removeItem(GAME_KEY); } catch (e) { /* 读写不了就当没存过 */ }
   let s = null; try { s = JSON.parse(localStorage.getItem(GAME_KEY)); } catch (e) { s = null; }
-  const g = { day: (s && s.day) || 1, found: new Set(s && Array.isArray(s.found) ? s.found : []), night: false, dusk: false };
+  const g = { day: (s && s.day) || 1, found: new Set(s && Array.isArray(s.found) ? s.found : []), night: false, dusk: false, wear: s && Array.isArray(s.wear) ? s.wear : null }; // wear = [第几天, 穿着大衣, 提着灯]（gearSave）
   if (g.found.has('fire') && !g.found.has('page')) g.found.add('page'); // v2 之前的存档没有这页纸
   g.night = g.day >= 3 ? false : g.day >= 2 ? g.found.has('log2') : DAY1_NEED.every((k) => g.found.has(k)); // 第 2 天：回屋读到日志中段才天黑
   if (g.night) g.found.add('journal'); // 老存档：第 1 天已找齐但没弹过「解锁遗稿」，直接算解锁
   g.saved = g.found.size > 0; // 有存档：刷新时问「继续上次 / 重新开始」（resumeAsk）
   return g;
 })();
-function saveGame() { try { localStorage.setItem(GAME_KEY, JSON.stringify({ day: game.day, found: [...game.found] })); } catch (e) { /* 存不了就只在这次打开里有效 */ } }
+function saveGame() { try { localStorage.setItem(GAME_KEY, JSON.stringify({ day: game.day, found: [...game.found], wear: game.wear })); } catch (e) { /* 存不了就只在这次打开里有效 */ } }
 // Journal「第一天」：键 → [英标题, 中标题, 英, 中]，按这个顺序列出已找到的
 const DAY1_TEXT = {
   page: ['A Page on the Desk', '书桌上的一页纸', 'A page of inquiry notes, in the clerk\'s hand, lying on the desk before she had sat down to it: "The inspector lit the stove. In the firebox, a letter not burnt through."', '书桌上压着一页调查记录，是书记员的笔迹，可她还没坐下来写过：“稽查生了火。炉膛里有一封没烧完的信。”'],
@@ -3368,7 +3368,7 @@ const X_PLAIN = { // ✕ 那间旁边没有小溪、水轮（叙事 r2 #7）：�
   'Porch Lamp': 'The porch lamp is lit. Yet here there is no sound of water.',
   'Water Bucket & Slop Pail': 'The bucket is full of clean water.',
 };
-Object.assign(LEAD_ZH, { [X_PLAIN['Porch Lamp']]: '门廊灯亮着。这里听不见水声。', [X_PLAIN['Water Bucket & Slop Pail']]: '桶里的干净水是满的。' });
+Object.assign(LEAD_ZH, { [X_PLAIN['Porch Lamp']]: '门廊灯亮着。可这里听不见水声。', [X_PLAIN['Water Bucket & Slop Pail']]: '桶里的干净水是满的。' });
 const x3 = { on: false, wasIn: false, spruce: null, light: null };
 window.cabinX = x3; // 调试
 const D3_CARDS = { // 图层 → [标题, 区域, 中文标题, 英, 中, 说明]
@@ -4378,19 +4378,21 @@ const GEAR_RAIL = { // 衣帽架空了：换名字和说明（交互 r2 UX4、�
   coat: ['Coat Rail', 'Entry', 'The greatcoat\'s peg is bare: you have it on.', '挂大衣的钉子空了，大衣穿在你身上。'],
   both: ['Coat Rail', 'Entry', 'The pegs are bare: the greatcoat is on your back, the lantern in your hand.', '钉子上空了：大衣穿在你身上，提灯在你手里。'],
   gone: ['Coat Rail', 'Entry', 'The pegs are bare. The greatcoat and the lantern went with you.', '钉子上空了。大衣和提灯，你都带走了。'], // 「留下」结局（endHome）
+  orbitCoat: ['Coat Rail', 'Entry', "The greatcoat's peg is bare: the inspector has it with him.", '挂大衣的钉子空了，大衣稽查带在身上。'], // 鸟瞰（不在第一人称）
+  orbitBoth: ['Coat Rail', 'Entry', 'The pegs are bare. The inspector has the greatcoat and the lantern with him.', '钉子上空了。大衣和提灯，稽查带在身上。'],
 };
 for (const r of Object.values(GEAR_RAIL)) LEAD_ZH[r[2]] = r[3];
 STORY_ZH['Coat Rail|Entry'] = ['衣帽架', '']; // 只有中文名（悬停）；没有长故事，鸟瞰也只给那一句
 function railInfo() { // infoOf('entry_coat_rail') 先问这里：null = 照旧「衣帽架和厚大衣」
   if (game.found.has('end_stay')) return GEAR_RAIL.gone;
-  return gear.coat ? gear.lantern ? GEAR_RAIL.both : GEAR_RAIL.coat : null;
+  if (!gear.coat) return null;
+  return !fp ? gear.lantern ? GEAR_RAIL.orbitBoth : GEAR_RAIL.orbitCoat : gear.lantern ? GEAR_RAIL.both : GEAR_RAIL.coat; // 鸟瞰：画面上的稽查没穿大衣、手里没灯，不说「你手里」（叙事 r3 #4）
 }
-function gearDay() { const f = game.found; return game.day >= 2 && !game.night && !f.has('ended') && !x3.on && !(game.day === 2 && f.has('d2light')); }
+function gearDay() { const f = game.found; return game.day >= 2 && !game.night && !f.has('ended') && !x3.on && !x3.pending && !(game.day === 2 && f.has('d2light')); } // x3.pending：在 ✕ 那间刷新，平移之前人还在自家门口，别当成「没拿就出门」
 function gearOf(name) { return /^entry_coat(_rail)?$/.test(name || '') ? 'coat' : name === 'entry_lantern' ? 'lantern' : null; }
 function gearCan(name) { const k = gearOf(name); return !!k && !gear[k] && !!fp && gearDay(); }
-function gearTake(name, quiet) { // → true = 拿了（不再出卡片 / 说明）
-  if (!gearCan(name)) return false;
-  const k = gearOf(name); gear[k] = true; if (!quiet) sfx('pick');
+function gearOn(k) { // 穿上大衣 / 提起提灯（不查能不能拿、不出声）
+  gear[k] = true;
   if (k === 'coat') { const c = layers.get('entry_coat'); if (c) c.visible = false; }
   else {
     const g = layers.get('entry_lantern'), t = toggles.get('entry_lantern');
@@ -4399,7 +4401,17 @@ function gearTake(name, quiet) { // → true = 拿了（不再出卡片 / 说明
     g.traverse((o) => { if (o.isMesh) o.castShadow = false; }); heldLayer(g, true);
     if (t) t.on = true; // 点上蜡烛（updateToggles 慢慢亮）
   }
-  shadowDirty = true; fp.solidT = 0;
+  shadowDirty = true; if (fp) fp.solidT = 0;
+}
+function gearSave() { game.wear = [game.day, gear.coat, gear.lantern]; saveGame(); }
+function gearRestore() { // 刷新 / 关掉再回来：存档里当天穿着大衣、提着灯，就照样穿上、提上（叙事 r3 #1）。plantForest 链尾、applyX 平移之后调；提灯每帧按镜头摆（updateGear），不跟着平移走
+  const w = x3.on ? [game.day, true, true] : game.wear; if (!w || w[0] !== game.day || !(gearDay() || x3.on)) return; // 到得了 ✕ 那间就一定出过门、两样都拿了（老存档没有 wear 也算）
+  if (w[1] && !gear.coat) gearOn('coat');
+  if (w[2] && !gear.lantern) { gearOn('lantern'); gear.t = 1; layers.get('entry_lantern').visible = !!fp; } // 直接在手里（不演从钉子上摘下来）；鸟瞰时 updateGear 不跑，先藏起（同 stopFP），不然画在 HELD_LAYER 上隔墙可见
+}
+function gearTake(name, quiet) { // → true = 拿了（不再出卡片 / 说明）
+  if (!gearCan(name)) return false;
+  const k = gearOf(name); gearOn(k); gearSave(); if (!quiet) sfx('pick');
   if (!quiet) showRoomNote(GEAR_SAYS[k]); // 手动拿也出一行字（UX4）；自动取下的那句由 updateGear 补
   if (hovered) tip.textContent = nameOf(infoOf(hovered)); // 准星还对着衣帽架：名字马上换成空衣帽架
   return true;
@@ -4411,7 +4423,7 @@ function gearHang() { // 挂回原处
     g.position.set(0, 0, 0); g.quaternion.identity(); g.visible = true; heldLayer(g, false); g.traverse((o) => { if (o.isMesh) o.castShadow = true; });
     if (t) t.on = false;
   }
-  gear.coat = gear.lantern = false; shadowDirty = true; if (fp) fp.solidT = 0;
+  gear.coat = gear.lantern = false; shadowDirty = true; if (fp) fp.solidT = 0; gearSave();
 }
 function gearPose() { // 画面右下角露出上半截；只跟着转身、不跟着抬头低头（挂着的提灯总是竖的）；k < 1 沉出画面（手里拿着别的东西时让开）
   const tall = camera.aspect < 0.7, d = tall ? 0.875 : 0.7, hh = d * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)), hw = hh * camera.aspect; // 手机竖屏（UX7）：远一点 = 缩到 0.8 倍，往左让开右下角的语言按钮，再沉一点
@@ -4428,7 +4440,7 @@ function updateGear(dt) {
   if (fp && game.day === 2 && game.found.has('d2light') && (gear.coat || gear.lantern) && !outdoors(fp.p.root.position)) { gearHang(); showRoomNote(GEAR_HANG); } // 傍晚回到屋里
   if (!gear.lantern) return;
   const g = layers.get('entry_lantern'); g.visible = !!fp; if (!fp) return;
-  gear.k += ((held ? 0 : 1) - gear.k) * Math.min(1, dt * 7);
+  gear.k += ((held || !card.hidden ? 0 : 1) - gear.k) * Math.min(1, dt * 7); // 卡片开着也沉出画面：手机上走到地上的线索前低头读卡，提灯会变大压到 EN（交互 r3 #7）
   const P = gearPose();
   if (gear.t < 1) { // 从钉子上摘下来：中途往上抬一点（同 held 的 up）
     gear.t = Math.min(1, gear.t + dt / 0.55); const e = gear.t * gear.t * (3 - 2 * gear.t);
