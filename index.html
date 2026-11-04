@@ -41,6 +41,7 @@ if (navigator.webdriver || /[?&]nolock\b/.test(location.search)) { let el = null
   /* 标题中英都显示：英文主标题，下面一行中文（不随语言切换） */
   html #title h1 .en, html #title h1 .zh { display: block !important; }
   #title h1 .zh { margin-top: 2px; font-family: var(--zh); font-size: var(--fs-m); letter-spacing: 6px; }
+  html:has(#fpHud:not([hidden])) #by { display: none; } /* 第一人称：手里的提灯在右下角，署名让开（交互 r2 UX7） */
   #by { position: fixed; right: 12px; bottom: 8px; z-index: 5; font-family: "IM Fell English SC", "IM Fell English", Georgia, serif; font-size: var(--fs-xs); letter-spacing: 1px; color: #fff; opacity: .6; text-shadow: 0 1px 3px rgba(0,0,0,.7); pointer-events: none; }
   button, #card, #tip { letter-spacing: .3px; }
   button { font: inherit; font-size: var(--fs-s); padding: 8px 14px; border: 0; border-radius: 6px; background: rgba(255,255,255,.85); color: var(--ink); cursor: pointer; box-shadow: 0 1px 4px rgba(0,0,0,.15); }
@@ -2262,7 +2263,7 @@ const STORY = {
   'The Clerk|Parlour': `A young clerk of the Survey Office. She had read every report he ever sent, though no one had asked her to.`,
   'Plank Door|Exterior': `A thick plank door, with iron strap-hinges, a latch and a night-bolt: the stoutest guard the cabin has. On the wildest nights the latch would rattle as though the forest meant to come in. Yet in his later years he never barred it fast, but made a habit of leaving it a crack ajar, that whatever was out there might know a fire burned within. When the two of them came, it stood ajar as ever, and a trail of dead leaves had blown in through the gap.`,
   'Snow upon the Roof|Exterior': `Come winter, the snow lay half a yard deep upon the shingles. When the storm had passed he would rap the eaves with a long pole and send it all thundering down — "letting the old house wash her face," he called it. In his journal he wrote: "Snow falling makes all things equal; but when it melts, only where a fire is kept does the bare wood show first."`,
-  'Porch Lamp|Exterior': `The cabin's light comes from the brook beside it: a little way downstream he set a water-wheel to turn an old dynamo, and nailed the wire from tree to tree along the bank. So long as the water runs, the lamp burns; only in the dead of winter, when the brook freezes hard, does the current fail, and for those months he lit the lantern.\n\nOne winter he broke his leg in the woods and lay half-frozen in the snow, until the faint glimmer of this lamp, far off, drew him crawling home. After that he changed the wiring, so that it burns whenever the dark comes on. It does not light the way for guests — only for those coming home.`,
+  'Porch Lamp|Exterior': `The cabin's light comes from the brook beside it: a little way downstream he set a water-wheel to turn an old dynamo, and carried the wire to the house, nailed to a tree by the bank and to a peeled post. So long as the water runs, the lamp burns; only in the dead of winter, when the brook freezes hard, does the current fail, and for those months he lit the lantern.\n\nOne winter he broke his leg in the woods and lay half-frozen in the snow, until the faint glimmer of this lamp, far off, drew him crawling home. After that he changed the wiring, so that it burns whenever the dark comes on. It does not light the way for guests — only for those coming home.`,
   'Boots & Bench|Entry': `Coming in, he stamped his feet on the sailcloth mat, sat on the low bench to pull his boots off, and stood them in the tray to drip. Two boot-prints are worn into the mat, the left deeper than the right — for he always carried logs on his left shoulder, and walked with a slight limp; and the left of the bench is smoother than the right, for he always put on the left boot first. The tread of the snow boots is worn nearly smooth.\n\nThe mud in the tray has long since dried to a crust, and the boots still stand beside it, their tops a little agape. The last time he went out, he did not wear them.`,
   'Lantern|Entry': `A candle lantern on a peg of the coat rail. He took it out to the woodpile, or into the night to see what stirred; and in the months when the brook froze and the current failed, it was the only light in the house. A crack runs across the glass, where the antlers of a startled deer once swept the frame on a snowy night. He never replaced the pane, only bound it round with wire. "Cracked is well enough," said he. "The light leaks through like a blade, and cuts the fog clean."`,
   'Coat Rail & Greatcoat|Entry': `Coats were hung here to dry upon coming in. The handiest peg always held the greatcoat, with ten years of pine-pitch, pipe-smoke and foul weather soaked into it. Its pockets always turned up something curious: a dry pine twig, a stone shaped like a mountain, a survey sketch folded in four. It hangs creased still, like a skin a cicada has just slipped.`,
@@ -2312,7 +2313,7 @@ const STORY = {
 const STORY_ZH = {
   'Plank Door|Exterior': ['木板大门', '厚木板门，铁铰链、门闩、夜闩齐全。本是最坚固的防线，风雪最盛的夜晚门闩震得哗哗响，仿佛森林要闯进来。但测绘员晚年从不彻底锁死，养成了虚掩的习惯——留一条缝，让外面知道这里有炉火。两个人到的时候，门也是虚掩着的，门缝里吹进来一溜落叶。'],
   'Snow upon the Roof|Exterior': ['屋顶积雪', '每到冬天，屋顶积雪能厚到半米。风雪停后他会拿竹竿敲屋檐，让雪轰然滑落，管这叫“给屋子卸妆”。他在日记里写过：“雪落时万物平等，但雪化时，只有有炉火的地方才会最先露出原木的底色。”'],
-  'Porch Lamp|Exterior': ['门廊灯', '屋里的电是从屋旁的小溪拉过来的：他在下游不远处架了一个小水轮，带一台旧发电机，电线顺着溪边的树干一棵一棵钉过来。溪水不停，灯就不停；只有隆冬溪面冻实了才断电，那几个月他点提灯。\n\n有一年大雪天他在林子里摔断了腿，快冻僵时，是远处这点微弱的光让他爬回了家。从那以后他改了线，只要天黑这盏灯就亮。这盏灯不照客人，只照归人。'],
+  'Porch Lamp|Exterior': ['门廊灯', '屋里的电是从屋旁的小溪拉过来的：他在下游不远处架了一个小水轮，带一台旧发电机，电线钉在溪边的一棵树上和一根木杆上，拉进屋来。溪水不停，灯就不停；只有隆冬溪面冻实了才断电，那几个月他点提灯。\n\n有一年大雪天他在林子里摔断了腿，快冻僵时，是远处这点微弱的光让他爬回了家。从那以后他改了线，只要天黑这盏灯就亮。这盏灯不照客人，只照归人。'],
   'Boots & Bench|Entry': ['换鞋处', '进门先在帆布门垫上跺脚，坐上矮凳脱靴，靴子立进托盘接雪水。门垫上磨出两道深浅不一的靴印——左脚重右脚轻，他总是左肩扛原木，走路微跛；凳面也是左边比右边光滑，他总先穿左脚。那双雪地靴鞋底的纹路快磨平了。\n\n托盘里的泥早干成了一层壳，靴子还立在边上，筒口微张。他最后一次出门，没穿它。'],
   'Lantern|Entry': ['提灯', '挂在衣帽架钉子上的蜡烛提灯。去柴堆劈柴、夜里出去查看动静都提它；冬天溪水冻住、屋里断电的那几个月，全屋就靠它。玻璃罩上有一道裂纹——某次雪地遇受惊野鹿，鹿角扫过灯架留下的。他没换玻璃，拿铁丝箍了一圈，说：“裂了也好，光从裂缝里漏出来像把剑，刚好能劈开黑雾。”'],
   'Coat Rail & Greatcoat|Entry': ['衣帽架和厚大衣', '进门把外套挂在这里晾干。最顺手的钉子上永远挂着那件厚大衣，吸饱了十年的松脂味、烟草味和雨雪潮气。口袋里总能翻出奇怪的东西：一截干枯松枝、一块形状像山的石头、一张折了四折的测绘草图。大衣的褶皱还在，像一层刚蜕下的蝉壳。'],
@@ -2453,6 +2454,7 @@ const GAME_TEXT = {
 };
 const LIGHT_ROOMS = { living: 'Parlour', entry: 'Entry', toilet: 'Water Closet', loft_bed: 'Loft', loft_rocker: 'Loft' };
 function infoOf(name) {
+  if (/^entry_coat/.test(name)) { const r = railInfo(); if (r) return r; } // 衣帽架、挂着的钥匙、大衣：空了就换说明
   if (INFO[name]) return INFO[name];
   if (name.startsWith('take_')) return TAKE_INFO[name.replace(/_\d+$/, '')] || null;
   if (name.startsWith('toilet_door_')) return ['Folding Door', 'Water Closet', 'Folds back against the wall to save room.'];
@@ -2720,7 +2722,8 @@ function chgLine(c) { // 'chg:键:1' → 夜里记录那句 [英, 中]（1 = 变
 window.__voiceLines = () => [ // 要配音的句子（英文原句），tools/voice/make_voice.py 用；漏的靠 __said 补
   ...OPENING, ...Object.values(ROOM_NOTES), PAGE_SAYS, LETTER_SAYS, CLERK_SAYS, ...Object.values(D2_SAYS), ...Object.values(D3_SAYS), ...Object.values(GEAR_SAYS), [DAY1_TEXT.took[2]], ['Look — there.'], PAGE_WAY,
   ...Object.values(HINTS).flatMap((h) => [h[0], h[1]]), ...[...Object.keys(CHG_KEYS), 'wall_lamp'].flatMap((k) => [true, false].map((on) => { try { return chgSay(k, on); } catch (e) { return null; } })),
-].filter(Boolean).map((l) => l[0]).concat(Object.values(STORY), Object.values(INFO).map((i) => i[2])).filter((t) => typeof t === 'string' && /[a-z]/i.test(t));
+  GEAR_HANG,
+].filter(Boolean).map((l) => l[0]).concat(Object.values(STORY), Object.values(INFO).map((i) => i[2]), Object.values(GEAR_RAIL).map((i) => i[2]), Object.values(X_PLAIN)).filter((t) => typeof t === 'string' && /[a-z]/i.test(t));
 function chgSay(key, on) {
   const n = chgNoun(key), open = on === n[2];
   if (n[3]) return open ? ['The clerk: "Did you light the lamp?"', '书记员：“灯是你开的？”'] : ['The clerk: "Did you put the lamp out?"', '书记员：“灯是你关的？”'];
@@ -3274,6 +3277,11 @@ const D3_LOGS = [[D3.fork + 32, 1, 0.35, 5.5], [D3.fork + 78, -1, -0.3, 6]]; // 
 const X_NEED = ['xcoat', 'xwatch', 'xnotes', 'xfire'];
 const X_BASIN = ['Washstand', 'Water Closet', '洗脸架', 'Half a basin of water, a few pieces of broken ice afloat in it.', '半盆水，水面上浮着几块碎冰。', 'Ice afloat in the water.'];
 const X_HIDE = ['entry_coat', 'entry_boots', 'entry_lantern']; // ✕ 那间：他是穿戴整齐出的门
+const X_PLAIN = { // ✕ 那间旁边没有小溪、水轮（叙事 r2 #7）：门廊灯、水桶不出讲小溪的故事，换成这一句（英文；中文在 LEAD_ZH）
+  'Porch Lamp': 'The porch lamp is lit. Yet here there is no sound of water.',
+  'Water Bucket & Slop Pail': 'The bucket is full of clean water.',
+};
+Object.assign(LEAD_ZH, { [X_PLAIN['Porch Lamp']]: '门廊灯亮着。这里听不见水声。', [X_PLAIN['Water Bucket & Slop Pail']]: '桶里的干净水是满的。' });
 const x3 = { on: false, wasIn: false, spruce: null, light: null };
 window.cabinX = x3; // 调试
 const D3_CARDS = { // 图层 → [标题, 区域, 中文标题, 英, 中, 说明]
@@ -3285,7 +3293,7 @@ const LOG3_CARD = ['Field Log', 'Parlour', '工作日志', 'The same field log s
 const X_MAP = ['Map', 'Parlour', '地图', 'The same map, the same note: Do Not Enter. Only, on this one, the ✕ is drawn on the red ring.', '同一张地图，旁注一样是“勿入”。只是这一张上，✕ 画在红圈的位置。', 'The ✕ on the red ring.']; // 并进 xnotes（#6）：书桌和地图都在起居室
 const X_ARRIVE = ['The Other Cabin', 'Exterior', '另一间小屋', 'You stop beneath the porch lamp. Your hand has found the latch before you looked for it.', '你在门廊灯下站住。手比眼睛先找到了门闩。', 'At the ✕.']; // v3：一句感受，不写结论；长文留在 Journal
 const X_CARDS = { // 四处不同：卡片只写看到的，不写「它说明什么」（设计原则 1）
-  xcoat: ['Coat Rail', 'Entry', '衣帽架', 'The coat rail is bare. No greatcoat on the peg, no boots by the tray, no lantern on its nail.', '衣帽架上没有大衣，托盘边没有靴子，钉子上没有提灯。', 'Nothing hangs here.'],
+  xcoat: ['Coat Rail', 'Entry', '衣帽架', 'The coat rail is bare, as yours was when you set out this morning. And by the tray, not so much as a boot.', '衣帽架上空着，和你今早出门时一样。托盘边连靴子也没有。', 'Nothing hangs here.'], // 叙事 r2 #1：大衣提灯是你自己拿走的，真正不同的只剩靴子
   xwatch: ['Night Table', 'Loft', '床头柜', 'In the drawer, the pocket-watch, the old compass, a few pine needles. The watch is going. Its hands do not stand at seventeen minutes past three.', '抽屉里有怀表、旧罗盘、几根松针。怀表还在走，指针不在三点十七分。', 'The watch is ticking.'],
   xnotes: ['Inquiry Notes', 'Parlour', '调查记录', 'A page of inquiry notes lies open on the desk, in the clerk\'s hand. It is dated today.\n\n' + GAME_TEXT.xNote[1], '书桌上摊着一页调查记录，是书记员的笔迹，写的是今天：\n\n' + GAME_TEXT.xNote[2], 'In the clerk\'s hand.'],
   xfire: ['The Fire', 'Kitchen', '炉火', 'The fire is burning in the stove. Up in the loft the rocking chair is rocking. There is no one in the house.', '炉火烧着，楼上的摇椅在摇，屋里没有人。', 'Someone keeps this fire.'],
@@ -3331,7 +3339,7 @@ function quest3() {
 function gameSeen3(name, title, add, got) {
   let over = null;
   if (x3.on) {
-    if (['Coat Rail & Greatcoat', 'Boots & Bench', 'Lantern'].includes(title)) { add('xcoat'); over = X_CARDS.xcoat; }
+    if (['Coat Rail & Greatcoat', 'Coat Rail', 'Boots & Bench', 'Lantern'].includes(title)) { add('xcoat'); over = X_CARDS.xcoat; } // 'Coat Rail'：大衣穿在身上时的名字（GEAR_RAIL）
     else if (title === 'Night Table') { add('xwatch'); over = X_CARDS.xwatch; }
     else if (title === 'Washstand & Hand Towel') { add('xfire'); over = X_BASIN; } // 叙事评审 11-04 #5：和炉火、摇椅同一处（有人在这儿过日子），第 1 天那盆冰在这里回收
     else if (title === 'Writing Desk, Chair & Wall Lamp') { add('xnotes'); over = X_CARDS.xnotes; }
@@ -3528,7 +3536,8 @@ function enterX() { // 走到那间屋的门廊下：不压黑，记一笔、一
 function porchAsk() { // ✕ 那间屋的门廊下：回去 / 留下 / 再看看
   if (!x3.on || game.found.has('ended') || !$('dlg').hidden) return;
   if (!game.found.has('xlook')) { game.found.add('xlook'); saveGame(); renderJournal(); }
-  dialog(['Under the Other Porch', '另一间屋的门廊下'], [GAME_TEXT.xLook[1], GAME_TEXT.xLook[2]],
+  const log = game.found.has('log3') ? ['', ''] : [' Inside, on the bookcase, the field log is there as well.', '屋里书架上，那本日志也在。']; // 叙事 r2 #3：还没读日志后段，引去书架（点「再看看」回屋就能读）
+  dialog(['Under the Other Porch', '另一间屋的门廊下'], [GAME_TEXT.xLook[1] + log[0], GAME_TEXT.xLook[2] + log[1]],
     [['Go Back', '回去', () => ending('back')], ['Stay', '留下', () => ending('stay')], ['Not Yet', '再看看']]);
 }
 function ending(kind) { LOG && LOG.ev('end', `结局 ${kind}`); LOG && LOG.ev('day', '第3天结束'); // 压黑，一张张放结局文字；读完存 ended，重新载入回自己那间屋
@@ -3546,9 +3555,12 @@ function ending(kind) { LOG && LOG.ev('end', `结局 ${kind}`); LOG && LOG.ev('d
   };
   setTimeout(() => next(0), 1300);
 }
-function endHome() { // 通关后按结局摆自家屋子（叙事评审 11-04 #7）：留下 = 稽查没回来（隐藏结局提灯照旧挂在钉子上，同结局文字）。「重新开始」清存档就复原
+function endHome() { // 通关后按结局摆自家屋子（叙事评审 11-04 #7）：留下 = 稽查没回来，大衣、提灯也跟他走了（叙事 r2 #2，衣帽架说明 GEAR_RAIL.gone）；回去、隐藏结局照旧挂在钉子上（同结局文字）。「重新开始」清存档就复原
+  if (!game.found.has('end_stay')) return;
   const m = people.get('person_man');
-  if (game.found.has('end_stay') && m) { m.root.visible = false; m.hit.visible = false; shadowDirty = true; }
+  if (m) { m.root.visible = false; m.hit.visible = false; }
+  for (const n of ['entry_coat', 'entry_lantern']) { const g = layers.get(n); if (g) g.visible = false; } // 提灯图层带点光源：藏起由 trackLight 补替身灯，同 X_HIDE
+  shadowDirty = true;
 }
 function endAsk() { // 通关后刷新：不问「继续上次」，告诉玩家终章、后记解锁了
   dialog(['The Papers Complete', '遗稿齐了'], ['The last pages are in the Journal now: where he went, and what came after.', '终章和后记已经收进遗稿：他去了哪里，以及后来。'],
@@ -3913,8 +3925,8 @@ function select(name, direct) {
   if (people.has(name)) wakePerson(name); // 点人物：起来活动一圈
   const pa = card.querySelector('#playAs'); pa.hidden = !people.has(name) || name === 'person_woman' || lite || !!fp; // 游戏里玩家只当老稽查，书记员是同伴 // 触屏还没做摇杆，先不给
   pa.innerHTML = name === 'person_woman' ? lbl('Take Her Place', '化身为她') : lbl('Take His Place', '化身为他');
-  const [title, area, desc] = infoOf(name), zh = STORY_ZH[title + '|' + area];
-  cardData = { t: title, a: area, lead: desc, story: STORY[title + '|' + area], zt: zh?.[0], zs: zh?.[1] };
+  const [title, area, desc] = infoOf(name), zh = STORY_ZH[title + '|' + area], xp = x3.on && X_PLAIN[title];
+  cardData = xp ? { t: title, a: area, lead: xp, zt: zh?.[0] } : { t: title, a: area, lead: desc, story: STORY[title + '|' + area], zt: zh?.[0], zs: zh?.[1] }; // ✕ 那间：讲小溪的只给一句短说明
   const g = gameSeen(name); // 游戏线索：有的换成信 / 日志 / 调查记录的卡片
   hintClick(); // 卡关提示：没进展的点击计数
   if (g) cardData = { t: g[0], a: g[1], zt: g[2], story: g[3], zs: g[4], lead: g[5], paper: isPaper(g), open: isPaper(g) }; // 纸上的字一打开就展开（原来要再点「走近看」，新玩家多半直接关掉：11-01 评审 #6）
@@ -4266,6 +4278,18 @@ const GEAR_SAYS = {
   coat: ['You take the greatcoat down from its peg.', '你从钉子上取下大衣。'],
   lantern: ['You take the lantern down from its peg.', '你从钉子上取下提灯。'],
 };
+const GEAR_HANG = ['You hang the greatcoat and the lantern back on their pegs.', '你把大衣和提灯挂回钉子上。'];
+const GEAR_RAIL = { // 衣帽架空了：换名字和说明（交互 r2 UX4、叙事 r2 #5）；名字同 X_CARDS.xcoat，✕ 那间照样算 xcoat
+  coat: ['Coat Rail', 'Entry', 'The greatcoat\'s peg is bare: you have it on.', '挂大衣的钉子空了，大衣穿在你身上。'],
+  both: ['Coat Rail', 'Entry', 'The pegs are bare: the greatcoat is on your back, the lantern in your hand.', '钉子上空了：大衣穿在你身上，提灯在你手里。'],
+  gone: ['Coat Rail', 'Entry', 'The pegs are bare. The greatcoat and the lantern went with you.', '钉子上空了。大衣和提灯，你都带走了。'], // 「留下」结局（endHome）
+};
+for (const r of Object.values(GEAR_RAIL)) LEAD_ZH[r[2]] = r[3];
+STORY_ZH['Coat Rail|Entry'] = ['衣帽架', '']; // 只有中文名（悬停）；没有长故事，鸟瞰也只给那一句
+function railInfo() { // infoOf('entry_coat_rail') 先问这里：null = 照旧「衣帽架和厚大衣」
+  if (game.found.has('end_stay')) return GEAR_RAIL.gone;
+  return gear.coat ? gear.lantern ? GEAR_RAIL.both : GEAR_RAIL.coat : null;
+}
 function gearDay() { const f = game.found; return game.day >= 2 && !game.night && !f.has('ended') && !x3.on && !(game.day === 2 && f.has('d2light')); }
 function gearOf(name) { return /^entry_coat(_rail)?$/.test(name || '') ? 'coat' : name === 'entry_lantern' ? 'lantern' : null; }
 function gearCan(name) { const k = gearOf(name); return !!k && !gear[k] && !!fp && gearDay(); }
@@ -4281,6 +4305,8 @@ function gearTake(name, quiet) { // → true = 拿了（不再出卡片 / 说明
     if (t) t.on = true; // 点上蜡烛（updateToggles 慢慢亮）
   }
   shadowDirty = true; fp.solidT = 0;
+  if (!quiet) showRoomNote(GEAR_SAYS[k]); // 手动拿也出一行字（UX4）；自动取下的那句由 updateGear 补
+  if (hovered) tip.textContent = nameOf(infoOf(hovered)); // 准星还对着衣帽架：名字马上换成空衣帽架
   return true;
 }
 function gearHang() { // 挂回原处
@@ -4293,8 +4319,8 @@ function gearHang() { // 挂回原处
   gear.coat = gear.lantern = false; shadowDirty = true; if (fp) fp.solidT = 0;
 }
 function gearPose() { // 画面右下角露出上半截；只跟着转身、不跟着抬头低头（挂着的提灯总是竖的）；k < 1 沉出画面（手里拿着别的东西时让开）
-  const d = 0.7, hh = d * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)), hw = hh * camera.aspect;
-  const X = new THREE.Vector3(hw * 0.62, -hh * (0.8 + 0.7 * (1 - gear.k)), -d).applyQuaternion(camera.quaternion).add(camera.position);
+  const tall = camera.aspect < 0.7, d = tall ? 0.875 : 0.7, hh = d * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)), hw = hh * camera.aspect; // 手机竖屏（UX7）：远一点 = 缩到 0.8 倍，往左让开右下角的语言按钮，再沉一点
+  const X = new THREE.Vector3(hw * (tall ? 0.49 : 0.62), -hh * ((tall ? 0.92 : 0.8) + 0.7 * (1 - gear.k)), -d).applyQuaternion(camera.quaternion).add(camera.position);
   const Q = new THREE.Quaternion().setFromAxisAngle(_hY, fp.yaw + GEAR_YAW).multiply(_hq.setFromAxisAngle(_hX, Math.sin((fp.bob || 0) * 2) * 0.05)); // 走路时轻轻晃
   return { X, Q };
 }
@@ -4304,7 +4330,7 @@ function updateGear(dt) {
     const say = !gear.coat && !gear.lantern ? GEAR_SAYS.both : !gear.coat ? GEAR_SAYS.coat : GEAR_SAYS.lantern;
     gearTake('entry_coat', true); gearTake('entry_lantern', true); showRoomNote(say);
   }
-  if (fp && game.day === 2 && game.found.has('d2light') && (gear.coat || gear.lantern) && !outdoors(fp.p.root.position)) gearHang(); // 傍晚回到屋里
+  if (fp && game.day === 2 && game.found.has('d2light') && (gear.coat || gear.lantern) && !outdoors(fp.p.root.position)) { gearHang(); showRoomNote(GEAR_HANG); } // 傍晚回到屋里
   if (!gear.lantern) return;
   const g = layers.get('entry_lantern'); g.visible = !!fp; if (!fp) return;
   gear.k += ((held ? 0 : 1) - gear.k) * Math.min(1, dt * 7);
