@@ -39,4 +39,6 @@ export function applyTerrain(geo) { // 按 terrainH 重抬顶点（世界平移�
   const p = geo.attributes.position;
   for (let i = 0; i < p.count; i++) p.setY(i, terrainH(p.getX(i), p.getZ(i)));
   p.needsUpdate = true; geo.computeVertexNormals(); geo.computeBoundingSphere(); geo.computeBoundingBox();
+  // 第一人称每帧往脚下打射线（fp.floors 含地面）：没 BVH 时逐个三角形试，地面 7584 面一条射线 2ms，比屋里 300 多个网格加起来还慢 10 倍
+  if (geo.boundsTree) geo.boundsTree.refit(); else geo.computeBoundsTree();
 }

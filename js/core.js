@@ -5,7 +5,18 @@ import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 
 THREE.BufferGeometry.prototype.computeBoundsTree = computeBoundsTree;
-THREE.Mesh.prototype.raycast = acceleratedRaycast; // 合并后单个网格三角面很多，用 BVH 加速点选
+// 合并后单个网格三角面很多，用 BVH 加速点选。先按包围球筛掉（three 自带的射线也这样，BVH 版不筛）：
+// 第一人称每帧对 300 多个网格打几十条短射线，不筛的话每个网格都要求一次逆矩阵、进一次 BVH
+const _rcSphere = new THREE.Sphere();
+THREE.Mesh.prototype.raycast = function (raycaster, intersects) {
+  const g = this.geometry, ray = raycaster.ray;
+  if (g.boundsTree) {
+    if (!g.boundingSphere) g.computeBoundingSphere();
+    _rcSphere.copy(g.boundingSphere).applyMatrix4(this.matrixWorld);
+    if (!ray.intersectsSphere(_rcSphere) || ray.origin.distanceTo(_rcSphere.center) - _rcSphere.radius > raycaster.far) return;
+  }
+  acceleratedRaycast.call(this, raycaster, intersects);
+};
 
 const app = document.getElementById('app');
 const renderer = new THREE.WebGLRenderer({ antialias: true });
