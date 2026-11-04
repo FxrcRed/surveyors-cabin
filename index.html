@@ -888,6 +888,7 @@ async function loadTree0(url, all) { // → [{ geometry, material }]，底部中
 
 // 树冠材质：底色是每棵树的实例颜色（色卡），再按树上的位置分块加色差——
 // 下层偏暗、梢头偏亮，一些块偏枯金、一些偏深绿，同一棵树上就有几种颜色（顶点位置已归一化成高 1）
+const BUSH_B = { value: new THREE.Color() }; // 灌木底面的补光（见 crownMaterial），渲染循环里 = 半球光颜色 × 强度 × 0.45
 function crownMaterial(opts = {}, bush = false) { // bush：灌木、草（loadPlant）
   // 色差在顶点里算好再插值（逐像素算的话远处一棵树只占几个像素、里面挤好几块颜色，相机一动就闪）
   const m = new THREE.MeshLambertMaterial({ color: 0xffffff, ...opts });
@@ -906,9 +907,11 @@ function crownMaterial(opts = {}, bush = false) { // bush：灌木、草（loadP
         diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.26, 0.21, 0.08), vTreeK.y);  // 枯金块
         diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.03, 0.045, 0.03), vTreeK.z); // 深绿块
         diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.82, 0.85, 0.9), smoothstep(0.0, 0.25, uSnow * 1.4 - (1.0 - vSnowK)) * 0.9); // 积雪`);
-    if (bush) { // 11-04 复测 ENV7：灌木一层层的底面朝下、只吃到地面反光，层间一道道黑缝像几张扁饼摞着 → 朝下的面提亮，雪天接近雪地的阴影色
+    if (bush) { // 11-04 复测 ENV7：灌木一层层的底面朝下、只吃到地面反光，层间一道道黑缝像几张扁饼摞着 → 朝下的面补一份地面（雪）反上来的天光
+      // 补光 = 半球光的天色 × 强度（BUSH_B，渲染循环里跟天色更新；11-04 r3 #1：原来是常数，黄昏、夜里每丛亮出白条）
+      sh.uniforms.uBushB = BUSH_B;
       sh.vertexShader = sh.vertexShader.replace('varying float vSnowK;', 'varying float vSnowK; varying float vDown;').replace('vSnowK = ', 'vDown = smoothstep(0.2, -0.7, normalize(objectNormal).y); vSnowK = ');
-      sh.fragmentShader = sh.fragmentShader.replace('varying float vSnowK;', 'varying float vSnowK; varying float vDown;').replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n        totalEmissiveRadiance += mix(diffuseColor.rgb * 0.3, vec3(0.3, 0.33, 0.38), uSnow) * vDown;'); }
+      sh.fragmentShader = sh.fragmentShader.replace('varying float vSnowK;', 'varying float vSnowK; varying float vDown; uniform vec3 uBushB;').replace('#include <emissivemap_fragment>', '#include <emissivemap_fragment>\n        totalEmissiveRadiance += mix(diffuseColor.rgb, vec3(0.6, 0.65, 0.75), uSnow * 0.6) * uBushB * vDown;'); }
     fogLayer(sh);
   };
   if (bush) m.customProgramCacheKey = () => 'bush'; // onBeforeCompile 的源码同树冠，不另给键会共用一个程序
@@ -949,7 +952,7 @@ function barkMaterial() {
       { vec2 w = pow(abs(vBarkN.xz) + 1e-3, vec2(4.0)); w /= w.x + w.y;
         vec3 bk = texture2D(uBark, vec2(vBarkP.z * 1.3, vBarkP.y * 0.9)).rgb * w.x + texture2D(uBark, vec2(vBarkP.x * 1.3, vBarkP.y * 0.9)).rgb * w.y; // 贴图里树皮纹沿 v 走
         diffuseColor.rgb = bk * vec3(2.1, 1.95, 1.8); // 树是 Lambert（不吃环境光），同一张贴图要提亮才看得出树皮
-        diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.86, 0.88, 0.92), uSnow * smoothstep(0.55, 0.3, vBarkH + 0.1 * sin(vBarkP.x * 9.0 + vBarkP.z * 7.0))); }`); // 树根 0.2m 埋在地下，露出的一截里 0.1–0.35m 是雪
+        diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.86, 0.88, 0.92), uSnow * max(smoothstep(0.55, 0.3, vBarkH + 0.1 * sin(vBarkP.x * 9.0 + vBarkP.z * 7.0)), smoothstep(0.3, 0.7, vBarkN.y + 0.15 * sin(vBarkP.x * 11.0 + vBarkP.z * 13.0)))); }`); // 树根 0.2m 埋在地下，露出的一截里 0.1–0.35m 是雪；朝上的面也积雪（11-04 r3 #5：枯立木的枝杈原来不积雪，雪雾里整棵近黑）
     fogLayer(sh);
   };
   return m;
@@ -1361,10 +1364,10 @@ function makeBrook() {
       rows[1].push(mid.map(at)); rows[2].push(oR.slice(6).map(at)); eRow.push(...mid.map((d) => Math.abs(d) - w)); // eRow：离水线多远（土岸积雪用）
     }
     const uvOf = (geo) => { const p = geo.attributes.position, uv = []; for (let i = 0; i < p.count; i++) uv.push(...uvf(p.getX(i), p.getZ(i))); geo.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); geo.computeBoundsTree(); return geo; };
-    const sm = propMat(rockTexture(), { tri: 1.3, color: 0x5e4a3a, snow: 0.9 }), ob = sm.onBeforeCompile; // 土岸：同林下土的写法，积雪量另给（BROOK.snow：地面积雪是阈值式的，岸上照 cover.uSnow 线性盖会比旁边地面先白）
+    const sm = propMat(rockTexture(), { tri: 1.3, color: 0x5e4a3a, snow: 1.3 }), ob = sm.onBeforeCompile; // snow > 1：雪盖满、不留斑驳的小孔（11-04 r3 #7：湿土带外沿的小黑点，黄昏成了黑碎片） // 土岸：同林下土的写法，积雪量另给（BROOK.snow：地面积雪是阈值式的，岸上照 cover.uSnow 线性盖会比旁边地面先白）
     sm.onBeforeCompile = (sh) => { ob(sh); sh.uniforms.uSnow = BROOK.snow; // 11-04 复测 ENV2：雪按离水线多远盖，不按坡度（原来陡的三角面没盖上雪，雪地上剩几片悬空似的黑碎片）——只在水边露一条连续的湿土，宽窄随沿线噪声
       sh.vertexShader = 'attribute float aE; varying float vE;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\nvE = aE;');
-      sh.fragmentShader = 'varying float vE;\n' + sh.fragmentShader.replace('smoothstep(0.42, 0.7, n.y + 0.18 * (sn - 0.5))', 'smoothstep(-0.03, 0.03, vE - 0.06 - 0.2 * (0.5 + 0.5 * sin(vPW.x * 0.9 + vPW.z * 0.6) * sin(vPW.z * 1.7 - vPW.x * 0.4)) - 0.08 * sn)'); };
+      sh.fragmentShader = 'varying float vE;\n' + sh.fragmentShader.replace('smoothstep(0.42, 0.7, n.y + 0.18 * (sn - 0.5))', 'smoothstep(-0.04, 0.04, vE - 0.06 - 0.2 * (0.5 + 0.5 * sin(vPW.x * 0.9 + vPW.z * 0.6) * sin(vPW.z * 1.7 - vPW.x * 0.4)))'); };
     const out = new THREE.Mesh(uvOf(mergeGeometries([strip(rows[0]), strip(rows[2])])), ground.material), soil = new THREE.Mesh(uvOf(strip(rows[1])), sm);
     soil.geometry.setAttribute('aE', new THREE.Float32BufferAttribute(eRow, 1));
     out.name = 'brook_bank'; soil.name = 'brook_soil'; out.receiveShadow = soil.receiveShadow = true; G.add(out, soil); BROOK.bed = [out, soil];
@@ -1376,7 +1379,7 @@ function makeBrook() {
     for (let i = 0; i < n; i++) { const [x, z, s, w, k] = P[i], [tx, tz] = tan(i), lv = lvlAt(i), ww = k > 0 ? w + 0.3 : w, al = Math.min(sstep(0, 2, s), 1 - sstep(BROOK.sEnd - 7, BROOK.sEnd, s));
       rows.push([-1, -0.5, 0, 0.5, 1].map((f) => { const d = f * ww, px = x + tz * d, pz = z - tx * d; aB.push(d, s, w, al); aD.push(tx, tz); return [px, k > 0 ? lv : gAt(px, pz) + 0.05, pz]; })); }
     const geo = strip(rows); geo.setAttribute('aB', new THREE.Float32BufferAttribute(aB, 4)); geo.setAttribute('aDir', new THREE.Float32BufferAttribute(aD, 2));
-    const m = new THREE.MeshStandardMaterial({ color: '#121a1d', roughness: 0.55, metalness: 0, envMapIntensity: 0.25, transparent: true }); // 糙一点、环境反射压低：晴天俯看原来太阳高光连成一片白，像急流 // 不加 polygonOffset：斜看时深度偏移大到把水推到岸前面（下游贴地段已抬 5cm）
+    const m = new THREE.MeshStandardMaterial({ color: '#121a1d', roughness: 0.85, metalness: 0, envMapIntensity: 0.05, transparent: true }); // 11-04 r3 #6：环境反射 0.25 → 0.05、粗糙 0.55 → 0.85（scene.environment 是一间亮屋子，林荫里照样映出一条银带，像锡纸）；原来就糙一点、环境反射压低：晴天俯看原来太阳高光连成一片白，像急流 // 不加 polygonOffset：斜看时深度偏移大到把水推到岸前面（下游贴地段已抬 5cm）
     m.onBeforeCompile = (sh) => {
       Object.assign(sh.uniforms, { uT: WATER.mat.userData.u.uT, uSnow: cover.uSnow });
       sh.vertexShader = 'attribute vec4 aB;\nattribute vec2 aDir;\nvarying vec4 vB;\nvarying vec2 vDir;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\nvB = aB; vDir = aDir;');
@@ -1785,7 +1788,8 @@ async function plantForest(center, y) {
       for (let i = 0; i < SHRUB_XZ.length; i += 3) if (Math.hypot(SHRUB_XZ[i] - x, SHRUB_XZ[i + 1] - z) < SHRUB_XZ[i + 2] + 0.4) return false; return true; };
     const nearDoor = (x, z) => door.some(([px, pz]) => Math.hypot(x - px, z - pz) < 17) && clear(x, z), free = (x, z) => !nearAny(taken, x, z, 1.2) && clear(x, z);
     await maybeYield(); P.push(...await ringPoints(r5, 14 * f, 9, 30, 2.3, center, taken, nearDoor), ...await ringPoints(r5, 16 * f, 12, 21, 2.3, X, taken, clear));
-    const dt = []; D.push(...await walkPoints(r5, 8 * f, 3, 18, 2.5, dt, (x, z) => treeOk(x, z) && free(x, z)), ...await ringPoints(r5, 4 * f, 9, 22, 2.5, center, dt, (x, z) => nearDoor(x, z) && free(x, z)), ...await ringPoints(r5, 4 * f, 12, 20, 2.5, X, dt, free)); // 枯立木（同幼树，不进 taken）
+    const dt = [], snag = (x, z) => !nearAny(taken, x, z, 2.5) && !nearAny(trailClear, x, z, 4) && clear(x, z); // 枯立木：离大树干 ≥2.5m（枝杈别插进旁边树冠）、离踪迹 ≥4m（11-04 r3 #5：出门正对一棵、3 棵贴着大树）
+    D.push(...await walkPoints(r5, 8 * f, 3, 18, 2.5, dt, (x, z) => treeOk(x, z) && snag(x, z)), ...await ringPoints(r5, 4 * f, 9, 22, 2.5, center, dt, (x, z) => nearDoor(x, z) && snag(x, z)), ...await ringPoints(r5, 4 * f, 12, 20, 2.5, X, dt, snag)); // 枯立木（同幼树，不进 taken）
     await maybeYield(); Y.push(...await ringPoints(r5, 28 * f, 9, 26, 1.6, center, yt, (x, z) => nearDoor(x, z) && free(x, z)), ...await ringPoints(r5, 14 * f, 12, 20, 1.6, X, yt, free)); // 幼树（同上面，不进 taken）；门口树冠已排满，大树多半种不下（plant 里按树冠缩成 0）
     plant(pine, P, r5, 3.5, 9, y, true); plant([...dead], D, r5, 3, 6, y, true); /* 枯立木没有树冠：拷一份不带 radius 的，不和旁边的树冠互相避让（原来走廊 45 棵大多被缩成 0） */ plant(lodP, Y, r5, 0.9, 2.1, y, true); window.__plant5 = [P.length, D.length, Y.length]; } // 调试
   brookClear();
@@ -3128,20 +3132,36 @@ function d2Add(name, g, x, z, yaw = 0) {
 // 只在第一人称有雾时显示（FOG_L），每圈 1 次绘制、96 个三角面；不吃 scene.fog（26m 外早就盖满），近处的树照常挡住它
 let fogWalls = null; const _fwc = new THREE.Color();
 function makeFogWalls() {
-  const sil = d2Canvas(1024, 256, (x, w, h) => { const R = rng(19); x.fillStyle = '#fff'; x.filter = 'blur(1.5px)';
-    for (let i = 0; i < 40; i++) { const cx = R() * w, th = h * (0.4 + 0.55 * R()), cw = th * (0.2 + 0.1 * R());
-      for (const ox of [-w, 0, w]) { x.beginPath(); // 一棵云杉：五层往上收的三角，左右各画一份接缝
-        for (let k = 0; k < 5; k++) { const y0 = h - th * (0.12 + 0.88 * k / 5), y1 = h - th * (0.12 + 0.88 * (k + 1.6) / 5), r = cw * (1 - k / 5.5); x.moveTo(cx + ox - r, y0); x.lineTo(cx + ox, Math.max(h - th, y1)); x.lineTo(cx + ox + r, y0); }
-        x.fill(); x.fillRect(cx + ox - 2, h - th * 0.14, 4, th * 0.14); } } });
-  sil.wrapS = THREE.RepeatWrapping;
+  // 剪影按米画（11-04 r3 #4：原来 1024 宽转 7/10 次，树横向压扁到 1/3–1/4，像一排冰锥，转半圈重复两三次）：每圈一张 2048×256、各用各的种子，转 3/4 次；
+  // sq = 贴图上横竖每米像素之比，树宽乘它才不扁。树高 8–20m、冠宽 0.3–0.5 倍树高，层数、下垂、歪斜各不一样，两三棵挤成一丛
+  const silOf = (seed, r, H, rep) => { const sq = (2048 / (2 * Math.PI * r / rep)) / (256 / H); return d2Canvas(2048, 256, (x, w, h) => { const R = rng(seed), k = h / H; x.fillStyle = '#fff'; x.filter = 'blur(1.2px)';
+    for (let cx = R() * 6 * k * sq; cx < w; cx += (2.5 + 5 * R()) * k * sq) { const th = (8 + 12 * R() * R() + 4 * R()) * k, cw = th * (0.3 + 0.2 * R()) * sq, n = 4 + Math.floor(3 * R()), lean = (R() - 0.5) * 0.15 * cw, droop = 0.2 + 0.25 * R();
+      for (const ox of [-w, 0, w]) { const c = cx + ox; x.beginPath(); // 一棵云杉：n 层往上收的「裙摆」，每层边上下垂一点；左右各画一份接缝
+        for (let j = 0; j < n; j++) { const y0 = h - th * (0.1 + 0.9 * j / n), y1 = h - th * Math.min(1, 0.1 + 0.9 * (j + 1.7) / n), rr = cw * (1 - j / (n + 0.6)) * (0.85 + 0.3 * R()), t = c + lean * j / n;
+          x.moveTo(t - rr, y0 + rr / sq * droop * 0.3); x.quadraticCurveTo(t - rr * 0.35, y0 - (y0 - y1) * 0.25, t, y1); x.quadraticCurveTo(t + rr * 0.35, y0 - (y0 - y1) * 0.25, t + rr, y0 + rr / sq * droop * 0.3); x.lineTo(t, y0 - (y0 - y1) * 0.15); }
+        x.fill(); x.fillRect(c - 0.18 * k * sq, h - th * 0.12, 0.36 * k * sq, th * 0.12); } } }); };
   const g = fogWalls = new THREE.Group(); g.visible = false;
   // 深浅照 fogLayer 里同样距离的一棵雪云杉：30m 还剩 13% 树色、45m 剩 5%，再偏蓝（a = 剪影不透明度，k = 雾色的倍数；雾 26m 就到底，更深就不像雾了）
-  for (const [r, H, rep, off, a, k] of [[30, 22, 7, 0, 0.9, [0.75, 0.8, 0.88]], [45, 30, 10, 0.37, 0.75, [0.85, 0.88, 0.93]]]) {
-    const m = new THREE.ShaderMaterial({ uniforms: { uMap: { value: sil }, uCol: { value: new THREE.Color() }, uA: { value: a }, uRep: { value: rep }, uOff: { value: off } }, transparent: true, depthWrite: false, side: THREE.BackSide,
+  for (const [r, H, rep, seed, a, k] of [[30, 22, 3, 19, 0.9, [0.75, 0.8, 0.88]], [45, 30, 4, 23, 0.75, [0.85, 0.88, 0.93]]]) {
+    const sil = silOf(seed, r, H, rep); sil.wrapS = THREE.RepeatWrapping;
+    // 放进不透明队列（11-04 r3 #2：原来是透明材质，three.js 最后才画，renderOrder 只在透明队列里排，墙盖在 30m 外的真树前面）：天穹（−1）之后、别的不透明物体之前画，写深度——
+    // 近处的树照常画在它前面，30m 外的树被剪影挡住；剪影之间的空隙和半透明的边都 discard（边写了深度会把后面的远树打掉、露出天色，成一圈白边）
+    const m = new THREE.ShaderMaterial({ uniforms: { uMap: { value: sil }, uCol: { value: new THREE.Color() }, uA: { value: a }, uRep: { value: rep } }, side: THREE.BackSide,
+      blending: THREE.CustomBlending, blendSrc: THREE.SrcAlphaFactor, blendDst: THREE.OneMinusSrcAlphaFactor,
       vertexShader: 'varying vec2 vUv; void main() { vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }',
-      fragmentShader: 'uniform sampler2D uMap; uniform vec3 uCol; uniform float uA, uRep, uOff; varying vec2 vUv;\nvoid main() { float a = texture2D(uMap, vec2(vUv.x * uRep + uOff, vUv.y)).a * uA; if (a < 0.01) discard; gl_FragColor = vec4(uCol, a);\n#include <tonemapping_fragment>\n#include <colorspace_fragment>\n}' });
-    const o = new THREE.Mesh(new THREE.CylinderGeometry(r, r, H, 48, 1, true).translate(0, H / 2, 0), m); o.userData.k = k; o.renderOrder = -2; o.frustumCulled = false; o.layers.set(OUT_LAYER); g.add(o); }
+      fragmentShader: 'uniform sampler2D uMap; uniform vec3 uCol; uniform float uA, uRep; varying vec2 vUv;\nvoid main() { float t = texture2D(uMap, vec2(vUv.x * uRep, vUv.y)).a; if (t < 0.5) discard; float a = uA; gl_FragColor = vec4(uCol, a);\n#include <tonemapping_fragment>\n#include <colorspace_fragment>\n}' });
+    const o = new THREE.Mesh(new THREE.CylinderGeometry(r, r, H, 48, 1, true).translate(0, H / 2, 0), m); o.userData.k = k; o.renderOrder = -0.5; o.frustumCulled = false; o.layers.set(OUT_LAYER); g.add(o); }
   scene.add(g);
+}
+// 第一人称雾里离小屋超过「雾远 + 屋子半径」：整栋不画（11-04 r3 #3：第 3 天挪世界后 ✕ 屋在 25–77m 外、早被雾盖白，还在画，s60–s120 是 3.0–3.4M 面，藏掉 1.1M）。
+// 进雾的范围前 3m 就恢复（回差防来回切），不会看到屋子冒出来；屋里的灯由 trackLight 补替身，灯数不变、不重编译；切换时重画阴影
+let houseFar = false; const houseC = new THREE.Vector3(), houseS = new THREE.Vector3();
+function fogCullHouse() {
+  const m = window.cabin && window.cabin.model; if (!m || !home) return;
+  const b = window.cabin.box; b.getCenter(houseC); b.getSize(houseS); // 每帧读：小屋自己的包围盒（加载时先包着整个 glb、约 105m，之后才收窄；home.r 是那时算的，鸟瞰取景用）
+  const d = Math.hypot(camera.position.x - houseC.x, camera.position.z - houseC.z), lim = scene.fog.far + houseS.length() / 2;
+  const far = !!fp && FOG_L.value > 0 && d > (houseFar ? lim - 3 : lim + 2);
+  if (far !== houseFar) { houseFar = far; m.visible = !far; shadowDirty = true; }
 }
 function updateFogWalls() { // 每帧（updateDay2）：跟着人、颜色跟着雾
   const on = FOG_L.value > 0 && outdoors(camera.position); fogWalls.visible = on; if (!on) return;
@@ -3152,7 +3172,7 @@ function updateFogWalls() { // 每帧（updateDay2）：跟着人、颜色跟着
 const PLUME_N = 110, PLUME_LIFE = 24, PLUME_GRAY = new THREE.Color(0xd8d4cc), PLUME_WARM = new THREE.Color(0xffb070);
 function makePlume(H, far) { // H = 烟升多高（米）；far：隔着林子远看的那柱（✕ 门廊往西南，11-04 复测 S4）：树梢以下不画、雾里看不见的树不挡它、压暗加浓（雾和阴天的天是浅灰，浅灰的烟认不出）；→ Group（原点 = 烟囱口），带看不见的点选柱（树冠以上那段）
   const u = { uTime: { value: Math.random() * 50 }, uWind: { value: 0 }, uAmt: { value: 0 }, uScale: { value: 1 }, uColor: { value: new THREE.Color() }, uWarm: { value: new THREE.Color() }, uFogC: { value: new THREE.Color() },
-    uNear: { value: 1e5 }, uLow: { value: far ? 16 : -1e3 }, uK: { value: new THREE.Vector2(far ? 1.5 : 1, far ? 0.6 : 1) } }; // uNear：顶点拉到这个距离以内（updatePlume 按雾设）；uLow：烟升过这个高度才看得见；uK = (浓淡倍数, 明暗倍数)
+    uNear: { value: 1e5 }, uLow: { value: far ? 16 : -1e3 }, uK: { value: new THREE.Vector2(far ? 1.5 : 1, 1) } }; // uNear：顶点拉到这个距离以内（updatePlume 按雾设）；uLow：烟升过这个高度才看得见；uK = (浓淡倍数, 明暗倍数)
   const geo = new THREE.BufferGeometry(), seed = new Float32Array(PLUME_N * 2);
   for (let i = 0; i < PLUME_N; i++) { seed[i * 2] = i / PLUME_N; seed[i * 2 + 1] = Math.random(); }
   geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(PLUME_N * 3), 3));
@@ -3181,6 +3201,7 @@ function makePlume(H, far) { // H = 烟升多高（米）；far：隔着林子�
   const pad = pickPad(new THREE.CylinderGeometry(6, 3, H * 0.6, 8)); pad.position.set(5, H * 0.6, 0); g.add(pad);
   g.userData.plume = u; g.userData.far = far; return g;
 }
+const _plC = new THREE.Color();
 function updatePlume(g, dt, amt) { // amt 0..1；每帧调（可见时）
   const u = g.userData.plume;
   u.uTime.value += dt; u.uWind.value = wx.cur.wind; u.uAmt.value = amt;
@@ -3188,7 +3209,7 @@ function updatePlume(g, dt, amt) { // amt 0..1；每帧调（可见时）
   const day = Math.min(1, hemi.intensity / 0.8);
   u.uColor.value.copy(PLUME_GRAY).multiplyScalar(0.35 + 0.65 * day).lerp(scene.fog.color, 0.25); // 比雾色亮一点，傍晚压在暗下来的天上
   u.uWarm.value.copy(PLUME_WARM).lerp(u.uColor.value, day * 0.7); u.uFogC.value.copy(scene.fog.color);
-  if (g.userData.far) { u.uWarm.value.copy(u.uColor.value); u.uNear.value = scene.fog.far * 0.8; } // 远处那柱根部的火光本来就被树挡着；雾在 80% 远处已看不清树，拉到那儿以内（鸟瞰雾远，等于不拉）
+  if (g.userData.far) { u.uColor.value.copy(scene.fog.color).multiply(_plC.setRGB(0.7, 0.74, 0.8)).multiplyScalar(0.4 + 0.6 * day); u.uWarm.value.copy(u.uColor.value); u.uNear.value = scene.fog.far * 0.8; u.uScale.value *= 1.35; } // 远处那柱：雾色 × 偏冷的中灰（11-04 r3 #8：原来 PLUME_GRAY × 0.6，雪雾里像天上一块褐色污渍），点放大 35% 边更散；根部的火光本来就被树挡着；雾在 80% 远处已看不清树，拉到那儿以内（鸟瞰雾远，等于不拉）
 }
 function markTree(g, H, W) { // 标记树：林子里的云杉模型（pine.glb）放大，不另建模型；→ 「离地 y 米处的树干半径」函数，贴刻痕用
   return loadTree('trees/pine.glb').then((parts) => {
@@ -5460,7 +5481,9 @@ renderer.setAnimationLoop(() => {
   mmTick(dt); // 迷雾小地图
   inspectTick(dt); // 书、纸飞到眼前 / 飞回去（js/props3d.js）
   spotsTick(dt); // 地板光点
+  BUSH_B.value.copy(hemi.color).multiplyScalar(hemi.intensity * 0.45);
   if (game.day >= 2) updateDay2(dt); // 雾、走远了绕回门口、傍晚的灯 // 出屋飞行被打断/结束：撤掉黑幕
+  fogCullHouse(); // 要在 updateDay2 之后：天气每帧先把雾设回自己的远端（125m），第一人称的 26m 是 updateDay2 里才设的
   // 屋里离东西很近，用最小 near；出屋飞行中 inside 已是 null，但相机还在屋里/门口（原来按离地高度算 near，阁楼约 0.65m，把近处的墙和家具切开）
   // 进屋飞行中 inside 已经设了，但相机还在屋外高处：离小屋远时照常按高度算，靠近（含屋顶上方）才切 0.05
   const cp = camera.position, nearCab = fly && (fly.out || fly.in) && Math.abs(cp.x) < 3.2 && Math.abs(cp.z) < 3.2 && cp.y < (fly.in ? 5.6 : 4.8);
