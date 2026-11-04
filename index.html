@@ -191,6 +191,7 @@ if (navigator.webdriver || /[?&]nolock\b/.test(location.search)) { let el = null
   #dlg p { margin: 12px 0 0; font-size: var(--fs-s); white-space: pre-line; }
   #mmap { position: fixed; left: 16px; bottom: 56px; z-index: 6; width: 124px; height: auto; pointer-events: none; border-radius: 4px; opacity: .88; box-shadow: 0 1px 4px rgba(0,0,0,.35); } /* 迷雾小地图 */
   @media (max-width: 600px) { #mmap { left: 8px; bottom: 52px; width: 92px; } }
+  @media (max-width: 600px) { body:has(#fpHud:not([hidden])) #skyL .btns { flex-direction: row; gap: 10px; } } /* 手机第一人称：时间、天气、遗稿横排在最底下一行，小地图在它上面露全（交互 r3 #1：竖排加深底盖住小地图 89%） */
   body:has(#fpHud:not([hidden])) #mmap { width: 84px; } @media (max-width: 600px) { body:has(#fpHud:not([hidden])) #mmap { width: 72px; } } /* 第一人称缩小：原来压住左下角的标桩（评审④ v2 #11） */
   #dlg .row { display: flex; gap: 8px; margin-top: 14px; }
   #dlg button { font: inherit; font-size: var(--fs-xs); color: inherit; text-shadow: inherit; background: none; box-shadow: none; border: 1px solid rgba(244,239,230,.45); border-radius: 6px; padding: 5px 10px; cursor: pointer; }
@@ -217,7 +218,8 @@ if (navigator.webdriver || /[?&]nolock\b/.test(location.search)) { let el = null
   body:has(#card:not([hidden])) #fpHud :is(.dot, .hint) { visibility: hidden; } /* 卡片开着视角冻结：准星和 E 提示先收起 */
   #fpHud .resume { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); padding: 4px 12px; border-radius: 6px; background: rgba(43,38,32,.6); color: #f4efe6; font-size: var(--fs-xs); text-align: center; white-space: nowrap; opacity: 0; transition: opacity .2s; }
   #fpHud .resume .zh { display: block; margin-top: 2px; opacity: .9; }
-  #fpHud:not(.live, .touch) .resume { opacity: 1; transition-delay: .4s; } /* 指针锁放开了（Esc、切窗口）：准星处提示点画面继续（UX1）；不跟 seen、提示条走；刚请求锁的一瞬间不闪 */
+  #fpHud:not(.live, .touch) .resume { opacity: 1; transition-delay: .4s; } /* 指针锁放开了（Esc、切窗口）：准星处提示点画面继续（UX1）；刚请求锁的一瞬间不闪 */
+  #fpHud:not(.live, .touch) .help { opacity: 0; } /* 放锁时只留准星处那一句：操作说明开头也写着「点画面开始」，两句同时出（交互 r3 #4）；说明行还可能被旁白、提示条藏掉，不能反过来只留它 */
   body:has(#card:not([hidden]), #dlg:not([hidden]), #journal:not([hidden])) #fpHud .resume { opacity: 0; transition-delay: 0s; } /* 弹层开着时先让给弹层 */
   #tip:not([hidden]) { animation: tipIn .2s ease-out; } @keyframes tipIn { from { opacity: 0; } }
   @media (min-width: 601px) and (max-width: 1200px) { #fpHud .help { bottom: 128px; } body:has(#note.on, #roomNote.on) #fpHud .help { opacity: 0; } } /* 窄窗口：操作说明挪到任务行上面，别压在左下「遗稿」上（UX10，英文「§ Journal」右沿到 356px，让不开）；旁白、说明出来时先让开 */
@@ -1875,7 +1877,7 @@ loader.load('cabin.glb', async (gltf) => {
   sun.target.position.copy(center);
   const s = sun.shadow.camera, sr = Math.max(r, 9.5); s.left = s.bottom = -sr; s.right = s.top = sr; s.near = 0.1; s.far = r * 5; // sr：罩到门前开场站位（z 8.4），两人的影子才画得出来
   s.updateProjectionMatrix();
-  window.cabin = { infoOf, isClue, scene, camera, controls, model, box, renderer, layers, toggles, cover, wx, sky, roofWx, closeView, select, meshes, people, THREE, get intro() { return intro; }, get fly() { return fly; }, get held() { return held; }, get hand() { return hand; }, get HAND() { return HAND; }, wake: (id, a) => wakePerson(id, a), get drops() { return drops; }, hov: () => [hovered, hoverDirty, !!fly, !!(intro || morn), pointer.lastEvent && pointer.lastEvent.clientX] }; // 调试用
+  window.cabin = { infoOf, nameOf, isClue, scene, camera, controls, model, box, renderer, layers, toggles, cover, wx, sky, roofWx, closeView, select, meshes, people, THREE, get intro() { return intro; }, get fly() { return fly; }, get held() { return held; }, get hand() { return hand; }, get HAND() { return HAND; }, wake: (id, a) => wakePerson(id, a), get drops() { return drops; }, hov: () => [hovered, hoverDirty, !!fly, !!(intro || morn), pointer.lastEvent && pointer.lastEvent.clientX] }; // 调试用
   window.cabin.game = game;
   T('setup');
   const peopleReady = loadPeople().catch(console.error); // 和种树一起加载，预热前要到齐（材质一起编译）
@@ -4381,6 +4383,7 @@ const GEAR_RAIL = { // 衣帽架空了：换名字和说明（交互 r2 UX4、�
 };
 for (const r of Object.values(GEAR_RAIL)) LEAD_ZH[r[2]] = r[3];
 STORY_ZH['Coat Rail|Entry'] = ['衣帽架', '']; // 只有中文名（悬停）；没有长故事，鸟瞰也只给那一句
+STORY_ZH['A Page on the Desk|Parlour'] = ['书桌上的一页纸', '']; STORY_ZH['Unburnt Letter|Kitchen'] = ['没烧完的信', '']; // 第 1 天这两条只有悬停名（卡片换成 PAGE_CARD / LETTER_CARD）：中文模式准星原来显示英文（交互 r3 #2）
 function railInfo() { // infoOf('entry_coat_rail') 先问这里：null = 照旧「衣帽架和厚大衣」
   if (game.found.has('end_stay')) return GEAR_RAIL.gone;
   return gear.coat ? gear.lantern ? GEAR_RAIL.both : GEAR_RAIL.coat : null;
@@ -4637,7 +4640,7 @@ function stepPrint(r, moving, st = fp) { r = r.position; // 野外雪地上每�
 }
 const NOKEYS = new Set();
 function updateFP(dt) {
-  const p = fp.p, r = p.root, s = r.scale.x, k = !card.hidden && !touchFP ? NOKEYS : fp.keys; // 卡片开着不走（原来按 W 会在卡片后面偷偷走）
+  const p = fp.p, r = p.root, s = r.scale.x, k = (!card.hidden || fp.paused) && !touchFP ? NOKEYS : fp.keys; // 卡片开着、锁放开（屏幕写着点画面继续）都不走（原来按 W 会偷偷走）
   fpTouchTick(dt); sliceTick(dt); // 触屏点物件后转头 + 动手；切片按位置认房间、书记员跟进门
   if ((fp.solidT -= dt) < 0) { fp.solid = fpSolid(); fp.floors = fp.solid.concat(ground, ...(BROOK.bed || [])); fp.solidT = 0.5; } // 门开关、积雪会变，半秒刷新一次
   const f = (k.has('KeyW') || k.has('ArrowUp') ? 1 : 0) - (k.has('KeyS') || k.has('ArrowDown') ? 1 : 0) || (fp.lad && !p.tasks.length ? fpLadTick(r, dt) : 0);
@@ -4788,7 +4791,7 @@ function sliceView() { // 右上角：第一人称时「看模型」（作品集
 }
 // 房间导览（2026-11-03，触屏第一人称）：右上「Rooms」点开 6 间，点一间沿路网走过去（fpGo；跨层自动爬梯子）
 const ROOM_GO = { 'Entry': [0.15, 1.7, 110, -0.2], 'Water Closet': [-0.62, 1.0, 293, -0.3], 'Hall': [...NAV.hall3, 185, 0.15], 'Parlour': [0.2, -1.0, 327, -0.2], 'Kitchen & Dining': [...NAV.hall, 180, -0.15], 'Loft': [...NAV.L_mid, 213, -0.1] }; // [x, z, 朝向°, 俯仰]：朝向照 ROOMS 的看屋视角，到了转过去（不然脸贴墙）
-const ROOM_GO_TALL = { 'Parlour': 275 }; // 竖屏横向视野只有约 37°：起居室改朝书桌和地图（评审④ v2 #4：327° 时只看到扶手椅和窗帘）
+const ROOM_GO_TALL = { 'Parlour': [0.2, -1.0, 275, -0.2], 'Entry': [0.15, 2.4, 180, -0.2] }; // 竖屏横向视野只有约 37°：起居室改朝书桌和地图（评审④ v2 #4：327° 时只看到扶手椅和窗帘）；玄关退到门边朝衣帽架、大衣、提灯（交互 r3 #5：原来朝东墙；门在它左边约 80°，竖屏装不进同一画面）
 const roomBtn = $('roomBtn'), roomList = $('roomList');
 roomBtn.innerHTML = lbl('Rooms', '房间');
 roomList.innerHTML = Object.keys(ROOM_GO).map((n) => { const r = ROOMS.find((q) => q.name === n); return `<button data-room="${n}">${lbl(r.name, r.zh)}</button>`; }).join('');
@@ -4802,7 +4805,7 @@ roomList.onclick = (e) => {
   if (!b || !fp || fp.climb || fp.lad) return;
   const p = fp.p; select(null);
   if (p.mode === 'sit') p.tasks = fpRise(p);
-  const [x, z, yaw0, pitch] = ROOM_GO[b.dataset.room], yaw = (innerHeight > innerWidth && ROOM_GO_TALL[b.dataset.room]) || yaw0;
+  const [x, z, yaw, pitch] = (innerHeight > innerWidth && ROOM_GO_TALL[b.dataset.room]) || ROOM_GO[b.dataset.room];
   fpGo(x, z, null, b.dataset.room === 'Loft', [yaw * Math.PI / 180, pitch]);
 };
 function roomNavSync() { // 每帧（updateFP）：进过屋、不在梯子上才显示
@@ -4967,7 +4970,7 @@ function fpTouchTick(dt) {
   const t = fp.turn; if (!t) return;
   const k = Math.min(1, dt * 6); t.t += dt;
   fp.yaw += angDiff(fp.yaw, t.yaw) * k; fp.pitch += (t.pitch - fp.pitch) * k;
-  if (t.t < 0.45) return;
+  if (t.t < 0.45 || (!t.name && t.t < 1.5 && Math.abs(angDiff(fp.yaw, t.yaw)) > 0.02)) return; // 房间导览的朝向转到位再停（0.45 秒只转到 93%，玄关偏 7° 衣帽架出画）
   fp.turn = null; if (!t.name) return;
   if (toggleOf(t.name)) toggle(t.name);
   select(t.name);
@@ -5043,21 +5046,22 @@ addEventListener('keydown', (e) => { if (e.key === 'Escape') select(null); });
 function updateHover() {
   if (!hoverDirty || !home) return;
   hoverDirty = false;
-  const n = fly || intro || spotHot || (fp && !card.hidden) ? null : pick(pointer.lastEvent);
+  const n = fly || intro || spotHot || (fp && (!card.hidden || (fp.paused && !touchFP))) ? null : pick(pointer.lastEvent); // 锁放开（点画面继续）时不留描边和名字
   if (fp) fpHover(n); else setHovered(n);
 }
 // 第一人称悬停分三级（11-04 交互评审 UX3，原来转一圈弹十几次名字）：2m 内能点的东西准星点变环；同一件停 0.45 秒才出名字和描边，离开后多留 0.3 秒防闪；转头快于 90°/秒不出。
 // hovered 只管显示（名字、描边、E 提示），E 拿取 / 坐下按准星实际对着的 aim 算，不用等名字出来
-// 11-04 复测：距离按水平量、屋外记号（d2_）放宽到 3m（UX3）；环也要同一件稳住 0.1 秒才出、离开多留 0.15 秒（UX5，原来一帧一闪）；准星换到别的东西上旧名字立刻收（UX6，原来多挂 0.3 秒，点到的和名字不是一件）
-const HOV = { near: 2, clue: 3, wait: 450, keep: 300, turn: Math.PI / 2, ring: 100, ringKeep: 150 }, hv = { cand: null, since: 0, lost: 0, yaw: 0, pitch: 0, t: 0, ring: -1e9 };
+// 11-04 复测：距离按水平量、屋外记号（d2_）放宽到 3m（UX3）；环也要同一件稳住 0.1 秒才出、离开多留 0.25 秒（UX5，原来一帧一闪；r3 #6：0.15 秒时慢转偶尔灭一下又亮）；准星换到别的东西上旧名字立刻收（UX6，原来多挂 0.3 秒，点到的和名字不是一件）
+const HOV = { near: 2, clue: 3, wait: 450, keep: 300, turn: Math.PI / 2, ring: 100, ringKeep: 250, ringGap: 300 }, hv = { cand: null, since: 0, lost: 0, yaw: 0, pitch: 0, t: 0, ring: -1e9, on: false, off: -1e9 };
 let aim = null;
 function fpHover(n) {
   const now = performance.now(), dt = Math.max(1, now - hv.t) / 1000, near = n && pick.hd <= (n.startsWith('d2_') ? HOV.clue : HOV.near) ? n : null;
   const w = Math.hypot(angDiff(hv.yaw, fp.yaw) * Math.cos(fp.pitch), fp.pitch - hv.pitch) / dt; hv.yaw = fp.yaw; hv.pitch = fp.pitch; hv.t = now;
   aim = n; window.__hv = { near, w }; // 调试 / 无头测试
   if (near !== hv.cand || w > HOV.turn) { hv.cand = near; hv.since = now; }
-  if (hv.cand && now - hv.since >= HOV.ring) hv.ring = now;
-  fpHud.classList.toggle('aim', now - hv.ring <= HOV.ringKeep);
+  if (hv.cand && now - hv.since >= HOV.ring && (hv.on || now - hv.off >= HOV.ringGap)) hv.ring = now; // 灭了至少 0.3 秒才再亮（r3 #6：只加长 ringKeep 只是把「灭一下又亮」挪到更宽的空隙上）
+  const on = now - hv.ring <= HOV.ringKeep; if (hv.on && !on) hv.off = now; hv.on = on;
+  fpHud.classList.toggle('aim', on);
   if (near && near === hovered) hv.lost = 0;
   else if (n && hovered && n !== hovered) { hv.lost = 0; setHovered(null); } // 点击、E 作用在 aim 上：名字不能还写着上一件
   else if (hv.cand && now - hv.since >= HOV.wait) { hv.lost = 0; setHovered(hv.cand); }
