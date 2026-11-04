@@ -259,12 +259,25 @@ function roofProfile(roof, F) {
 function fitSlab(S, th) { // 按厚度 th 重算这一坡雪板的顶点高度（代替原来的 scale.y）；厚度变化 <3mm 不重算
   if (Math.abs(th - S.built) < 0.003) return;
   S.built = th;
-  const P = roofWx.prof, g = S.slab.geometry, p = g.attributes.position, o = S.base, f = THREE.MathUtils.smoothstep(th, 0.02, 0.15);
+  const P = roofWx.prof, g = S.slab.geometry, p = g.attributes.position, a = p.array, o = S.base, f = THREE.MathUtils.smoothstep(th, 0.02, 0.15);
   for (let i = 0; i < p.count; i++) {
     const k = Math.min(P.n - 1, Math.max(0, Math.round(o[i * 3] / P.bin))), t = P.tile[k], y = o[i * 3 + 1];
-    p.setY(i, y < 1e-4 ? t - SINK : t + (P.env[k] - t) * f + th * y);
+    a[i * 3 + 1] = y < 1e-4 ? t - SINK : t + (P.env[k] - t) * f + th * y;
   }
-  p.needsUpdate = true; g.computeVertexNormals(); g.computeBoundingSphere(); g.computeBoundingBox();
+  p.needsUpdate = true; fastNormals(g); g.computeBoundingSphere(); g.computeBoundingBox(); g.boundsTree.refit();
+}
+// 同 computeVertexNormals（按面积加权），直接读写数组：雪板 1.3 万面，three 自带的一次 9ms，两坡同一帧重算就卡一下
+function fastNormals(g) {
+  const a = g.attributes.position.array, ix = g.index.array, N = g.attributes.normal, n = N.array;
+  n.fill(0);
+  for (let i = 0; i < ix.length; i += 3) {
+    const A = ix[i] * 3, B = ix[i + 1] * 3, C = ix[i + 2] * 3, bx = a[B], by = a[B + 1], bz = a[B + 2];
+    const ex = a[C] - bx, ey = a[C + 1] - by, ez = a[C + 2] - bz, fx = a[A] - bx, fy = a[A + 1] - by, fz = a[A + 2] - bz;
+    const nx = ey * fz - ez * fy, ny = ez * fx - ex * fz, nz = ex * fy - ey * fx;
+    n[A] += nx; n[A + 1] += ny; n[A + 2] += nz; n[B] += nx; n[B + 1] += ny; n[B + 2] += nz; n[C] += nx; n[C + 1] += ny; n[C + 2] += nz;
+  }
+  for (let i = 0; i < n.length; i += 3) { const l = Math.sqrt(n[i] * n[i] + n[i + 1] * n[i + 1] + n[i + 2] * n[i + 2]) || 1; n[i] /= l; n[i + 1] /= l; n[i + 2] /= l; }
+  N.needsUpdate = true;
 }
 // 檐口掉雪（2026-10-22 重做；原来是 20 面硬块、3–11cm 均匀、落地直接消失，像白方块）：雪团 = 凹凸低模球，随机压扁、翻滚，
 // 小的多大的少；下落途中掉粉，大块落地碎成 2–4 小块弹开，小块落地停住、缩进雪里，同时扬一小团雪粉（powder，Points 软圆点）。
@@ -371,7 +384,7 @@ function updateRidge(R, F) { // 按当前厚度 R.t 重算屋脊雪的截面：�
     const sa = ax < c ? x * x / (2 * c) + c / 2 : ax; // 顶上圆一点
     p.setXYZ(i, x, Math.max(F.top - F.slope * sa + h, F.top - F.slope * ax - 0.015), z);
   }
-  p.needsUpdate = true; R.mesh.geometry.computeVertexNormals(); R.mesh.geometry.computeBoundingSphere();
+  p.needsUpdate = true; fastNormals(R.mesh.geometry); R.mesh.geometry.computeBoundingSphere();
 }
 function setupRoofWeather() {
   const roof = shared.layers.get('roof'); if (!roof) return;
@@ -392,7 +405,8 @@ function setupRoofWeather() {
   for (const sg of [-1, 1]) {
     const tilt = new THREE.Group(); // 原点在屋脊、x 沿坡往下
     tilt.position.set(0, top, zc); tilt.rotation.set(0, sg > 0 ? 0 : Math.PI, -ang, 'YXZ');
-    const slab = new THREE.Mesh(slabG.clone(), patchySnow()); slab.castShadow = slab.receiveShadow = true; slab.visible = false; slab.userData.side = sg; // 每坡一份几何（厚度各自算）
+    const slab = new THREE.Mesh(slabG.clone(), patchySnow()); slab.geometry.computeBoundsTree(); // 点选也打它（1.3 万面，不建 BVH 一条射线 2.4ms），fitSlab 改完顶点 refit
+    slab.castShadow = slab.receiveShadow = true; slab.visible = false; slab.userData.side = sg; // 每坡一份几何（厚度各自算）
     tilt.add(slab); scene.add(tilt);
     const pile = new THREE.Mesh(moundG, snowMat); pile.receiveShadow = true; pile.visible = false;
     pile.position.set(sg * (ex + 0.3), gy, zc); scene.add(pile);
