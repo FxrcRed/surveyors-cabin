@@ -1462,7 +1462,7 @@ function brookClear() {
 function brookWire() {
   const A = BROOK.wireA; if (!A) return;
   const G = BROOK.group, gy = ground.position.y, m4 = new THREE.Matrix4(), v = new THREE.Vector3(), sc = new THREE.Vector3(), qt = new THREE.Quaternion();
-  const B = new THREE.Vector3(home.target.x + WIRE_WALL[0], gy + WIRE_WALL[1], home.target.z + WIRE_WALL[2]).sub(G.position), ab = B.clone().sub(A), L = ab.length(); ab.normalize();
+  const B = new THREE.Vector3(home.target.x + WIRE_WALL[0], gy + WIRE_WALL[1], home.target.z + WIRE_WALL[2]), ab = B.clone().sub(A), L = ab.length(); ab.normalize(); // 全按家的坐标（G 的本地坐标）：自家东墙就是 home.target，不减 G.position（世界挪过后减了就连到 ✕ 那间）
   const prof = new Map(), trunkAt = (geo, y) => { // 树干在高 y（0–1）处离轴多远、轴在本地的 x, z（模型按整棵树的包围盒居中，见 markTree）
     let p = prof.get(geo); if (!p) { const pos = geo.attributes.position, lo = new THREE.Box3(); for (let i = 0; i < pos.count; i++) if (pos.getY(i) < 0.2) lo.expandByPoint(v.fromBufferAttribute(pos, i)); p = { geo, cx: (lo.min.x + lo.max.x) / 2, cz: (lo.min.z + lo.max.z) / 2 }; prof.set(geo, p); }
     const pos = geo.attributes.position; let r = 0.02; for (let i = 0; i < pos.count; i++) if (Math.abs(pos.getY(i) - y) < 0.08) r = Math.max(r, Math.hypot(pos.getX(i) - p.cx, pos.getZ(i) - p.cz)); return [r, p.cx, p.cz]; };
@@ -1881,7 +1881,7 @@ loader.load('cabin.glb', async (gltf) => {
   const peopleReady = loadPeople().catch(console.error); // 和种树一起加载，预热前要到齐（材质一起编译）
   await yieldFrame();
   // 树种好再揭开加载页、开始开场动画，免得飞行中树一棵棵冒出来
-  plantForest(center, ground.position.y).catch(console.error).then(clearOrbitView).then(() => { brookWire(); FLOOR_U.uFloor.value = floorMap(); makeFogWalls(); }).then(() => peopleReady).finally(async () => { // 地面雪坑图等树都定下来（删掉挡视线的）再画
+  plantForest(center, ground.position.y).catch(console.error).then(clearOrbitView).then(() => { brookWire(); FLOOR_U.uFloor.value = floorMap(); makeFogWalls(); if (x3.pending) { x3.pending = false; applyX(); } }).then(() => peopleReady).finally(async () => { // 地面雪坑图等树都定下来（删掉挡视线的）再画
     T('forest');
     await prewarm(); const w0 = performance.now(); await Promise.all(bvhJobs); window.__bvhWait = performance.now() - w0; sceneReady = true; // __bvhWait 调试用：后台 BVH 没赶上时多等了多久
     T('prewarm');
@@ -3599,7 +3599,7 @@ function day3Setup() { // 小路尽头的老云杉 + 裂口 + 焦黑松针；✕
   // ✕ 那间屋的烟囱：屋子还没「到」之前，先看见树梢上一柱烟（原来是不吃雾、不被挡的门廊灯光晕），跟着世界一起平移
   x3.glow = makePlume(55); x3.glow.visible = false;
   x3.glow.position.set(2.42 + XSHIFT.x, ground.position.y + 3.6, -1.52 + XSHIFT.y); scene.add(x3.glow); OUTDOOR.push(x3.glow); // 烟囱口同 interact.js SMOKE_AT
-  if (game.found.has('xarrive') && !game.found.has('ended')) applyX();
+  if (game.found.has('xarrive') && !game.found.has('ended')) x3.pending = true; // 等树、小溪、电线、林墙都建完再 applyX（plantForest 链尾）：原来在这里就平移世界，之后种的树、建的电线都没跟着挪——✕ 周围站着自家那片树，电线从小棚一路拉到 ✕ 东墙 14 根杆（11-04 F2 复测）
 }
 function xLook() { // 换成 ✕ 那间屋的样子（同一个模型，不另外渲染一间）
   for (const n of X_HIDE) { const g = layers.get(n); if (g && !(n === 'entry_lantern' && gear.lantern)) g.visible = false; } // 提在手里的那盏不藏
