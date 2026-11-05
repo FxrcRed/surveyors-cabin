@@ -2,9 +2,12 @@
 .claude/
 # 内部文档和工具（只在本机，完整历史在私有仓库 log-cabin-archive）
 CLAUDE.md
+CLAUDE.md.bak-*
 HANDOFF*.md
 FEATURES.md
 story/
 tools/
 publish/
 fonts/src/
+# 本机开网页的批处理（只在本机用）
+开网页.bat

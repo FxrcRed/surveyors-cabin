@@ -74,6 +74,9 @@ python -m http.server 8765
 | 人物和动作 | Quaternius *Universal Base Characters*、*Modular Character Outfits – Fantasy*、*Universal Animation Library* 1 和 2 | CC0 |
 | 英文字体 | IM Fell English（Igino Marini） | SIL OFL 1.1 |
 | 中文字体 | [汇文明朝体 改进版](https://github.com/bosswnx/huiwenmincho-improved)（子集） | CC0 |
+| 音效、背景音乐、小溪 | [OpenGameArt](https://opengameart.org/)，作者和链接见 [sfx/CREDITS.md](sfx/CREDITS.md) | CC0 |
+| 地面贴图 | [ambientCG](https://ambientcg.com/) Ground 037，见 [textures/README.md](textures/README.md) | CC0 |
+| 配音 | 用 [Chatterbox](https://github.com/resemble-ai/chatterbox)（Resemble AI）AI 合成，音色克隆自 [LibriVox](https://librivox.org/) 上 Peter Yearsley、Ruth Golding 的朗读 | MIT（Chatterbox）；LibriVox 录音为公有领域 |
 | 库 | [three.js](https://threejs.org/)、[three-mesh-bvh](https://github.com/gkjohnson/three-mesh-bvh)、[Draco](https://github.com/google/draco) | MIT、MIT、Apache 2.0 |
 
 代码按 [MIT 许可](LICENSE) 开放。小屋模型、故事和截图 © Fxrc，保留所有权利，转载或使用请先联系。
