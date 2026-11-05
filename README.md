@@ -74,6 +74,9 @@ Built by vibe coding with Claude.
 | Characters and animations | Quaternius *Universal Base Characters*, *Modular Character Outfits – Fantasy*, *Universal Animation Library* 1 and 2 | CC0 |
 | English font | IM Fell English by Igino Marini | SIL OFL 1.1 |
 | Chinese font | [Huiwen Mincho Improved](https://github.com/bosswnx/huiwenmincho-improved) (subset) | CC0 |
+| Sound effects, music, brook | [OpenGameArt](https://opengameart.org/); authors and links in [sfx/CREDITS.md](sfx/CREDITS.md) | CC0 |
+| Ground texture | [ambientCG](https://ambientcg.com/) Ground 037; see [textures/README.md](textures/README.md) | CC0 |
+| Voice-over | AI-synthesized with [Chatterbox](https://github.com/resemble-ai/chatterbox) (Resemble AI), voices cloned from [LibriVox](https://librivox.org/) readings by Peter Yearsley and Ruth Golding | MIT (Chatterbox); LibriVox recordings are public domain |
 | Libraries | [three.js](https://threejs.org/), [three-mesh-bvh](https://github.com/gkjohnson/three-mesh-bvh), [Draco](https://github.com/google/draco) | MIT, MIT, Apache 2.0 |
 
 The code is under the [MIT License](LICENSE). The cabin model, the story and the screenshots are © Fxrc, all rights reserved; please ask before reusing them.
