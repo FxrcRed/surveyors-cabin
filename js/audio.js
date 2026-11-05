@@ -27,7 +27,7 @@ async function load(n) {
   return buf[n];
 }
 function unlock() {
-  if (ctx) { if (ctx.state === 'suspended') ctx.resume(); return; }
+  if (ctx) { if (ctx.state !== 'running') ctx.resume()?.catch?.(() => {}); return; } // iOS 切后台回来是 interrupted，也要 resume
   const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
   ctx = new AC();
   master = ctx.createGain(); master.gain.value = muted ? 0 : 1; master.connect(ctx.destination);
@@ -52,7 +52,7 @@ function unlock() {
   });
   fetch('sfx/steps.json').then((r) => r.json()).then((j) => { steps = j; }).catch(() => {});
 }
-for (const ev of ['pointerdown', 'keydown']) addEventListener(ev, unlock, true);
+for (const ev of ['pointerdown', 'keydown', 'touchend', 'click']) addEventListener(ev, unlock, true); // iOS 不把触摸的 pointerdown 当用户操作，要 touchend / click 才放得出声（r3 兼容 #1）
 addEventListener('keydown', (e) => {
   if (e.code !== 'KeyM' || e.repeat || /INPUT|TEXTAREA/.test(document.activeElement?.tagName)) return;
   muted = !muted; try { localStorage.setItem('cabinMute', muted ? '1' : '0'); } catch { /* 无痕模式 */ }

@@ -165,6 +165,20 @@ function indoorShade(model) {
     }
   });
 }
+// 每天一套色板（r3 #11，学 Firewatch 每天换色调）：第 1 天原样（只晴 / 阴，见 gameInit）；第 2 天天和雾压暗一档、偏冷灰蓝、去饱和，太阳弱 30%；
+// 第 3 天曝光 0.8、天色带一点病态的黄绿。白天才调（夜里那几张别动），颜色是线性值
+const GRADE = { 2: { sky: [0.70, 0.75, 0.86], sat: 0.75, sun: 0.7, hemi: 0.85, exp: 1 }, 3: { sky: [0.80, 0.82, 0.62], sat: 0.6, sun: 0.75, hemi: 0.9, exp: 0.8 } };
+const _gl = new THREE.Color();
+function dayGrade() {
+  const G = GRADE[shared.game?.day]; if (!G) return;
+  const h = sky.hour, w = THREE.MathUtils.smoothstep(h, 5.6, 7) * (1 - THREE.MathUtils.smoothstep(h, 18.2, 19.6));
+  if (!w) return;
+  const tint = (c, k) => { const l = 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b; _gl.setRGB(l * G.sky[0], l * G.sky[1], l * G.sky[2]); c.lerp(_gl, k * w); };
+  tint(skyU.uHor.value, G.sat); tint(skyU.uTop.value, G.sat); scene.fog.color.copy(skyU.uHor.value);
+  tint(hemi.color, G.sat * 0.6);
+  sun.intensity *= 1 - (1 - G.sun) * w; hemi.intensity *= 1 - (1 - G.hemi) * w; scene.environmentIntensity *= 1 - (1 - G.hemi) * w;
+  renderer.toneMappingExposure *= 1 - (1 - G.exp) * w;
+}
 function updateSky(dt) {
   skyU.uTime.value += dt;
   if (sky.goal !== null) { // 点了时段按钮：沿较短方向快速转过去
@@ -175,6 +189,7 @@ function updateSky(dt) {
   sky.hour = ((sky.hour % 24) + 24) % 24;
   applySky();
   shared.applyWeather(dt);
+  dayGrade();
   skyDome.position.copy(camera.position);
   syncSkyUI();
 }

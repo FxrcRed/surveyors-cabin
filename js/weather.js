@@ -41,7 +41,7 @@ function setWeather(n, now, show = n) { // show：界面上写的名字和图标
   wx.name = n; wx.goal = p; if (now) wx.cur = { ...p };
   $('wxName').innerHTML = lbl(show, WX_ZH[show]); $('wxIco').innerHTML = `<svg viewBox="0 0 20 20">${WX_ICON[show]}</svg>`; [...wxPanel.children].forEach((c, k) => c.classList.toggle('on', k === i));
   clearTimeout(wxTimer);
-  wxTimer = setTimeout(() => { const o = WEATHERS.filter((w) => w[0] !== wx.name); setWeather(o[Math.floor(Math.random() * o.length)][0]); }, (120 + Math.random() * 120) * 1000);
+  wxTimer = setTimeout(() => { const o = WEATHERS.filter((w) => w[0] !== wx.name && (!wx.pool || wx.pool.includes(w[0]))); setWeather(o[Math.floor(Math.random() * o.length)][0]); }, (120 + Math.random() * 120) * 1000);
 }
 setWeather(WEATHERS[Math.floor(Math.random() * WEATHERS.length)][0], true);
 // 底部三个按钮：天气在正中，时间、Journal 分在两边、离它一样远（CSS grid 1fr auto 1fr）；时钟按最宽的数字定宽、右对齐，

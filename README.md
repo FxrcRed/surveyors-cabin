@@ -2,8 +2,10 @@
 
 # The Surveyor's Cabin
 
-**A log cabin in a northern forest that you can walk into, in your browser.**
-The owner left one day and never came back. The stove is still warm, the kettle is on, and every object in the house has a story to tell.
+**A short mystery game in a log cabin in the northern woods, played in your browser.**
+For thirty years the Surveyor sent down a report each spring. This spring, none came. On the desk in his cabin lies a page of inquiry notes in your clerk's hand, describing what you have not done yet.
+
+Three days · about 20 minutes · two endings and a hidden one · English and Chinese, with voice-over
 
 [**▶ Open it in your browser**](https://fxrcred.github.io/surveyors-cabin/) · [中文说明](README.zh.md) · three.js · no build step · code MIT
 
@@ -13,23 +15,15 @@ The owner left one day and never came back. The stove is still warm, the kettle 
 
 ## What's inside
 
-**The world goes on without you.**
-- A full day passes in six minutes: sunrise, noon, dusk, then moonlight and stars. When it gets dark every lamp in the cabin lights itself.
-- Seven kinds of weather: Fair, Overcast, Rain, Thunderstorm, Snow, Blizzard, Fog. It changes on its own every few minutes, or pick one yourself.
-- Rain leaves puddles and the eaves keep dripping after it stops. Snow piles up on the roof and the trees, and one day the whole roof load slides off and lands in the yard.
-- Chimney smoke drifts with the wind. Lightning comes in bursts of three to five flashes.
+**Three days in the woods.** You are the old inspector who signed the Surveyor's commission thirty years ago; a young clerk who has read every report he sent comes with you.
+- **Day one:** the door ajar, the porch lamp burning, the stove stone cold. Search the six rooms (Entry, Water Closet, Hall, Parlour, Kitchen, Loft) for what he left behind.
+- **Day two:** fog has come down. Follow a trail into the trees and see what is waiting along it.
+- **Day three:** go where the trail leads, and choose.
+- Everything you find is written into the **Journal**, the *Nameless Surveyor's Last Papers*, in period English with the Chinese original underneath.
 
-**Walk in and look around.**
-- The opening shot flies down a cobblestone path through ten thousand trees to the front door.
-- Six rooms: Entry, Water Closet, Hall, Parlour, Kitchen & Dining, Loft. The camera flies from one to the next.
-- Click almost anything (the greatcoat, the snowshoes, the field books on the desk) for a card with its story, in old-fashioned English with the Chinese original underneath.
-- Things react when you touch them. Doors open, lamps switch on and off, the stove fire can be put out and relit, the kettle boils and lifts its lid, the taps run, the rocking chair rocks, the door curtain ties itself back.
-- The **Journal** holds the whole tale of *the Nameless Surveyor's Last Papers*: prologue, the man himself, and an epilogue.
+**How to play.** First person: WASD to walk, mouse to look, click to examine, E to take or climb. On a phone, tap where you want to go, or use *Rooms*. Progress is saved in the browser; close the page and come back later.
 
-**Someone is still here.**
-- An old man sits on the settee. Click him and he gets up and potters around the cabin.
-- A woman clerk reads in the loft rocking chair or writes at the desk. Every so often she gets up to look about, slides the ladder over, climbs it, and lifts the loft bar herself.
-- Choose *Take His Place* or *Take Her Place* to walk in first person (WASD, Shift to hurry). Climb the ladder to the loft, and take the pans and knives down from the wall to turn them over in your hands (E to take, right mouse to rotate).
+**The world goes on around you.** Sun, dusk and lamplight, weather, snow on the roof, chimney smoke on the wind; doors, lamps, the stove, the kettle and the rocking chair all work.
 
 <table>
 <tr>
