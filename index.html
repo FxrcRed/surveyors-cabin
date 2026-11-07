@@ -2569,7 +2569,7 @@ const game = (() => {
   const str = (a) => (Array.isArray(a) ? a.filter((k) => typeof k === 'string') : []); // 坏存档里混进数字、null、对象：只留字符串（不然 k.startsWith 报错，停在 84%）
   const seen = str(s && s.seen); // 第 1 天进过的房间 + 'stove' / 'desk'（刷新后旁白不重播、任务条不空、书记员不再领路）
   const g = { day: Math.min(3, Math.max(1, Math.floor(+(s && s.day)) || 1)), found: new Set(str(s && s.found)), night: false, dusk: false, wear: s && Array.isArray(s.wear) ? s.wear : null, // wear = [第几天, 穿着大衣, 提着灯]（gearSave）；day 夹到 1–3
-    seen: new Set(seen.filter((k) => k !== 'stove' && k !== 'desk')), stoveSeen: seen.includes('stove'), deskSeen: seen.includes('desk'),
+    seen: new Set(seen.filter((k) => k !== 'stove' && k !== 'desk' && k !== 'help')), stoveSeen: seen.includes('stove'), deskSeen: seen.includes('desk'), helpSeen: seen.includes('help'),
     snap: str(s && s.snap) }; // snap：站在 ✕ 门廊下那一刻的 found（进 ✕ 时存、选结局时更新），通关后「回到另一间屋的门廊下」载入它（r3 #15）
   g.entered = g.seen.size > 0;
   if (g.found.has('fire') && !g.found.has('page')) g.found.add('page'); // v2 之前的存档没有这页纸
@@ -2578,7 +2578,7 @@ const game = (() => {
   g.saved = g.found.size > 0; // 有存档：刷新时问「继续上次 / 重新开始」（resumeAsk）
   return g;
 })();
-function saveGame() { SAVE.set(JSON.stringify({ day: game.day, found: [...game.found], wear: game.wear, seen: [...game.seen, ...(game.stoveSeen ? ['stove'] : []), ...(game.deskSeen ? ['desk'] : [])], ...(game.snap.length ? { snap: game.snap } : {}) })); }
+function saveGame() { SAVE.set(JSON.stringify({ day: game.day, found: [...game.found], wear: game.wear, seen: [...game.seen, ...(game.stoveSeen ? ['stove'] : []), ...(game.deskSeen ? ['desk'] : []), ...(game.helpSeen ? ['help'] : [])], ...(game.snap.length ? { snap: game.snap } : {}) })); }
 // Journal「第一天」：键 → [英标题, 中标题, 英, 中]，按这个顺序列出已找到的
 const DAY1_TEXT = {
   page: ['A Page on the Desk', '书桌上的一页纸', 'A page of inquiry notes, in the clerk\'s hand, lying on the desk before she had sat down to it: "The inspector lit the stove. In the firebox, a letter not burnt through."', '书桌上压着一页调查记录，是书记员的笔迹，可她还没坐下来写过：“稽查生了火。炉膛里有一封没烧完的信。”'],
@@ -2696,7 +2696,7 @@ function endOpening() {
 }
 function openingCard() { // 开场飞行被跳过：字幕没播完的话整段放进卡片
   if (!opening || opening.card) return;
-  clearTimeout(opening.timer); opening.card = performance.now(); $('subs').classList.remove('on');
+  clearTimeout(opening.timer); opening.card = performance.now(); stopVoice('sub'); $('subs').classList.remove('on'); // 第一句旁白别再念给看不见的字幕（11-07 评审⑪ 声1）
   const o = $('opening'), box = o.querySelector('.box');
   box.innerHTML = OPENING.map((l) => `<p>${lbl(...l)}</p>`).join('') + `<button>${lbl('Go In', '进去看看')}</button>`;
   o.hidden = false; requestAnimationFrame(() => o.classList.add('on'));
@@ -2833,11 +2833,11 @@ function chgLine(c) { // 'chg:键:1' → 夜里记录那句 [英, 中]（1 = 变
   if (n[3]) return open ? ['The inspector lit again a lamp he had put out.', '稽查把关掉的灯又打开了。'] : ['The inspector put out again a lamp he had lit.', '稽查把开着的灯又关了。'];
   return open ? [`The inspector opened the ${n[0]} again after shutting it.`, `稽查把关上的${n[1]}又打开了。`] : [`The inspector shut the ${n[0]} again after opening it.`, `稽查把${n[1]}又关上了。`];
 }
-window.__voiceLines = () => [ // 要配音的句子（英文原句），tools/voice/make_voice.py 用；漏的靠 __said 补
+window.__voiceLines = () => [ // 要配音的句子（英文原句），tools/voice/make_voice.py 用；漏的靠 __said 补。infoOf 里直接 return 的说明在末尾 concat 手列名字，新加这类说明要同步（11-07 评审⑪ 声3）
   ...OPENING, ...Object.values(ROOM_NOTES), PAGE_SAYS, LETTER_SAYS, CLERK_SAYS, ...Object.values(D2_SAYS), ...Object.values(D3_SAYS), ...Object.values(GEAR_SAYS), [DAY1_TEXT.took[2]], LOOK_THERE, ...Object.values(WHERE), PAGE_WAY,
   ...Object.values(HINTS).flatMap((h) => [h[0], h[1]]), ...[...Object.keys(CHG_KEYS), 'wall_lamp'].flatMap((k) => [true, false].map((on) => { try { return chgSay(k, on); } catch (e) { return null; } })),
   GEAR_HANG,
-].filter(Boolean).map((l) => l[0]).concat(Object.values(STORY), Object.values(INFO).map((i) => i[2]), Object.values(GEAR_RAIL).map((i) => i[2]), Object.values(X_PLAIN)).filter((t) => typeof t === 'string' && /[a-z]/i.test(t));
+].filter(Boolean).map((l) => l[0]).concat(Object.values(STORY), Object.values(INFO).map((i) => i[2]), Object.values(GEAR_RAIL).map((i) => i[2]), Object.values(X_PLAIN), Object.values(TAKE_INFO).map((i) => i[2]), ['toilet_door_1', 'stove_door', 'hall_pendant_'].map((n) => infoOf(n)[2])).filter((t) => typeof t === 'string' && /[a-z]/i.test(t));
 function chgSay(key, on) {
   const n = chgNoun(key), open = on === n[2];
   if (n[3]) return open ? ['The clerk: "Did you light the lamp?"', '书记员：“灯是你开的？”'] : ['The clerk: "Did you put the lamp out?"', '书记员：“灯是你关的？”'];
@@ -4262,13 +4262,14 @@ canvas.addEventListener('pointerleave', () => setHovered(null));
 const FP = { R: 0.17, STEP: 0.22, RUN: 2.6, SENS: 0.0022, HIDE: /^(HeadSkin|Eyebrows|Eyes|Hair_)/ }; // 头和头发眉毛眼睛（three 去掉了名字里的点：她的是 HeadSkin001、Eyes001）
 let fp = null; // { p, yaw, pitch, keys, solid, floors, solidT, eye, paused, climb, crouch, bob, inspect }
 const fpRay = new THREE.Raycaster(); fpRay.firstHitOnly = true;
-const fpHud = document.createElement('div'); fpHud.id = 'fpHud'; fpHud.hidden = true;
+const fpHud = document.createElement('div'); fpHud.id = 'fpHud'; fpHud.hidden = true; if (game.helpSeen) fpHud.classList.add('seen'); // 键位说明看过一次就不再出（存档 seen 里的 'help'，换天刷新也记得）
 const FP_KEYS = ['<b>WASD</b> to walk · <b>Shift</b> to hurry<br><b>E</b> to take a thing · <b>E</b> again to put it back or drop it · hold <b>right button</b> to turn it over', 'WASD 走动 · Shift 快走 · E 拿取，再按 E 放回原处或丢在地上 · 按住右键翻看']; // 键位：开局说明行和「点画面继续」框第二行共用（说明行只出一次，放锁时还能在框里看到，11-05 评审⑨ #3）
 const FP_HELP = '<span class="en">' + FP_KEYS[0] + '</span><span class="zh">' + FP_KEYS[1] + '</span>'; // 电脑上这行只在锁上指针后才显示（CSS 放锁时藏起），开头不再写「点画面开始」（新手 11-07 新8：点了以后底下还写着点画面开始）
 const FP_HELP_TOUCH = '<span class="en"><b>Tap</b> where to go, or a thing to use it · <b>Drag</b> to look about</span><span class="zh">点哪走到哪，点物件走过去用 · 拖动转头</span>';
 fpHud.innerHTML = '<div class="dot"></div><div class="help">' + FP_HELP + '</div><div class="hint"></div><div class="resume"><span class="en">Click to continue</span><span class="zh">点画面继续</span><div class="keys"><span class="en">' + FP_KEYS[0] + '</span><span class="zh">' + FP_KEYS[1] + '</span></div></div>';
 document.body.append(fpHud);
 const fpHint = fpHud.querySelector('.hint');
+function helpDone() { fpHud.classList.add('seen'); if (!game.helpSeen) { game.helpSeen = true; saveGame(); } }
 // 不挡路的：墙上的挂件（贴着墙，墙本身会挡）、门帘、挂着的大衣、卫生纸架、毛巾架、地毯、正端在手里的东西
 const FP_SOFT = /^(wall_|take_|sink_water_bucket_dipper$|entry_(tp_holder|towel_rack|cleaning_tools|noren|coat$|coat_rail_keys|lantern|doormat)|loft_hanging_towel|dining_stool_1$|.*_rug$)/; // dining_stool_1：和梯子夹出玄关进屋唯一的口，只剩 0.2m 能过（11-01 评审：玄关走不出去）
 function fpSolid() { // 碰撞用的网格：显示着的、不是自己的胶囊
@@ -4631,7 +4632,7 @@ addEventListener('keydown', (e) => {
   if (e.cabinClosed) return; // 这一下已经用来关弹窗 / 遗稿
   if (!card.hidden && !touchFP) { fpCardKey(e); return; }
   if (e.code === 'KeyE' && !e.repeat) { fpUse(); return; }
-  if (!fp.paused && fp.liveAt && !fpHud.classList.contains('seen') && /^(Key[WASD]|Arrow)/.test(e.code)) setTimeout(() => fpHud.classList.add('seen'), Math.max(1500, 6000 - (performance.now() - fp.liveAt))); // 操作说明：真走起来、且锁住满 6 秒才收起（评审④ v2 #1：原来一锁指针就收，「WASD 走动」从来没显示过）
+  if (!fp.paused && fp.liveAt && !fpHud.classList.contains('seen') && /^(Key[WASD]|Arrow)/.test(e.code)) setTimeout(helpDone, Math.max(1500, 6000 - (performance.now() - fp.liveAt))); // 操作说明：真走起来、且锁住满 6 秒才收起（评审④ v2 #1：原来一锁指针就收，「WASD 走动」从来没显示过）
   fp.keys.add(e.code);
 });
 addEventListener('keyup', (e) => { if (fp) fp.keys.delete(e.code); });
@@ -4986,7 +4987,7 @@ canvas.addEventListener('pointerdown', (e) => {
   e.preventDefault(); fpT.at = performance.now(); // 挡掉浏览器补的 mousedown
   if (fpT.id !== null) return; // 第二根手指不管
   Object.assign(fpT, { id: e.pointerId, x: e.clientX, y: e.clientY, x0: e.clientX, y0: e.clientY, t: performance.now(), drag: false });
-  fpHud.classList.add('live', 'seen'); // 碰过屏幕就收起说明
+  fpHud.classList.add('live'); helpDone(); // 碰过屏幕就收起说明
 });
 canvas.addEventListener('pointermove', (e) => {
   if (!fp || e.pointerId !== fpT.id) return;
