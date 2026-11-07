@@ -483,7 +483,7 @@ import { updateBirds } from './js/birds.js';
 import { LOG } from './js/playlog.js';
 import { applyWeather, wsPos, WS, groundCover, cover, precipHole, setupRoofWeather, wx, roofWx, setWeather, wxTimer, slideSnow, updatePrecip, updateRoofWeather } from './js/weather.js';
 import { LAMPS, toggles, DOORS, swapSoftProps, splitParts, setupToggles, setupFire, setupWaterFx, toggle, fire, rocker, toggleOf, updateToggles, updateFire, updateLantern, updateRocker, updateWaterFx } from './js/interact.js';
-import { people, SEATS, wakePerson, loadPeople, seatTaken, goHome, SPOTS, routeTasks, NAV, MOODS, fpRise, sitTasks, CLIMB, moodOf, climbAt, WALK_SPEED, ladderRoot, floorBelow, goTasks, nearNode, navPath, updatePeople } from './js/characters.js';
+import { setOutfit, people, SEATS, wakePerson, loadPeople, seatTaken, goHome, SPOTS, routeTasks, NAV, MOODS, fpRise, sitTasks, CLIMB, moodOf, climbAt, WALK_SPEED, ladderRoot, floorBelow, goTasks, nearNode, navPath, updatePeople } from './js/characters.js';
 // 模块（js/*.js）要用的主页面变量：模块里写 shared.名字，读写都直通这里（写过的才给 setter）
 share({
   ground: () => ground, layers: () => layers, loader: () => loader, INFO: () => INFO, meshes: () => meshes, isShown: () => isShown,
@@ -4539,14 +4539,14 @@ function gearDay() { const f = game.found; return game.day >= 2 && !game.night &
 function gearOf(name) { return /^entry_coat(_rail)?$/.test(name || '') ? 'coat' : name === 'entry_lantern' ? 'lantern' : null; }
 function gearCan(name) { const k = gearOf(name); return !!k && !gear[k] && !!fp && gearDay(); }
 function gearOn(k) { // 穿上大衣 / 提起提灯（不查能不能拿、不出声）
-  gear[k] = true;
-  if (k === 'coat') { const c = layers.get('entry_coat'); if (c) c.visible = false; }
+  gear[k] = true; gear.who = fp ? fp.p.id : gear.who || 'person_man';
+  if (k === 'coat') { const c = layers.get('entry_coat'); if (c) c.visible = false; setOutfit(gear.who, 'coat'); } // 穿上外套（Ranger 短上衣，鸟瞰看得到；第一人称看到袖口变卡其）
   else {
     const g = layers.get('entry_lantern'), t = toggles.get('entry_lantern');
     if (!gear.c0) gear.c0 = new THREE.Box3().setFromObject(g).getCenter(new THREE.Vector3()); // 原位中心（第一次拿时还挂在钉子上）
     gear.from = poseOf(g, gear.c0); gear.t = 0; gear.k = 1;
     if (!gear.home) gear.home = g.parent; scene.attach(g); // 提在手里就挂到场景下（env r4 #1）：fogCullHouse 雾外藏整栋小屋时它不跟着藏、灯不灭；上面一串父级都是单位变换，世界姿态不变
-    g.traverse((o) => { if (o.isMesh) o.castShadow = false; }); heldLayer(g, true); gear.lay = true; gear.who = fp ? fp.p.id : 'person_man';
+    g.traverse((o) => { if (o.isMesh) o.castShadow = false; }); heldLayer(g, true); gear.lay = true;
     if (t) t.on = true; // 点上蜡烛（updateToggles 慢慢亮）
   }
   shadowDirty = true; if (fp) fp.solidT = 0;
@@ -4565,7 +4565,7 @@ function gearTake(name, quiet) { // → true = 拿了（不再出卡片 / 说明
   return true;
 }
 function gearHang() { // 挂回原处
-  if (gear.coat) { const c = layers.get('entry_coat'); if (c) c.visible = true; }
+  if (gear.coat) { const c = layers.get('entry_coat'); if (c) c.visible = true; setOutfit(gear.who || 'person_man', 'base'); }
   if (gear.lantern) {
     const g = layers.get('entry_lantern'), t = toggles.get('entry_lantern');
     if (gear.home) gear.home.attach(g); g.position.set(0, 0, 0); g.quaternion.identity(); g.visible = true; heldLayer(g, false); gear.lay = false; g.traverse((o) => { if (o.isMesh) o.castShadow = true; });

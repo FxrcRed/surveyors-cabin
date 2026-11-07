@@ -13,7 +13,8 @@ const PEOPLE = [
   // 起居室长沙发右边那块坐垫（x -0.14…0.52，坐面 y 0.69，面朝北边的炉子）；坐姿骨盆在脚后 0.34m、离脚底 0.58m（×scale）
   // scale：原模型连头发 1.81m，偏高偏壮；缩到 0.94 ≈ 1.70m（门 1.97m、阁楼下净高 2.0m）
   { id: 'person_man', url: 'characters/man.glb', pos: [0.19, 0.216, 0.07], standY: 0.26, yaw: Math.PI, scale: 0.94, mode: 'sit', seat: 'living_sofa', sitUp: 0.52, // 2026-11-01 换成 Rhino 里的 Male_Peasant：原来自做衬衫下摆垂到骨盆下 8.7cm，新裤子只到 7.7cm，坐低 0.9cm；pos.y = 0.736 − 0.52×0.94
-    hand: 'characters/hand.glb', handMat: { HandSkin: 'MI_Regular_Male', HandSleeve: 'MI_Peasant' } },
+    hand: 'characters/hand.glb', handMat: { HandSkin: 'MI_Regular_Male', HandSleeve: 'MI_Peasant' },
+    coat: 'characters/man_coat.glb' }, // 第 2、3 天出门穿的外套（tools/make_coat.py 从 Quaternius Male_Ranger 取上衣和袖子、绿布换卡其），setOutfit 第一次要用时才加载
   // 女调查员：Rhino 模型里的 Female_Peasant（服装 + 女性基础人物的头 + Hair_Buns 盘发），Rhino 里 1.60m、scale 0.896。
   // 打开页面随机二选一：阁楼摇椅上看书（Sitting_Read_Loop + Book），或书桌前写笔记（Sitting_Write_Loop + Notebook、Pen）；这两个动作是 Blender 里用 IK 在坐姿上摆的。
   // 她的坐姿骨盆在脚后 0.324、坐面比根节点高 0.444（未缩放，男的是 0.34 / 0.468）。调试：网址带 ?woman=read / ?woman=desk 固定一种。
@@ -75,7 +76,36 @@ async function loadPeople() {
     indoorShade(root); // 屋里压暗天光，和家具一致
     scene.add(root); shared.layers.set(P.id, root); people.set(P.id, p);
     if (P.hand) p.hand = await loadHand(P, gltf.scene);
+    p.P = P; if (OUTFIT[P.id]) applyOutfit(p); // 存档恢复时 gearOn 可能比人先到
   }));
+}
+// —— 外套（2026-11-07 用户定：大衣用 Quaternius Ranger 短上衣）：Ranger 和 Peasant 是同一服装包、同一套骨骼，按骨骼名重新绑到人身上；穿上时藏 Peasant 的上衣和手臂，裤子、鞋不换 ——
+const OUTFIT = {}; // id → 'coat' | 'base'；人还没加载完也先记下
+const COAT_SLEEVE = new THREE.Color().setRGB(100 / 255, 71 / 255, 45 / 255, THREE.SRGBColorSpace); // 第一人称手上的袖口：Ranger 袖子贴图的平均色（棕皮）；hand.glb 的 UV 是 Peasant 的，套不上 Ranger 贴图
+function setOutfit(id, o) { OUTFIT[id] = o; const p = people.get(id); if (p) applyOutfit(p); }
+async function loadCoat(p) {
+  const g = (await shared.loader.loadAsync(p.P.coat)).scene, mats = new Map(), bones = {}; let body = null;
+  p.root.traverse((o) => { if (o.isMesh) mats.set(o.material.name, o.material); if (o.isSkinnedMesh && /^Male_Peasant_Body/.test(o.name)) body = o; });
+  for (const b of body.skeleton.bones) bones[b.name] = b;
+  const list = []; g.traverse((o) => { if (o.isSkinnedMesh) list.push(o); });
+  for (const m of list) {
+    const sk = new THREE.Skeleton(m.skeleton.bones.map((b) => bones[b.name]), m.skeleton.boneInverses.map((x) => x.clone()));
+    body.parent.add(m); m.position.set(0, 0, 0); m.quaternion.identity(); m.scale.set(1, 1, 1); m.updateMatrixWorld(true);
+    m.bind(sk, body.bindMatrix); m.frustumCulled = false; m.castShadow = m.receiveShadow = true; m.visible = false;
+    if (mats.has(m.material.name)) m.material = mats.get(m.material.name); // 手部皮肤：用他身上那份（已压暗过）
+  }
+  indoorShade(p.root); // 新材质也要屋里压暗（已处理过的会跳过）
+  p.coat = list; p.coatHide = []; p.root.traverse((o) => { if (o.isMesh && /^Male_Peasant_(Body|Arms)/.test(o.name)) p.coatHide.push(o); });
+  p.hand?.traverse((o) => { if (o.isMesh && o.name === 'HandSleeve') { p.sleeve = [o, o.material, o.material.clone()]; p.sleeve[2].map = null; p.sleeve[2].color.copy(COAT_SLEEVE); p.sleeve[2].onBeforeCompile = o.material.onBeforeCompile; } });
+}
+function applyOutfit(p) {
+  const on = OUTFIT[p.id] === 'coat'; if (!p.P?.coat) return;
+  if (on && !p.coat) { p.coatLoad ||= loadCoat(p).then(() => applyOutfit(p)).catch(console.error); return; }
+  if (!p.coat) return;
+  for (const m of p.coat) m.visible = on;
+  for (const m of p.coatHide) m.visible = !on;
+  if (p.sleeve) p.sleeve[0].material = p.sleeve[on ? 2 : 1];
+  shared.shadowDirty = true;
 }
 async function loadHand(P, body) { // 第一人称拿东西的右手（../blender/scripts/make_hand.py / make_hand_woman.py 从人身上切的握拳右手），材质用人身上同名的
   const mats = new Map(); body.traverse((o) => { if (o.isMesh) mats.set(o.material.name, o.material); });
@@ -557,4 +587,4 @@ function deskFix(p) {
 
 
 share({ people: () => people, SEATS: () => SEATS }); // interact.js 用
-export { people, SEATS, wakePerson, loadPeople, seatTaken, goHome, SPOTS, routeTasks, NAV, MOODS, fpRise, sitTasks, CLIMB, moodOf, climbAt, WALK_SPEED, ladderRoot, floorBelow, goTasks, nearNode, navPath, updatePeople };
+export { setOutfit, people, SEATS, wakePerson, loadPeople, seatTaken, goHome, SPOTS, routeTasks, NAV, MOODS, fpRise, sitTasks, CLIMB, moodOf, climbAt, WALK_SPEED, ladderRoot, floorBelow, goTasks, nearNode, navPath, updatePeople };
