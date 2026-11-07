@@ -483,7 +483,7 @@ import { updateBirds } from './js/birds.js';
 import { LOG } from './js/playlog.js';
 import { applyWeather, wsPos, WS, groundCover, cover, precipHole, setupRoofWeather, wx, roofWx, setWeather, wxTimer, slideSnow, updatePrecip, updateRoofWeather } from './js/weather.js';
 import { LAMPS, toggles, DOORS, swapSoftProps, splitParts, setupToggles, setupFire, setupWaterFx, toggle, fire, rocker, toggleOf, updateToggles, updateFire, updateLantern, updateRocker, updateWaterFx } from './js/interact.js';
-import { people, SEATS, wakePerson, loadPeople, seatTaken, goHome, SPOTS, routeTasks, NAV, MOODS, fpRise, sitTasks, CLIMB, moodOf, climbAt, WALK_SPEED, ladderRoot, floorBelow, goTasks, nearNode, navPath, updatePeople } from './js/characters.js';
+import { setOutfit, people, SEATS, wakePerson, loadPeople, seatTaken, goHome, SPOTS, routeTasks, NAV, MOODS, fpRise, sitTasks, CLIMB, moodOf, climbAt, WALK_SPEED, ladderRoot, floorBelow, goTasks, nearNode, navPath, updatePeople } from './js/characters.js';
 // 模块（js/*.js）要用的主页面变量：模块里写 shared.名字，读写都直通这里（写过的才给 setter）
 share({
   ground: () => ground, layers: () => layers, loader: () => loader, INFO: () => INFO, meshes: () => meshes, isShown: () => isShown,
@@ -4278,6 +4278,14 @@ canvas.addEventListener('pointerleave', () => setHovered(null));
 const FP = { R: 0.17, STEP: 0.22, RUN: 2.6, SENS: 0.0022, HIDE: /^(HeadSkin|Eyebrows|Eyes|Hair_)/ }; // 头和头发眉毛眼睛（three 去掉了名字里的点：她的是 HeadSkin001、Eyes001）
 let fp = null; // { p, yaw, pitch, keys, solid, floors, solidT, eye, paused, climb, crouch, bob, inspect }
 const fpRay = new THREE.Raycaster(); fpRay.firstHitOnly = true;
+const _lnO = new THREE.Vector3(), _lnD = new THREE.Vector3();
+function fpLean(r, s) { // 眼睛在身体中心前多少：平视 12cm；低头（俯角 43°→75°）再往前探到 28cm，前面有墙就停在墙前 8cm
+  const base = 0.12 * s, ext = 0.16 * s * THREE.MathUtils.smoothstep(-fp.pitch, 0.75, 1.3);
+  if (ext < 0.002 || !fp.near) return base;
+  fpRay.set(_lnO.set(r.position.x, r.position.y + 1.3 * s, r.position.z), _lnD.set(Math.sin(fp.yaw), 0, Math.cos(fp.yaw))); fpRay.far = base + ext + 0.08;
+  const h = fpRay.intersectObjects(fp.near, false)[0];
+  return h ? Math.max(base, Math.min(base + ext, h.distance - 0.08)) : base + ext;
+}
 const fpHud = document.createElement('div'); fpHud.id = 'fpHud'; fpHud.hidden = true; if (game.helpSeen) fpHud.classList.add('seen'); // 键位说明看过一次就不再出（存档 seen 里的 'help'，换天刷新也记得）
 const FP_KEYS = ['<b>WASD</b> to walk · <b>Shift</b> to hurry<br><b>E</b> to take a thing · <b>E</b> again to put it back or drop it · hold <b>right button</b> to turn it over', 'WASD 走动 · Shift 快走 · E 拿取，再按 E 放回原处或丢在地上 · 按住右键翻看']; // 键位：开局说明行和「点画面继续」框第二行共用（说明行只出一次，放锁时还能在框里看到，11-05 评审⑨ #3）
 const FP_HELP = '<span class="en">' + FP_KEYS[0] + '</span><span class="zh">' + FP_KEYS[1] + '</span>'; // 电脑上这行只在锁上指针后才显示（CSS 放锁时藏起），开头不再写「点画面开始」（新手 11-07 新8：点了以后底下还写着点画面开始）
@@ -4405,15 +4413,22 @@ function aimingAtHome(h) { // 准星对着它原来的位置（原位包围盒�
 }
 function reachable(name) {
   const g = name && (TAKEABLE.test(name) || gearCan(name)) && layers.get(gearOf(name) === 'coat' ? 'entry_coat' : name);
-  return g && new THREE.Box3().setFromObject(g).distanceToPoint(camera.position) < REACH ? g : null;
+  if (!g) return null;
+  const b = _rb.setFromObject(g), c = camera.position;
+  if (b.distanceToPoint(c) < REACH) return g;
+  return b.max.y < c.y - 0.9 && Math.hypot(THREE.MathUtils.clamp(c.x, b.min.x, b.max.x) - c.x, THREE.MathUtils.clamp(c.z, b.min.z, b.max.z) - c.z) < 0.8 ? g : null; // 掉在地上 / 矮处：弯腰去捡，按水平距离（眼高 1.5m，站在旁边低头也有 1.4m，REACH 1.0 永远够不着，动画检查 #1）
 }
+const _rb = new THREE.Box3();
 function dropPose(h) { // 往前丢：前方约 0.7m（前面有墙就近一点），从眼高往下找落脚面；最薄的轴竖起来平躺，长轴横在面前稍微歪一点
   const info = h.info, fwd = new THREE.Vector3(Math.sin(fp.yaw), 0, Math.cos(fp.yaw));
   fpRay.set(camera.position, fwd); fpRay.far = 0.95;
-  const w = fpRay.intersectObjects(fp.solid, false)[0], d = w ? Math.max(0.2, w.distance - 0.25) : 0.7;
-  const at = camera.position.clone().addScaledVector(fwd, d);
-  fpRay.set(at, _fpDn); fpRay.far = 3;
-  const f = fpRay.intersectObjects(fp.floors, false)[0], fy = f ? f.point.y : fp.p.root.position.y;
+  const w = fpRay.intersectObjects(fp.solid, false)[0]; let d = w ? Math.max(0.2, w.distance - 0.25) : 0.7, at, hs;
+  for (;;) { // 落点正下方先打到人（隐形点选胶囊）：往自己这边收 0.2m 再找，别落在人身上悬空、也别穿进坐着的人怀里（动画检查 #2）
+    at = camera.position.clone().addScaledVector(fwd, d); fpRay.set(at, _fpDn); fpRay.far = 3; hs = fpRay.intersectObjects(fp.floors, false);
+    if (d <= 0.2 || !hs.length || !people.has(hs[0].object.parent?.name)) break;
+    d = Math.max(0.2, d - 0.2);
+  }
+  const f = hs.find((h) => !people.has(h.object.parent?.name)), fy = f ? f.point.y : fp.p.root.position.y;
   const across = new THREE.Vector3(Math.cos(fp.yaw), 0, -Math.sin(fp.yaw)).applyAxisAngle(_hY, (Math.random() - 0.5) * 0.8);
   const a1 = info.a1, up = info.a3;
   const mo = new THREE.Matrix4().makeBasis(a1, up, new THREE.Vector3().crossVectors(a1, up));
@@ -4524,14 +4539,14 @@ function gearDay() { const f = game.found; return game.day >= 2 && !game.night &
 function gearOf(name) { return /^entry_coat(_rail)?$/.test(name || '') ? 'coat' : name === 'entry_lantern' ? 'lantern' : null; }
 function gearCan(name) { const k = gearOf(name); return !!k && !gear[k] && !!fp && gearDay(); }
 function gearOn(k) { // 穿上大衣 / 提起提灯（不查能不能拿、不出声）
-  gear[k] = true;
-  if (k === 'coat') { const c = layers.get('entry_coat'); if (c) c.visible = false; }
+  gear[k] = true; gear.who = fp ? fp.p.id : gear.who || 'person_man';
+  if (k === 'coat') { const c = layers.get('entry_coat'); if (c) c.visible = false; setOutfit(gear.who, 'coat'); } // 穿上外套（Ranger 短上衣，鸟瞰看得到；第一人称看到袖口变卡其）
   else {
     const g = layers.get('entry_lantern'), t = toggles.get('entry_lantern');
     if (!gear.c0) gear.c0 = new THREE.Box3().setFromObject(g).getCenter(new THREE.Vector3()); // 原位中心（第一次拿时还挂在钉子上）
     gear.from = poseOf(g, gear.c0); gear.t = 0; gear.k = 1;
     if (!gear.home) gear.home = g.parent; scene.attach(g); // 提在手里就挂到场景下（env r4 #1）：fogCullHouse 雾外藏整栋小屋时它不跟着藏、灯不灭；上面一串父级都是单位变换，世界姿态不变
-    g.traverse((o) => { if (o.isMesh) o.castShadow = false; }); heldLayer(g, true);
+    g.traverse((o) => { if (o.isMesh) o.castShadow = false; }); heldLayer(g, true); gear.lay = true;
     if (t) t.on = true; // 点上蜡烛（updateToggles 慢慢亮）
   }
   shadowDirty = true; if (fp) fp.solidT = 0;
@@ -4550,10 +4565,10 @@ function gearTake(name, quiet) { // → true = 拿了（不再出卡片 / 说明
   return true;
 }
 function gearHang() { // 挂回原处
-  if (gear.coat) { const c = layers.get('entry_coat'); if (c) c.visible = true; }
+  if (gear.coat) { const c = layers.get('entry_coat'); if (c) c.visible = true; setOutfit(gear.who || 'person_man', 'base'); }
   if (gear.lantern) {
     const g = layers.get('entry_lantern'), t = toggles.get('entry_lantern');
-    if (gear.home) gear.home.attach(g); g.position.set(0, 0, 0); g.quaternion.identity(); g.visible = true; heldLayer(g, false); g.traverse((o) => { if (o.isMesh) o.castShadow = true; });
+    if (gear.home) gear.home.attach(g); g.position.set(0, 0, 0); g.quaternion.identity(); g.visible = true; heldLayer(g, false); gear.lay = false; g.traverse((o) => { if (o.isMesh) o.castShadow = true; });
     if (t) t.on = false;
   }
   gear.coat = gear.lantern = false; shadowDirty = true; if (fp) fp.solidT = 0; gearSave();
@@ -4572,13 +4587,31 @@ function updateGear(dt) {
   }
   if (fp && game.day === 2 && game.found.has('d2light') && (gear.coat || gear.lantern) && !outdoors(fp.p.root.position)) { gearHang(); showRoomNote(GEAR_HANG); } // 傍晚回到屋里
   if (!gear.lantern) return;
-  const g = layers.get('entry_lantern'); g.visible = !!fp; if (!fp) return;
+  const g = layers.get('entry_lantern'); g.visible = true; gearLayer(g, true);
   gear.k += ((held || !card.hidden ? 0 : 1) - gear.k) * Math.min(1, dt * 7); // 卡片开着也沉出画面：手机上走到地上的线索前低头读卡，提灯会变大压到 EN（交互 r3 #7）
   const P = gearPose();
   if (gear.t < 1) { // 从钉子上摘下来：中途往上抬一点（同 held 的 up）
     gear.t = Math.min(1, gear.t + dt / 0.55); const e = gear.t * gear.t * (3 - 2 * gear.t);
     _hp.lerpVectors(gear.from.X, P.X, e); _hp.y += Math.sin(Math.PI * e) * 0.06; setPose(g, gear.c0, _hp, _hq.slerpQuaternions(gear.from.Q, P.Q, e));
   } else setPose(g, gear.c0, P.X, P.Q);
+  if (hand && !held && gear.t >= 1 && gear.k > 0.02) { // 握着提梁的手（原来提灯悬在右下角、下面没有手，动画检查 #7）
+    hand.visible = true; hand.position.copy(P.X); hand.position.y += LANT_HAND.up;
+    hand.quaternion.setFromAxisAngle(_hY, fp.yaw + Math.PI).multiply(LANT_HAND.rot);
+  }
+}
+const LANT_HAND = { up: 0.105, rot: handRot([0.35, -0.85, 0.4], [1, 0, 0.2]) }; // 拳心在提灯中心上方 up（提梁）；rot：同 HAND.rot 的 e / back，只是不跟着低头（提灯一直竖着）
+const _gv = new THREE.Vector3(), _gv2 = new THREE.Vector3();
+function gearLayer(g, on) { if (gear.lay !== on) { heldLayer(g, on); gear.lay = on; } } // 第一人称画在 HELD_LAYER（不穿墙），鸟瞰挂在人手上要回普通图层
+function gearOrbit() { // 鸟瞰：提灯提在他右手上（原来鸟瞰时藏起，人空着手，衣帽架却说他带着，动画检查 #6）
+  if (fp || !gear.lantern) return;
+  const m = people.get(gear.who || 'person_man'), g = layers.get('entry_lantern'); if (!m || !g) return;
+  if (!m.root.visible) { g.visible = false; return; }
+  g.visible = true; gearLayer(g, false);
+  _gv2.set(0, 0, 1).applyQuaternion(m.root.quaternion); const yaw = Math.atan2(_gv2.x, _gv2.z);
+  if (m.mode === 'sit') { const r = m.root.position; _gv.set(r.x - Math.cos(yaw) * 0.3 + Math.sin(yaw) * 0.15, m.standY + LANT_HAND.up - 0.005, r.z + Math.sin(yaw) * 0.3 + Math.cos(yaw) * 0.15); } // 坐着：放在右脚边稍前的地上（贴脚会插进沙发前沿）（手搭在膝盖上，挂手上会插进腿和坐垫）
+  else { const H = m.root.getObjectByName('hand_r'), M = m.root.getObjectByName('middle_01_r'); if (!H || !M) return;
+    H.getWorldPosition(_gv); M.getWorldPosition(_gv2); _gv.lerp(_gv2, 0.7); _gv.y -= LANT_HAND.up; } // 拳心 ≈ 手腕到中指根 70% 处
+  setPose(g, gear.c0, _gv, _hq.setFromAxisAngle(_hY, yaw + GEAR_YAW));
 }
 function startFP(id) {
   const p = people.get(id);
@@ -4604,7 +4637,6 @@ function startFP(id) {
 function stopFP() {
   if (!fp) return;
   heldPutBack(); // 拿着东西就直接放回原处
-  if (gear.lantern) layers.get('entry_lantern').visible = false; // 提灯在他手里：鸟瞰时不浮在镜头前
   const p = fp.p; fp = null;
   p.player = false; p.hit.visible = true; p.next = 6; p.roam = 8; // 过一会儿走回自己的座位
   p.root.traverse((o) => { if (FP.HIDE.test(o.name)) o.visible = true; });
@@ -4806,13 +4838,14 @@ function updateFP(dt) {
       r.rotation.y += THREE.MathUtils.clamp(angDiff(r.rotation.y, fp.yaw), -8 * dt, 8 * dt); // 身体朝向跟着视线转
       if (f || st) fp.go = null; // 按键接管：取消点地面走路
       const go = fp.go ? fpSteer(r, dt) : null; // 触屏点了地面 / 物件：沿路点走过去
+      let spK = 1; // 走路动画步频 = 实际速度 / 原速（倒着走、弯腰、屋外 ×1.8 都跟着变，动画检查 #13）
       if (f || st || go) {
         const sp = (run ? FP.RUN : WALK_SPEED) * s * (f < 0 ? 0.7 : 1) * (fp.crouch ? 0.6 : 1) * (game.day >= 2 && outdoors(r) ? 1.8 : 1); // 屋外路长（到 ✕ 110m）：走快些
         if (go) _fpV.set(go[0], 0, go[1]).multiplyScalar(sp * dt);
         else _fpV.set(Math.sin(fp.yaw) * f - Math.cos(fp.yaw) * st, 0, Math.cos(fp.yaw) * f + Math.sin(fp.yaw) * st).normalize().multiplyScalar(sp * dt);
-        moving = fpTryMove(r, _fpV.x, _fpV.z, s);
+        moving = fpTryMove(r, _fpV.x, _fpV.z, s); spK = sp / (WALK_SPEED * s);
       }
-      if (moving) { p.play(run && !fp.crouch ? 'Jog_Fwd_Loop' : 'Walk_Loop', 0.25); p.cur.timeScale = f < 0 ? -0.7 : 1; } // 倒着走 = 走路动画倒放
+      if (moving) { const jog = run && !fp.crouch; p.play(jog ? 'Jog_Fwd_Loop' : 'Walk_Loop', 0.25); p.cur.timeScale = jog ? 1 : (f < 0 ? -1 : 1) * spK * p.walkTS; } // 倒着走 = 走路动画倒放
       else { p.play(MOODS.stand.idle, 0.3); p.cur.timeScale = 1; }
       still = !moving && !!fp.last && r.position.distanceToSquared(fp.last) < 1e-10 && fp.ceil != null && !fpBusy(r.position); // 人和东西都没动：上一帧推挤、贴地的结果原样有效，51 条射线全省（11-05 评审 #7）
       if (!still) { const q0 = fpProbe(r.position.x, r.position.y, r.position.z);
@@ -4832,7 +4865,8 @@ function updateFP(dt) {
   fp.crouch = eyeH < 1.62 * s - 0.08;
   fp.bob = moving ? fp.bob + dt * (run ? 13 : 8.5) : fp.bob * 0.9;
   audioStep(fp.bob, moving, run);
-  _fpO.set(r.position.x + Math.sin(fp.yaw) * 0.12 * s, r.position.y + eyeH + Math.sin(fp.bob * 2) * 0.012, r.position.z + Math.cos(fp.yaw) * 0.12 * s);
+  const lean = fpLean(r, s); // 低头往前探，免得看见自己的衣领、肩膀（动画检查 #12）
+  _fpO.set(r.position.x + Math.sin(fp.yaw) * lean, r.position.y + eyeH + Math.sin(fp.bob * 2) * 0.012, r.position.z + Math.cos(fp.yaw) * lean);
   const seated = !!p.seat || p.mode === 'sit' || (climbs(p) && (!!fp.climb || p.S != null)); // 坐着、她爬梯子时镜头跟头骨
   fp.headK = (fp.headK || 0) + ((seated ? 1 : 0) - (fp.headK || 0)) * Math.min(1, dt * 6);
   if (fp.headK > 0.001 && p.head) { // 头骨（颅底）往上 7cm、沿视线往前 10cm ≈ 眼睛
@@ -5542,7 +5576,7 @@ renderer.setAnimationLoop(() => {
   if (sceneReady) hideOutdoors(now);
   audioTick(dt, !!VOICE.a && !VOICE.a.paused);
   updateBirds(dt);
-  updatePeople(dt);
+  updatePeople(dt); gearOrbit(); // 人动完再把提灯挂到手上
   if (WATER.mat) WATER.mat.userData.u.uT.value = now / 1000;
   if (BROOK.wheel) { BROOK.wheel.rotation.x = -now / 1000 * 0.9; BROOK.snow.value = sstep(0.3, 0.85, cover.uSnow.value); } // 水轮慢转（约 7 秒一圈），底下的叶片顺流走；土岸积雪跟地面差不多同时出现
   if (WATER.ice) { const I = WATER.ice, k1 = wx.name === 'Blizzard' ? 1 : 0; // 浮冰：暴雪时约 4 秒长出来，转晴时缩回去；看不到就不算

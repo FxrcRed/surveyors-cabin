@@ -12,13 +12,14 @@ import { shared, share } from './state.js';
 const PEOPLE = [
   // 起居室长沙发右边那块坐垫（x -0.14…0.52，坐面 y 0.69，面朝北边的炉子）；坐姿骨盆在脚后 0.34m、离脚底 0.58m（×scale）
   // scale：原模型连头发 1.81m，偏高偏壮；缩到 0.94 ≈ 1.70m（门 1.97m、阁楼下净高 2.0m）
-  { id: 'person_man', url: 'characters/man.glb', pos: [0.19, 0.247, 0.07], standY: 0.26, yaw: Math.PI, scale: 0.94, mode: 'sit', seat: 'living_sofa', sitUp: 0.52, // 2026-11-01 换成 Rhino 里的 Male_Peasant：原来自做衬衫下摆垂到骨盆下 8.7cm，新裤子只到 7.7cm，坐低 0.9cm；pos.y = 0.736 − 0.52×0.94
-    hand: 'characters/hand.glb', handMat: { HandSkin: 'MI_Regular_Male', HandSleeve: 'MI_Peasant' } },
+  { id: 'person_man', url: 'characters/man.glb', pos: [0.19, 0.216, 0.07], standY: 0.26, yaw: Math.PI, scale: 0.94, mode: 'sit', seat: 'living_sofa', sitUp: 0.52, // 2026-11-01 换成 Rhino 里的 Male_Peasant：原来自做衬衫下摆垂到骨盆下 8.7cm，新裤子只到 7.7cm，坐低 0.9cm；pos.y = 0.736 − 0.52×0.94
+    hand: 'characters/hand.glb', handMat: { HandSkin: 'MI_Regular_Male', HandSleeve: 'MI_Peasant' },
+    coat: 'characters/man_coat.glb' }, // 第 2、3 天出门穿的外套（tools/make_coat.py 从 Quaternius Male_Ranger 取上衣和袖子、绿布换卡其），setOutfit 第一次要用时才加载
   // 女调查员：Rhino 模型里的 Female_Peasant（服装 + 女性基础人物的头 + Hair_Buns 盘发），Rhino 里 1.60m、scale 0.896。
   // 打开页面随机二选一：阁楼摇椅上看书（Sitting_Read_Loop + Book），或书桌前写笔记（Sitting_Write_Loop + Notebook、Pen）；这两个动作是 Blender 里用 IK 在坐姿上摆的。
   // 她的坐姿骨盆在脚后 0.324、坐面比根节点高 0.444（未缩放，男的是 0.34 / 0.468）。调试：网址带 ?woman=read / ?woman=desk 固定一种。
   // 2026-10-20 起她也能第一人称操作（手 hand_woman.glb），也会自己起来走动、爬梯子上下阁楼（见「女调查员的日常」）；坐哪张椅子就做哪件事（seatActs），别的座位是普通坐姿。
-  { id: 'person_woman', url: 'characters/woman.glb', scale: 0.896, mode: 'sit', sitBack: 0.324, sitUp: 0.49,
+  { id: 'person_woman', url: 'characters/woman.glb', scale: 0.896, mode: 'sit', sitBack: 0.324, sitUp: 0.49, walkTS: 1.29, // walkTS：她的 Walk_Loop 一周期 1.71s，原速支撑脚只蹬 0.69 m/s，按 WALK_SPEED 走会往前滑 22%（2026-11-07 动画检查 #3）
     hand: 'characters/hand_woman.glb', handMat: { HandSleeve: 'MI_Peasant' },
     seatActs: { loft_rocking_chair: { idle: 'Sitting_Read_Loop', props: ['Book', 'Cushion'] }, loft_chair: { idle: 'Sitting_Write_Loop', props: ['Notebook', 'Pen'] } },
     // 游戏（2026-10-21 用户定）：白天站在一楼地图前、在楼下转（planWander），天黑才走去书桌坐下写调查记录；重开页面时已经天黑就直接坐在书桌前。
@@ -55,11 +56,11 @@ async function loadPeople() {
     for (const c of gltf.animations) acts[c.name] = mixer.clipAction(c);
     for (const n of ['Sitting_Enter', 'Sitting_Exit', 'Interact', 'PickUp_Table', 'Ladder_Top', 'Ladder_Top_Lift']) if (acts[n]) { acts[n].setLoop(THREE.LoopOnce); acts[n].clampWhenFinished = true; }
     const p = { id: P.id, root, mixer, acts, cur: null, mode: P.mode, next: 4 + Math.random() * 8, hit, head, tasks: [], sitY: root.position.y, standY: P.standY ?? root.position.y, seat: P.seat || null, roam: 70 + Math.random() * 90,
-      sitBack: P.sitBack ?? 0.34, sitUp: P.sitUp ?? 0.517, seatActs: P.seatActs || null, showProps, home: P.seat,
+      sitBack: P.sitBack ?? 0.34, sitUp: P.sitUp ?? 0.517, seatActs: P.seatActs || null, showProps, home: P.seat, walkTS: P.walkTS || 1,
       neck: gltf.scene.getObjectByName('neck_01'), look: null, lookK: 0, lookYaw: 0, lookPitch: 0, lookT: 0 };
     p.play = (name, fade = 0.5) => {
       const a = acts[name]; if (!a || a === p.cur) return;
-      a.reset().setEffectiveWeight(1).play(); a.timeScale = 1;
+      a.reset().setEffectiveWeight(1).play(); a.timeScale = name === 'Walk_Loop' ? p.walkTS : 1;
       if (p.cur) p.cur.crossFadeTo(a, fade, false);
       p.cur = a;
     };
@@ -75,7 +76,36 @@ async function loadPeople() {
     indoorShade(root); // 屋里压暗天光，和家具一致
     scene.add(root); shared.layers.set(P.id, root); people.set(P.id, p);
     if (P.hand) p.hand = await loadHand(P, gltf.scene);
+    p.P = P; if (OUTFIT[P.id]) applyOutfit(p); // 存档恢复时 gearOn 可能比人先到
   }));
+}
+// —— 外套（2026-11-07 用户定：大衣用 Quaternius Ranger 短上衣）：Ranger 和 Peasant 是同一服装包、同一套骨骼，按骨骼名重新绑到人身上；穿上时藏 Peasant 的上衣和手臂，裤子、鞋不换 ——
+const OUTFIT = {}; // id → 'coat' | 'base'；人还没加载完也先记下
+const COAT_SLEEVE = new THREE.Color().setRGB(100 / 255, 71 / 255, 45 / 255, THREE.SRGBColorSpace); // 第一人称手上的袖口：Ranger 袖子贴图的平均色（棕皮）；hand.glb 的 UV 是 Peasant 的，套不上 Ranger 贴图
+function setOutfit(id, o) { OUTFIT[id] = o; const p = people.get(id); if (p) applyOutfit(p); }
+async function loadCoat(p) {
+  const g = (await shared.loader.loadAsync(p.P.coat)).scene, mats = new Map(), bones = {}; let body = null;
+  p.root.traverse((o) => { if (o.isMesh) mats.set(o.material.name, o.material); if (o.isSkinnedMesh && /^Male_Peasant_Body/.test(o.name)) body = o; });
+  for (const b of body.skeleton.bones) bones[b.name] = b;
+  const list = []; g.traverse((o) => { if (o.isSkinnedMesh) list.push(o); });
+  for (const m of list) {
+    const sk = new THREE.Skeleton(m.skeleton.bones.map((b) => bones[b.name]), m.skeleton.boneInverses.map((x) => x.clone()));
+    body.parent.add(m); m.position.set(0, 0, 0); m.quaternion.identity(); m.scale.set(1, 1, 1); m.updateMatrixWorld(true);
+    m.bind(sk, body.bindMatrix); m.frustumCulled = false; m.castShadow = m.receiveShadow = true; m.visible = false;
+    if (mats.has(m.material.name)) m.material = mats.get(m.material.name); // 手部皮肤：用他身上那份（已压暗过）
+  }
+  indoorShade(p.root); // 新材质也要屋里压暗（已处理过的会跳过）
+  p.coat = list; p.coatHide = []; p.root.traverse((o) => { if (o.isMesh && /^Male_Peasant_(Body|Arms)/.test(o.name)) p.coatHide.push(o); });
+  p.hand?.traverse((o) => { if (o.isMesh && o.name === 'HandSleeve') { p.sleeve = [o, o.material, o.material.clone()]; p.sleeve[2].map = null; p.sleeve[2].color.copy(COAT_SLEEVE); p.sleeve[2].onBeforeCompile = o.material.onBeforeCompile; } });
+}
+function applyOutfit(p) {
+  const on = OUTFIT[p.id] === 'coat'; if (!p.P?.coat) return;
+  if (on && !p.coat) { p.coatLoad ||= loadCoat(p).then(() => applyOutfit(p)).catch(console.error); return; }
+  if (!p.coat) return;
+  for (const m of p.coat) m.visible = on;
+  for (const m of p.coatHide) m.visible = !on;
+  if (p.sleeve) p.sleeve[0].material = p.sleeve[on ? 2 : 1];
+  shared.shadowDirty = true;
 }
 async function loadHand(P, body) { // 第一人称拿东西的右手（../blender/scripts/make_hand.py / make_hand_woman.py 从人身上切的握拳右手），材质用人身上同名的
   const mats = new Map(); body.traverse((o) => { if (o.isMesh) mats.set(o.material.name, o.material); });
@@ -88,7 +118,7 @@ async function loadHand(P, body) { // 第一人称拿东西的右手（../blende
 // pull：书桌椅要先往外拉开人才站得进去（不拉的话站的位置插进桌子），坐下后连人带椅推回去，起身时再拉开、往旁边让一步、推回。out = 拉椅子 / 起身后让开时站的地方。
 // rock：摇椅，坐着时一直轻轻摇，人跟着椅子的变换一起动。
 const SEATS = {
-  living_sofa: { pelvis: [0.19, 0.39], y: 0.736, yaw: Math.PI, node: 'sofa' }, // 长沙发右坐垫（老人的老位置）；坐面实测 0.69，软垫坐下去陷 4.6cm，按 0.736 算正好是原来手调的根节点 0.25
+  living_sofa: { pelvis: [0.19, 0.39], y: 0.705, yaw: Math.PI, node: 'sofa' }, // 长沙发右坐垫（老人的老位置）；坐面实测 0.69，软垫坐下去陷 4.6cm，按 0.736 算正好是原来手调的根节点 0.25
   loft_chair: { pelvis: [-0.894, -1.124], y: 0.70, yaw: -Math.PI / 2, pull: [0.4, 0], out: [-0.83, -0.62], node: 'desk', shut: ['desk_drawer'] }, // shut：坐下前先关上（抽屉拉开 30cm 正顶在腿上） // 书桌椅（名字带 loft，其实在一楼起居室西北角），面朝西边的书桌
   loft_rocking_chair: { pelvis: [-0.686, 1.114], y: 2.70, yaw: Math.atan2(0.733, -0.68), rock: true, node: 'L_rocker' }, // 阁楼摇椅，顺着摇杆朝东南；骨盆比坐面中心往椅背挪 5cm（原先挪 10cm 时膝盖窝在座面前沿后面，小腿必穿前横档；背后空隙由女调查员的靠垫 Cushion 填）
   entry_toilet: { pelvis: [-1.43, 1.259], y: 0.58, yaw: Math.PI / 2, node: 'wc' }, // 卫生间马桶，面朝东边的门
@@ -141,7 +171,7 @@ function riseTasks(p, n = p.seat) { // 起身：（拉开椅子）→ 站起来 
   if (!n) return p.mode === 'sit' ? [['anim', 'Sitting_Exit']] : [];
   if (S.pull) t.push(['chair', n, 1]);
   t.push(['anim', 'Sitting_Exit'], ['unseat']);
-  if (S.pull) t.push(['walk', ...S.out], ['chair', n, 0]);
+  if (S.pull) t.push(['walk', ...S.out], ['face', S.pelvis[0] + S.pull[0], S.pelvis[1] + S.pull[1]], ['chair', n, 0]); // 先回身对着椅子再推（站着推椅子有伸手动作）
   return t;
 }
 function fpRise(p) { // 第一人称起身：站起来后再往前迈半步。沙发坐垫网格伸到 z 0.03，Sitting_Exit 做完脚还在坐垫投影里（z 0.21），身体那几圈碰撞射线从坐垫里面往外打、四面都挡，人就关在沙发里出不去（2026-10-27 用户试玩）
@@ -164,9 +194,10 @@ function routeTasks(x, y, z, to) { // 从 (x,y,z) 走到节点 to；不在同一
   }
   return [...goTasks(null, x, z, 'L_land'), ['walk', ...NAV.L_land], ['face', 0.6, 1.5], ['gate', false], ['turn', shared.LADDER.yaw], ['topDown'], ['climb', 0], ['dismount'], ...goTasks(null, ...NAV.ladder, to)];
 }
+const STOVE_AT = [1.27, -0.91]; // 拨火站的地方：NAV.stove 往炉门挪 0.2m，原来离炉子 0.62m，Interact 是平举手臂往前指，站近也离炉子 32cm，改弯腰的 PickUp_Table（动画检查 #10）
 // 老人的日常：坐在沙发上，隔 1–2.5 分钟（或被点一下）起来去做一件事再回沙发：拨火暖手、去书桌坐一会儿、上厕所
 const ACTIVITIES = {
-  stove: (p) => [['face', 1.42, -1.3], ['anim', 'Interact'], ['idle', 3]],
+  stove: (p) => [['walk', ...STOVE_AT], ['face', 1.42, -1.3], ['anim', 'PickUp_Table'], ['idle', 3]],
   desk: (p) => [...sitTasks(p, 'loft_chair'), ['idle', 15 + Math.random() * 15], ...riseTasks(p, 'loft_chair')],
   wc: (p) => [...sitTasks(p, 'entry_toilet'), ['idle', 8 + Math.random() * 8], ...riseTasks(p, 'entry_toilet')],
 };
@@ -179,7 +210,17 @@ function planOuting(p, id, act) {
   t.push(...goTasks(p, startX, startZ, goal), ...ACTIVITIES[act](p));
   const back = act === 'stove' ? 'stove' : goal;
   t.push(...navPath(back, SEATS[home].node).map(([x, z]) => ['walk', x, z]), ...sitTasks(p, home));
-  return wcDoorTasks(t);
+  return wcDoorTasks(trimBack(t));
+}
+function trimBack(t) { // 连续三段走路 A→B→C，C 就在 B 身后 0.45m 内：去掉 B（回座位时路线终点 sofa/wc 是坐着时脚的位置，先走进沙发再转身退到座位前，动画检查 #4）
+  const out = []; let a = null;
+  for (let i = 0; i < t.length; i++) {
+    const B = t[i], C = t[i + 1];
+    if (a && B[0] === 'walk' && C && C[0] === 'walk') { const bx = B[1] - a[0], bz = B[2] - a[1], cx = C[1] - B[1], cz = C[2] - B[2]; if (bx * cx + bz * cz < 0 && Math.hypot(cx, cz) < 0.45) continue; }
+    if (B[0] === 'walk') a = [B[1], B[2]]; else if (B[0] !== 'face' && B[0] !== 'turn' && B[0] !== 'wcDoor') a = null;
+    out.push(B);
+  }
+  return out;
 }
 function wcDoorTasks(t) { // 走 entryW ↔ wcIn 这一段要穿过折叠门门洞：前面插一个 wcDoor（执行时门开着就跳过）
   const out = []; let prev = null;
@@ -199,7 +240,7 @@ const SPOTS = {
   books: { node: 'books', tasks: () => [['face', -0.55, -1.72], ['look', -0.9, 1.8, -1.6, 4], ['idle', 2], ['anim', 'PickUp_Table'], ['idle', 2]] },
   map: { node: 'books', tasks: () => [['face', -1.72, -1.1], ['look', -1.7, 1.65, -1.08, 5], ['idle', 4]] },
   dish: { node: 'dish', tasks: () => [['face', 0.2, -1.72], ['anim', 'PickUp_Table'], ['idle', 2]] },
-  stove: { node: 'stove', tasks: () => [['face', 1.42, -1.3], ['anim', 'Interact'], ['idle', 3]] },
+  stove: { node: 'stove', tasks: () => [['walk', ...STOVE_AT], ['face', 1.42, -1.3], ['anim', 'PickUp_Table'], ['idle', 3]] },
   rail: { node: 'L_rail', tasks: () => { const d = 8 + Math.random() * 8; return [['face', 0.9, -0.6], ['pose', 'Idle_FoldArms_Loop', d, [0.0, 0.8, -0.5]]]; } },
   bedside: { node: 'L_bed', tasks: () => [['face', 0.35, -1.7], ['anim', 'PickUp_Table'], ['idle', 2]] },
   hooks: { node: 'L_hooks', tasks: () => [['face', 0, 1.8], ['look', 0, 3.7, 1.67, 3], ['anim', 'Interact'], ['idle', 2]] },
@@ -226,12 +267,12 @@ function planWoman(p, act) {
   p.lastSpot = picks[picks.length - 1];
   const hn = SEATS[home].node;
   t.push(...routeTasks(x, y, z, hn), ['walk', ...NAV[hn]], ...sitTasks(p, home));
-  return t;
+  return trimBack(t);
 }
 function goHome(p, id) { // 玩家退出后人留在别处：（起身）走回自己的座位坐下
   const home = ROUTINES[id].home || p.home, S = p.seat && SEATS[p.seat], r = p.root;
   const sx = S && S.out ? S.out[0] : r.position.x, sz = S && S.out ? S.out[1] : r.position.z;
-  p.tasks = wcDoorTasks([...riseTasks(p), ...routeTasks(sx, r.position.y, sz, SEATS[home].node), ['walk', ...NAV[SEATS[home].node]], ...sitTasks(p, home)]);
+  p.tasks = wcDoorTasks(trimBack([...riseTasks(p), ...routeTasks(sx, r.position.y, sz, SEATS[home].node), ['walk', ...NAV[SEATS[home].node]], ...sitTasks(p, home)]));
 }
 function wakePerson(id, act) {
   const p = people.get(id), R = ROUTINES[id];
@@ -250,7 +291,7 @@ function wakePerson(id, act) {
 // 下：阁楼口面朝西（背对梯子）倒放 Ladder_Top（topDown）→ 倒着爬到 S=0 → dismount 挪回地上站点。
 const CLIMB = { cyc: 0.56, top: 0.84, fwd: 0.787, up: 1.068, gateAt: 2.0 };
 function ladderRoot(S, out = new THREE.Vector3()) { return out.set(1.254 - 0.1987 * S, 0.399 + 0.9801 * S, shared.ladderZ()); }
-const _cv = new THREE.Vector3();
+const _cv = new THREE.Vector3(), _rq = new THREE.Quaternion();
 function snap(p, name, time = 0, ts = 1) { // 立刻换成这个动作（不淡入淡出）：前后两段的衔接姿势本来就一样
   const a = p.acts[name]; p.mixer.stopAllAction(); a.reset(); a.time = time; a.timeScale = ts; a.setEffectiveWeight(1).play(); p.cur = a; p.mixer.update(0); return a;
 }
@@ -327,8 +368,7 @@ function runTask(p, dt) {
   if (!T.on) {
     T.on = true; T.t = 0;
     if (k === 'anim' || k === 'walk' || k === 'face' || k === 'turn' || k === 'idle') p.play(k === 'anim' ? T[1] : k === 'walk' ? 'Walk_Loop' : (p.mode === 'sit' && k === 'idle' ? moodOf(p) : MOODS.stand).idle, 0.3);
-    if (k === 'anim' && T[1] === 'Sitting_Exit') p.showProps(null); // 起身时书、本子先收起来
-    if (k === 'chair') { const g = shared.layers.get(T[1]); T.from = g ? g.userData.pullK || 0 : 0; }
+    if (k === 'chair') { const g = shared.layers.get(T[1]); T.from = g ? g.userData.pullK || 0 : 0; T.lag = p.mode === 'sit' ? 0 : 0.25; if (T.lag) p.play('PickUp_Table', 0.2); } // 站着拉 / 推椅子：弯腰伸手，手到了椅子再动（原来椅子自己滑，动画检查 #8）
     if (C) C.start(p, T);
   }
   T.t += dt;
@@ -338,6 +378,9 @@ function runTask(p, dt) {
     const a = p.cur, d = a.getClip().duration, e = Math.min(1, a.time / d);
     if (T[1] === 'Sitting_Exit') r.position.y = p.sitY + (p.standY - p.sitY) * e; // 坐着压低一点贴坐垫，站起来脚踩回地板
     if (T[1] === 'Sitting_Enter') r.position.y = p.standY + (p.sitY - p.standY) * e;
+    if (T[1] === 'Sitting_Exit' && !T.hid && e > 0.3) { T.hid = true; p.showProps(null); } // 书、本子：手离开时收起、坐稳了才拿出来（原来起身第一帧就没了，动画检查 #11）
+    if (T[1] === 'Sitting_Enter' && !T.shown && e > 0.8 && p.seat) { T.shown = true; p.showProps(p.seat); }
+    if (T[1] === 'Sitting_Exit' && p.ride) { _rq.setFromAxisAngle(_cv.set(0, 1, 0), p.ride.yaw); r.quaternion.slerp(_rq, Math.min(1, dt * 8)); } // 摇椅起身：摇椅不再带着人（updateRocker 只管没任务的人），把往后仰的那点角度慢慢收回，免得 unseat 那帧头弹 5cm（#14）
     if (p.seat && (T[1] === 'Sitting_Enter' || T[1] === 'Sitting_Exit')) { // 坐下前段从座位前挪回坐姿位置，起身后段往前挪出去
       const F = seatFront(p, p.seat), u = T[1] === 'Sitting_Enter' ? 1 - THREE.MathUtils.smoothstep(e, 0, 0.4) : THREE.MathUtils.smoothstep(e, 0.3, 1);
       if (T.ax === undefined) { const o = T[1] === 'Sitting_Exit' ? r.position : { x: F.a.x, z: F.a.z }; T.ax = o.x; T.az = o.z; }
@@ -349,7 +392,7 @@ function runTask(p, dt) {
   else if (k === 'seat') { const a = seatPose(p, T[1], SEATS[T[1]].pull ? 1 : 0); p.seat = T[1]; p.standY = r.position.y; p.sitY = a.y; done = true; }
   else if (k === 'unseat') { p.seat = null; const f = _cv.set(0, 0, 1).applyQuaternion(r.quaternion); r.rotation.set(0, Math.atan2(f.x, f.z), 0); done = true; } // 摇椅上 quaternion 是「仰 × 朝向」，拆成 XYZ 欧拉角时朝向 >90° 会落到 x/z=±π 上，直接清 x/z 会一下转 86°；按正前方重算朝向
   else if (k === 'chair') { // 拉开 / 推回椅子；人坐在上面就一起挪
-    const g = shared.layers.get(T[1]), S = SEATS[T[1]], e = Math.min(1, T.t / 0.6), kk = T.from + (T[2] - T.from) * e * e * (3 - 2 * e);
+    const g = shared.layers.get(T[1]), S = SEATS[T[1]], e = THREE.MathUtils.clamp((T.t - T.lag) / 0.6, 0, 1), kk = T.from + (T[2] - T.from) * e * e * (3 - 2 * e);
     if (g) { const dk = kk - (g.userData.pullK || 0); g.userData.pullK = kk; g.position.set(S.pull[0] * kk, 0, S.pull[1] * kk); shared.shadowDirty = true;
       if (p.seat === T[1] && p.mode === 'sit') { r.position.x += S.pull[0] * dk; r.position.z += S.pull[1] * dk; } }
     done = e >= 1;
@@ -544,4 +587,4 @@ function deskFix(p) {
 
 
 share({ people: () => people, SEATS: () => SEATS }); // interact.js 用
-export { people, SEATS, wakePerson, loadPeople, seatTaken, goHome, SPOTS, routeTasks, NAV, MOODS, fpRise, sitTasks, CLIMB, moodOf, climbAt, WALK_SPEED, ladderRoot, floorBelow, goTasks, nearNode, navPath, updatePeople };
+export { setOutfit, people, SEATS, wakePerson, loadPeople, seatTaken, goHome, SPOTS, routeTasks, NAV, MOODS, fpRise, sitTasks, CLIMB, moodOf, climbAt, WALK_SPEED, ladderRoot, floorBelow, goTasks, nearNode, navPath, updatePeople };
