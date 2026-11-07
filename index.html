@@ -2752,7 +2752,7 @@ const HINTS = {
     ['The iron stove on the kitchen side — look into the firebox.', '厨房那边的铁炉子——看看炉膛里。'], 'stove_firebox'],
   letter: [['Not everything in the stove burnt away.', '炉子里有东西没烧干净。'],
     ['Look in the ashes behind the stove door.', '炉门里面的灰里看看。'], 'stove_letter'],
-  map: [['He was a surveyor; his work would hang where he could see it.', '他是测绘员，干活的东西会挂在抬眼就看得见的地方。'],
+  map: [['A surveyor would mark that place on the map on his wall.', '信里那个地方，测绘员会标在墙上的地图上。'], // 一级就点名墙上的地图：原来只说「挂在抬眼看得见的地方」，新手读完信不知道去看地图（11-07 新手评审 #2）
     ['A map on the wall of the Parlour.', '起居室墙上的地图。'], 'wall_map'],
   watch: [['Up in the loft, where he slept, his things are still about.', '楼上他睡觉的地方，还留着他的东西。'],
     ['The night table in the loft — open its drawer.', '阁楼的床头柜——拉开抽屉看看。'], 'loft_bedside_table'],
@@ -2771,24 +2771,30 @@ const HINTS = {
 };
 const HINT_ORDER = ['page', 'fire', 'letter', 'map', 'watch', 'basin']; // v2：只提示过关要的；日志、大衣靴子提灯是选看
 const HINT_IDLE = 90, HINT_IDLE_NIGHT = 20, HINT_IDLE_PAGE = 30, HINT_CLICKS = 6; // 天黑只差点书记员 / 书桌：20 秒就提示，每 20 秒升一级；第一条（书桌上的纸）30 秒：玄关像死角，新玩家进门不知往哪走（11-01 评审）
+const HINT_WAIT = { night: HINT_IDLE_NIGHT, page: HINT_IDLE_PAGE, fire: HINT_IDLE_PAGE, letter: HINT_IDLE_PAGE, map: HINT_IDLE_PAGE }; // 按要找的线索定等多久；第 1 天生火、信、地图也 30 秒：原来 90 秒，新手读完信干站 3 分钟才见第 2 级（11-07 新手评审 #2）
+const HINT_ROOMS0 = ['Entry', 'Water Closet']; // 玄关这两间看着四面是墙，进屋的口子是门帘那道门洞
 const hint = { idle: 0, clicks: 0, key: null, lvl: 0 };
 let hintGlow = null; // 三级提示时描边的图层（drawHighlight 当悬停画）
 function hintReset() { hint.idle = 0; hint.clicks = 0; }
 const HINT_Q = ['page', 'fire', 'look', 'out', 'out1', 'dusk2', 'night']; // 这几步任务里才提示
 function hintActive() { const q = questNow(); return game.entered && (inside || fp) && HINT_Q.includes(q) &&!opening && card.hidden && journal.hidden && $('dlg').hidden && document.visibilityState === 'visible'; }
+function hintKey() { return questNow() === 'night' ? 'night' : (game.day >= 3 ? HINT_ORDER3.filter((k) => x3.on ? X_NEED.includes(k) : !X_NEED.includes(k)) : game.day >= 2 ? HINT_ORDER2 : HINT_ORDER).find((k) => !game.found.has(k) && (game.day < 2 || k !== 'd2light' || d2.lamp)); } // 下一条该提示的线索
+const hintInEntry = () => !!fp && HINT_ROOMS0.includes(roomAt(fp.p.root.position));
 function hintFire() { // 升一级并显示
-  const key = questNow() === 'night' ? 'night' : (game.day >= 3 ? HINT_ORDER3.filter((k) => x3.on ? X_NEED.includes(k) : !X_NEED.includes(k)) : game.day >= 2 ? HINT_ORDER2 : HINT_ORDER).find((k) => !game.found.has(k) && (game.day < 2 || k !== 'd2light' || d2.lamp));
+  const key = hintKey();
   if (!key) return;
   if (key !== hint.key) { hint.key = key; hint.lvl = 0; }
   hint.lvl = Math.min(3, hint.lvl + 1); hintReset();
-  const h = HINTS[key], t3 = hint.lvl < 3 ? null : hintThere(h[2]);
+  const h = HINTS[key], g0 = layers.get(h[2]);
+  const via = hint.lvl === 3 && g0 && layers.get('entry_noren') && hintInEntry() && !HINT_ROOMS0.includes(roomAt(new THREE.Box3().setFromObject(g0).getCenter(new THREE.Vector3()))); // 人还在玄关、东西在屋里：三级先描门帘那道门洞（11-07 新手评审 #3：照「在你右边」转过去是墙）
+  const t3 = hint.lvl < 3 ? null : via ? PAGE_WAY : hintThere(key);
   LOG && LOG.ev('hint', `第${hint.lvl}级 ${key}：${(t3 || h[hint.lvl - 1]).join(' / ')}`);
   if (hint.lvl === 1 && game.day === 2 && DAY2_MARKS.includes(key) && d2.over && d2.over.n === DAY2_MARKS.filter((k) => game.found.has(k)).length) { showRoomNote(D2_SAYS.passed, null, key); return; } // 已经走过那样记号：别再催往前走（评审④ v2 #6）
   if (hint.lvl < 3) { showRoomNote(key === 'page' && hint.lvl === 1 && fp && [null, 'Entry', 'Water Closet'].includes(roomAt(fp.p.root.position)) ? PAGE_WAY : h[hint.lvl - 1], null, key); return; } // 还在玄关：第一句先说往哪走（评审④ v2 #2）
   showRoomNote(t3);
-  const g = layers.get(h[2]);
+  const gn = via ? 'entry_noren' : h[2], g = layers.get(gn);
   if (g) {
-    const prev = hintGlow; hintGlow = h[2]; if (prev) paint(prev); paint(hintGlow); // 描边一直留到找到（hintClick 里撤）；原来 5 秒就灭，东西不在视野里就白提示（评审④ v2 #10）
+    const prev = hintGlow; hintGlow = gn; if (prev) paint(prev); paint(hintGlow); // 描边一直留到找到（hintClick 里撤）；原来 5 秒就灭，东西不在视野里就白提示（评审④ v2 #10）
     const w = people.get('person_woman'), c = new THREE.Box3().setFromObject(g).getCenter(new THREE.Vector3());
     if (w && !w.player) { w.look = [c.x, c.y, c.z]; w.lookT = 5; if (!w.tasks.length && w.S == null && w.mode !== 'sit') w.tasks = [['face', c.x, c.z], ['look', c.x, c.y, c.z, 5], ['idle', 3]]; } // 她说完转头看着那样东西（闲着就整个人转过去）
   }
@@ -2796,24 +2802,34 @@ function hintFire() { // 升一级并显示
 const PAGE_WAY = ['The rooms lie through the passage off the Entry.', '穿过玄关边上的过道，就是屋里。']; // 原来说「帘子后面」，可进门时帘子已经卷上去看不见（11-05 评审 #5）
 const LOOK_THERE = ['Look — there.', '看——就在那儿。'], WHERE = { loft: ['Up in the loft.', '在阁楼上。'], down: ['Downstairs.', '在楼下。'], below: ['Look down.', '往下看。'], above: ['Look up.', '往上看。'],
   left: ['To your left.', '在你左边。'], right: ['To your right.', '在你右边。'], backL: ['Behind you, to the left.', '在你左后方。'], backR: ['Behind you, to the right.', '在你右后方。'], back: ['Behind you.', '在你身后。'] };
-function hintThere(name) { // 3 级提示的话：东西在画面里说「看——就在那儿」（配描边）；不在画面里说在哪个方向（11-05 评审 #4：原来东西在背后、墙后时只剩这一句）
-  const g = layers.get(name); if (!g || !fp) return LOOK_THERE;
+// 方向句带上要找的东西（11-07 新手评审 #3：只说「在你右边」，转过去不知道该看什么）；{} 换成 HINT_NOUN 里的名字，每个组合各配一句音
+const WHERE_N = { loft: ['{} is up in the loft.', '{}在阁楼上。'], down: ['{} is downstairs.', '{}在楼下。'], below: ['{} is below. Look down.', '{}在下面，低头看。'], above: ['{} is above. Look up.', '{}在上面，抬头看。'],
+  left: ['{} is to your left.', '{}在你左边。'], right: ['{} is to your right.', '{}在你右边。'], backL: ['{} is behind you, to the left.', '{}在你左后方。'], backR: ['{} is behind you, to the right.', '{}在你右后方。'], back: ['{} is behind you.', '{}在你身后。'] };
+const HINT_NOUN = { page: ['The writing desk', '书桌'], fire: ['The stove', '炉子'], letter: ['The stove door', '炉门'], map: ['The map', '地图'], watch: ['The night table', '床头柜'], basin: ['The washstand', '洗脸架'], night: ['The writing desk', '书桌'],
+  d2block: ['The chopping block', '劈柴木桩'], d2stake: ['The stake', '标桩'], d2blaze: ['The marked tree', '刻了记号的树'], d2cairn: ['The heap of stones', '石堆'], d2light: ['The light', '灯光'],
+  xarrive: ['The old spruce', '老云杉'], xcoat: ['The coat rail', '衣帽架'], xnotes: ['The writing desk', '书桌'], xfire: ['The rocking chair', '摇椅'], xwatch: ['The night table', '床头柜'] }; // 只给 HINT_ORDER* 和 night 里会提示到的；没名字的退回 WHERE
+const whereSay = (d, n) => n ? [WHERE_N[d][0].replace('{}', n[0]), WHERE_N[d][1].replace('{}', n[1])] : WHERE[d];
+function hintThere(key) { // 3 级提示的话：东西在画面里说「看——就在那儿」（配描边）；不在画面里说在哪个方向（11-05 评审 #4：原来东西在背后、墙后时只剩这一句）
+  const g = layers.get(HINTS[key][2]), W = (d) => whereSay(d, HINT_NOUN[key]); if (!g || !fp) return LOOK_THERE;
   const c = new THREE.Box3().setFromObject(g).getCenter(new THREE.Vector3()), e = camera.position;
   let hid = false; camera.updateMatrixWorld(); if (new THREE.Frustum().setFromProjectionMatrix(new THREE.Matrix4().multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse)).containsPoint(c)) {
     const d = e.distanceTo(c), h = new THREE.Raycaster(e.clone(), c.clone().sub(e).normalize(), 0, d).intersectObjects(meshes.filter(isShown), false).find((x) => !g.getObjectById(x.object.id));
     if (!h || h.distance > d - 0.15) return LOOK_THERE; hid = true; // 在视锥里还要看得见：隔着墙就照样说方向（r3 #5）
   }
-  const up = c.y > home.floorY + 2.1; if (up !== onLoft(fp.p.root.position.y)) return up ? WHERE.loft : WHERE.down; // 阁楼面高 2.29
+  const up = c.y > home.floorY + 2.1; if (roomAt(fp.p.root.position) && up !== onLoft(fp.p.root.position.y)) return W(up ? 'loft' : 'down'); // 阁楼面高 2.29；人在屋外不说楼上楼下（第 2 天树梢上的灯原来会说成「在阁楼上」）
   const rel = angDiff(fp.yaw, Math.atan2(c.x - e.x, c.z - e.z)), a = Math.abs(rel), L = rel > 0; // fp.yaw 变大 = 往左转
-  if (a < 0.9) return hid ? (L ? WHERE.left : WHERE.right) : c.y < e.y ? WHERE.below : WHERE.above; // 墙后正前方：说偏的那一边，绕过去
-  return a < 2.1 ? (L ? WHERE.left : WHERE.right) : a < 2.8 ? (L ? WHERE.backL : WHERE.backR) : WHERE.back;
+  if (a < 0.9) return W(hid ? (L ? 'left' : 'right') : c.y < e.y ? 'below' : 'above'); // 墙后正前方：说偏的那一边，绕过去
+  return W(a < 2.1 ? (L ? 'left' : 'right') : a < 2.8 ? (L ? 'backL' : 'backR') : 'back');
 }
 function hintClick() { // select 里调：点了东西却没找到新线索
   if (gameSeen.got) { if (!hint.key || game.found.has(hint.key)) { hint.key = null; hint.lvl = 0; if (hintGlow) { const n = hintGlow; hintGlow = null; paint(n); } } hintReset(); if (noteCur && noteCur.hint && game.found.has(noteCur.hint)) { endRoomNote(); pumpNote(); } return; } // 正挂着的提示已经解出来了才撤；找到别的线索只清计时，不倒回 1 级（11-05 评审 #1）
   const q = questNow(); if (!game.entered || !HINT_Q.includes(q) || hint.wait) return;
   if (++hint.clicks >= HINT_CLICKS) { hint.wait = true; setTimeout(() => { hint.wait = false; hintFire(); }, 1200); } // 等物件说明先读一眼
 }
-setInterval(() => { if (hintActive() && ++hint.idle >= ({ night: HINT_IDLE_NIGHT, page: HINT_IDLE_PAGE }[questNow()] || HINT_IDLE)) hintFire(); }, 1000);
+setInterval(() => {
+  if (hintGlow === 'entry_noren' && hint.key && HINTS[hint.key] && !hintInEntry()) { hintGlow = HINTS[hint.key][2]; paint('entry_noren'); paint(hintGlow); } // 穿过门帘了：描边换到要找的那件
+  if (hintActive() && ++hint.idle >= (HINT_WAIT[hintKey()] || HINT_IDLE)) hintFire();
+}, 1000);
 window.cabinHint = { hint, fire: hintFire, click: hintClick, HINTS, glow: () => hintGlow };
 function startNight(late) { // 线索找齐：书记员说一句 → 天色转到夜里、她走去书桌 → 壁灯亮起（late：刚弹出「他什么都没带」，等它读完）
   game.night = game.dusk = true;
@@ -2834,7 +2850,7 @@ function chgLine(c) { // 'chg:键:1' → 夜里记录那句 [英, 中]（1 = 变
   return open ? [`The inspector opened the ${n[0]} again after shutting it.`, `稽查把关上的${n[1]}又打开了。`] : [`The inspector shut the ${n[0]} again after opening it.`, `稽查把${n[1]}又关上了。`];
 }
 window.__voiceLines = () => [ // 要配音的句子（英文原句），tools/voice/make_voice.py 用；漏的靠 __said 补。infoOf 里直接 return 的说明在末尾 concat 手列名字，新加这类说明要同步（11-07 评审⑪ 声3）
-  ...OPENING, ...Object.values(ROOM_NOTES), PAGE_SAYS, LETTER_SAYS, CLERK_SAYS, ...Object.values(D2_SAYS), ...Object.values(D3_SAYS), ...Object.values(GEAR_SAYS), [DAY1_TEXT.took[2]], LOOK_THERE, ...Object.values(WHERE), PAGE_WAY,
+  ...OPENING, ...Object.values(ROOM_NOTES), PAGE_SAYS, LETTER_SAYS, CLERK_SAYS, ...Object.values(D2_SAYS), ...Object.values(D3_SAYS), ...Object.values(GEAR_SAYS), [DAY1_TEXT.took[2]], LOOK_THERE, ...Object.values(WHERE), ...Object.values(HINT_NOUN).flatMap((n) => Object.keys(WHERE_N).map((d) => whereSay(d, n))), PAGE_WAY,
   ...Object.values(HINTS).flatMap((h) => [h[0], h[1]]), ...[...Object.keys(CHG_KEYS), 'wall_lamp'].flatMap((k) => [true, false].map((on) => { try { return chgSay(k, on); } catch (e) { return null; } })),
   GEAR_HANG,
 ].filter(Boolean).map((l) => l[0]).concat(Object.values(STORY), Object.values(INFO).map((i) => i[2]), Object.values(GEAR_RAIL).map((i) => i[2]), Object.values(X_PLAIN), Object.values(TAKE_INFO).map((i) => i[2]), ['toilet_door_1', 'stove_door', 'hall_pendant_'].map((n) => infoOf(n)[2])).filter((t) => typeof t === 'string' && /[a-z]/i.test(t));
