@@ -138,11 +138,11 @@ if (navigator.webdriver || /[?&]nolock\b/.test(location.search)) { let el = null
   /* 中英切换：右下角署名上方，字体字号同署名 */
   #langBtn { position: fixed; right: 7px; bottom: 26px; z-index: 8; font: inherit; font-family: "IM Fell English SC", "IM Fell English", Georgia, serif; font-size: var(--fs-xs); letter-spacing: 1px; color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,.7);
     background: none; border: 0; border-radius: 4px; padding: 2px 5px; cursor: pointer; }
-  #viewBtn { position: fixed; right: 7px; top: 10px; z-index: 8; font: inherit; font-size: var(--fs-xs); letter-spacing: .5px; color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,.7); background: none; border: 0; padding: 2px 5px; cursor: pointer; opacity: .75; }
+  #viewBtn { position: fixed; right: 7px; top: 0; z-index: 8; font: inherit; font-size: var(--fs-xs); letter-spacing: .5px; color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,.7); background: none; border: 0; padding: 0 5px; min-width: 44px; min-height: 44px; cursor: pointer; opacity: .75; } /* 点击区 44px 高（字号不变），和下面的「房间」按钮不重叠（新手 11-07 新9） */
   /* 房间导览（触屏第一人称）：按钮在「看模型」下面（它藏着时顶上去），列表从按钮处展开；按钮和列表项点击区至少 44px 高（字号不变） */
-  #roomBtn { position: fixed; right: 7px; top: 27px; z-index: 8; font: inherit; font-size: var(--fs-xs); letter-spacing: .5px; color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,.7); background: none; border: 0; padding: 0 5px; min-width: 44px; min-height: 44px; text-align: right; cursor: pointer; opacity: .75; }
+  #roomBtn { position: fixed; right: 7px; top: 46px; z-index: 8; font: inherit; font-size: var(--fs-xs); letter-spacing: .5px; color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,.7); background: none; border: 0; padding: 0 5px; min-width: 44px; min-height: 44px; text-align: right; cursor: pointer; opacity: .75; }
   #viewBtn[hidden] + #roomBtn { top: 3px; }
-  #roomList { position: fixed; right: 10px; top: 72px; z-index: 8; display: flex; flex-direction: column; align-items: flex-end; color: #f4efe6; text-shadow: 0 1px 3px rgba(0,0,0,.75), 0 0 8px rgba(0,0,0,.45);
+  #roomList { position: fixed; right: 10px; top: 91px; z-index: 8; display: flex; flex-direction: column; align-items: flex-end; color: #f4efe6; text-shadow: 0 1px 3px rgba(0,0,0,.75), 0 0 8px rgba(0,0,0,.45);
     transform-origin: top right; transition: opacity .2s, transform .2s ease; }
   #viewBtn[hidden] ~ #roomList { top: 48px; }
   #roomList.shut { opacity: 0; transform: scale(.6); pointer-events: none; }
@@ -280,6 +280,7 @@ if (navigator.webdriver || /[?&]nolock\b/.test(location.search)) { let el = null
     filter: drop-shadow(0 1px 1.5px rgba(0,0,0,.75)); }
   #wxIco svg .f { fill: currentColor; stroke: none; }
   /* 遗稿：解锁后在天气旁边；章节号 § 用 IM Fell（汇文子集里没有这个字形） */
+  #skyL #jBtn.pulse { animation: jPulse 1.8s ease-in-out infinite; } @keyframes jPulse { 50% { background: rgba(255,255,255,.28); } } /* 第 1 夜遗稿悄悄解锁：按钮呼吸到玩家点开为止，代替原来的弹窗（文字经济 11-07 #3） */
   #jBtn .sec { margin-right: .35em; font-family: "IM Fell English", Georgia, serif; }
   #wxPanel { width: min(320px, calc(100vw - 32px)); display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; }
   #wxPanel[hidden] { display: none; }
@@ -292,7 +293,7 @@ if (navigator.webdriver || /[?&]nolock\b/.test(location.search)) { let el = null
 </head>
 <body>
 <div id="app"></div>
-<div id="loader"><div id="ldLine"><span class="en">For thirty years the Surveyor in the northern woods sent down a report each spring. This spring, none came.</span><span class="zh">三十年来，林子里的测绘员每年开春寄回一份报告。今年春天，报告没有来。</span></div><div id="ldSub"><span class="en">Three days · about 20 minutes</span><span class="zh">三天 · 约 20 分钟</span></div><div id="bar"><div></div></div><div id="pct">0%</div></div>
+<div id="loader"><div id="ldLine"></div><div id="ldSub"><span class="en">Three days · about 20 minutes</span><span class="zh">三天 · 约 20 分钟</span></div><div id="bar"><div></div></div><div id="pct">0%</div></div>
 <script>/* 试玩：?day=2 / ?day=3 写一份「前一夜记录读完」的存档（同无头 day2.py / day3.py），直接从那天早上开始；会覆盖真存档，只在本机 / 局域网或带 &debug 时生效（11-05 评审 #6：原来发布版也认） */ try { const d = +(location.search.match(/[?&]day=([23])\b/) || [])[1]; if (d && (/^(localhost|127\.|\[::1\]|10\.|172\.|192\.168\.)/.test(location.hostname) || /[?&]debug\b/.test(location.search))) { const f = ['opening', 'fire', 'letter', 'map', 'drawer', 'coat', 'boots', 'lantern', 'log', 'took', 'journal', 'notes1'].concat(d === 3 ? ['d2block', 'd2stake', 'd2blaze', 'd2cairn', 'd2light', 'log2', 'notes2'] : []); localStorage.setItem('cabin.game.v1', JSON.stringify({ day: d, found: f })); sessionStorage.setItem('cabin.nextDay', '1'); } } catch (e) { /* 存不了就照常从存档开始 */ }</script>
 <script>try { const rd = (f) => { try { return f(); } catch (e) { return null; } }, K = 'cabin.game.v1', s = rd(() => localStorage.getItem(K)) || rd(() => sessionStorage.getItem(K)) || (window.name.startsWith(K + '=') ? window.name.slice(K.length + 1) : null); // 同 SAVE.get：local 禁了也读得到（r3 #6）
   const g = /[?&]reset/.test(location.search) ? {} : JSON.parse(s || '{}') || {}, t = g.found && g.found.includes('ended') ? null : g.day >= 3 ? ['The third morning. Still the fog has not lifted…', '第三天早上。雾还是没有散……'] : g.day === 2 ? ['The second morning. The fog came down in the night…', '第二天早上。夜里起的雾还没有散……'] : null; // 加载页按存档的天数换字
@@ -2182,7 +2183,7 @@ $('roomNote').onclick = (e) => { e.stopPropagation(); endRoomNote(); pumpNote();
 $('note').onclick = (e) => { e.stopPropagation(); showNote(null); };
 // Journal：整页阅读序章、测绘员、各房间、终章
 const journal = $('journal');
-$('jBtn').onclick = () => { for (const [q] of PANELS) q.hidden = true; journal.hidden = false; journal.scrollTop = 0; };
+$('jBtn').onclick = () => { $('jBtn').classList.remove('pulse'); for (const [q] of PANELS) q.hidden = true; journal.hidden = false; journal.scrollTop = 0; };
 journal.querySelector('.x').onclick = () => { journal.hidden = true; };
 addEventListener('keydown', (e) => { if (e.key === 'Escape' && !journal.hidden) { journal.hidden = true; e.cabinClosed = true; } }); // 标记：这次 Esc 已用来关遗稿，第一人称别再退出
 // 屋里原地环顾：相机站定不动，目标点放在视线前方 LOOK_R 处，OrbitControls 绕它转 = 只转头，
@@ -2402,7 +2403,7 @@ const STORY_ZH = {
   'Porch Lamp|Exterior': ['门廊灯', '屋里的电是从屋旁的小溪拉过来的：他在下游不远处架了一个小水轮，带一台旧发电机，电线架在两根木杆上，从溪边拉进屋来。溪水不停，灯就不停；只有隆冬溪面冻实了才断电，那几个月他点提灯。\n\n有一年大雪天他在林子里摔断了腿，快冻僵时，是远处这点微弱的光让他爬回了家。从那以后他改了线，只要天黑这盏灯就亮。这盏灯不照客人，只照归人。'],
   'Boots & Bench|Entry': ['换鞋处', '进门先在帆布门垫上跺脚，坐上矮凳脱靴，靴子立进托盘接雪水。门垫上磨出两道深浅不一的靴印——左脚重右脚轻，他总是左肩扛原木，走路微跛；凳面也是左边比右边光滑，他总先穿左脚。那双雪地靴鞋底的纹路快磨平了。\n\n托盘里的泥早干成了一层壳，靴子还立在边上，筒口微张。他最后一次出门，没穿它。'],
   'Lantern|Entry': ['提灯', '挂在衣帽架钉子上的蜡烛提灯。去柴堆劈柴、夜里出去查看动静都提它；冬天溪水冻住、屋里断电的那几个月，全屋就靠它。玻璃罩上有一道裂纹——某次雪地遇受惊野鹿，鹿角扫过灯架留下的。他没换玻璃，拿铁丝箍了一圈，说：“裂了也好，光从裂缝里漏出来像把剑，刚好能劈开黑雾。”'],
-  'Coat Rail & Greatcoat|Entry': ['衣帽架和厚大衣', '进门把外套挂在这里晾干。最顺手的钉子上永远挂着那件厚大衣，吸饱了十年的松脂味、烟草味和雨雪潮气。口袋里总能翻出奇怪的东西：一截干枯松枝、一块形状像山的石头、一张折了四折的测绘草图。大衣的褶皱还在，像一层刚蜕下的蝉壳。'],
+  'Coat Rail & Greatcoat|Entry': ['衣帽架和厚大衣', '最顺手的钉子上永远挂着那件厚大衣，吸饱了十年的松脂味、烟草味和雨雪潮气。口袋里总能翻出奇怪的东西：一截干枯松枝、一块形状像山的石头、一张折了四折的测绘草图。大衣的褶皱还在，像一层刚蜕下的蝉壳。'],
   'Green Umbrella|Umbrella Stand': ['绿伞', '墙上挂着一把从不挡雨的绿伞，伞骨顶端绑了黄铜指南针——那是他测绘时用的拐杖。他晚年不用伞挡雨，说：“在林子里让雨落在头顶是礼貌。”'],
   'Snowshoes|Entry': ['雪鞋', '雪鞋挂在旁边墙上，走深雪不会陷下去。他刚来那年不会用，在齐腰深的雪里挣扎了半天才回到屋。后来学会了——把体重分散到更大的面积上，就不会沉。他说这是森林教他的第一课：“不要试图对抗，要学会摊开自己。”'],
   'Walking Stick|Umbrella Stand': ['登山杖', ''],
@@ -2460,6 +2461,7 @@ const LEAD_ZH = {
   'Mat, bench, tray and boots: where the snow is stamped off and the boots come off.': '门垫、换鞋凳、托盘和靴子：进门在这里跺掉雪、脱下靴子。',
   'A candle lantern on the peg, to carry out to the woodpile.': '钉子上挂着一盏蜡烛提灯，出门搬柴时提着。',
   'Coats are hung here to dry upon coming in.': '进门把大衣挂在这里晾干。',
+  'Where he split the winter\'s wood.': '门廊边劈柴用的木桩。', 'A stake by the path, a rag of red cloth at its head.': '路边一根测量标桩，顶上系着一块红布。', 'A mark cut in the bark.': '树皮上刻的记号。', 'Stones heaped where the path bends.': '小路拐弯处堆着石头。', 'Smoke, far off over the trees.': '远处树梢上的烟。', // 第 2 天线索（D2_CARDS 的说明）：第 1 天第一人称点到这几样东西只放这一句，中文缺了会退回英文（文字经济 11-07 #1）；不能清空，清空会提前放出第 2 天正文
   'Shoes for the deep snow, on the wall by the door.': '门边墙上挂着走深雪用的雪鞋。',
   'A green umbrella on the wall, a compass lashed to its top.': '墙上挂着一把绿伞，伞顶绑着指南针。',
   'An iron pan under the umbrella and the stick, to catch the snowmelt.': '伞和手杖下面一只铁盘，接化下来的雪水。',
@@ -2567,7 +2569,7 @@ const game = (() => {
   const str = (a) => (Array.isArray(a) ? a.filter((k) => typeof k === 'string') : []); // 坏存档里混进数字、null、对象：只留字符串（不然 k.startsWith 报错，停在 84%）
   const seen = str(s && s.seen); // 第 1 天进过的房间 + 'stove' / 'desk'（刷新后旁白不重播、任务条不空、书记员不再领路）
   const g = { day: Math.min(3, Math.max(1, Math.floor(+(s && s.day)) || 1)), found: new Set(str(s && s.found)), night: false, dusk: false, wear: s && Array.isArray(s.wear) ? s.wear : null, // wear = [第几天, 穿着大衣, 提着灯]（gearSave）；day 夹到 1–3
-    seen: new Set(seen.filter((k) => k !== 'stove' && k !== 'desk')), stoveSeen: seen.includes('stove'), deskSeen: seen.includes('desk'),
+    seen: new Set(seen.filter((k) => k !== 'stove' && k !== 'desk' && k !== 'help')), stoveSeen: seen.includes('stove'), deskSeen: seen.includes('desk'), helpSeen: seen.includes('help'),
     snap: str(s && s.snap) }; // snap：站在 ✕ 门廊下那一刻的 found（进 ✕ 时存、选结局时更新），通关后「回到另一间屋的门廊下」载入它（r3 #15）
   g.entered = g.seen.size > 0;
   if (g.found.has('fire') && !g.found.has('page')) g.found.add('page'); // v2 之前的存档没有这页纸
@@ -2576,7 +2578,7 @@ const game = (() => {
   g.saved = g.found.size > 0; // 有存档：刷新时问「继续上次 / 重新开始」（resumeAsk）
   return g;
 })();
-function saveGame() { SAVE.set(JSON.stringify({ day: game.day, found: [...game.found], wear: game.wear, seen: [...game.seen, ...(game.stoveSeen ? ['stove'] : []), ...(game.deskSeen ? ['desk'] : [])], ...(game.snap.length ? { snap: game.snap } : {}) })); }
+function saveGame() { SAVE.set(JSON.stringify({ day: game.day, found: [...game.found], wear: game.wear, seen: [...game.seen, ...(game.stoveSeen ? ['stove'] : []), ...(game.deskSeen ? ['desk'] : []), ...(game.helpSeen ? ['help'] : [])], ...(game.snap.length ? { snap: game.snap } : {}) })); }
 // Journal「第一天」：键 → [英标题, 中标题, 英, 中]，按这个顺序列出已找到的
 const DAY1_TEXT = {
   page: ['A Page on the Desk', '书桌上的一页纸', 'A page of inquiry notes, in the clerk\'s hand, lying on the desk before she had sat down to it: "The inspector lit the stove. In the firebox, a letter not burnt through."', '书桌上压着一页调查记录，是书记员的笔迹，可她还没坐下来写过：“稽查生了火。炉膛里有一封没烧完的信。”'],
@@ -2596,7 +2598,7 @@ const QUEST = { // 屏幕上那一行任务提示：[英, 中]
   fire: ['It is cold in here. Get the fire going first.', '有点冷，先把火升起来吧。'],
   look: ['Where did he go?', '他往哪儿去了？'],
   dusk: ['', ''],
-  night: ['Go and see what the clerk has written.', '去看看书记员写了什么。'],
+  night: ['The clerk is writing at the desk. Go and have a look.', '书记员在书桌前写记录，去看看。'],
   end: ['', ''],
 };
 const CLERK_SAYS = ['The clerk: "This house is newer than the reports made it."', '书记员：“这屋子比报告里写的新。”'];
@@ -2637,7 +2639,7 @@ function dialog(title, text, btns) {
   if (document.pointerLockElement) document.exitPointerLock(); // 第一人称：放出鼠标才点得到按钮
   d.hidden = false;
 }
-function glLost() { if (glLost.on) return; glLost.on = true; dialog(['The picture was lost', '画面丢了'], ['', ''], [['Reload', '重新载入', () => location.reload()]]); } // iOS 内存紧张、切后台回来时 WebGL 画布被清掉，整屏白/黑：给一个重新载入（进度在存档里；r3 兼容 #2）
+function glLost() { if (glLost.on) return; glLost.on = true; dialog(['The picture was lost', '画面丢了'], ['Your progress is saved.', '进度已保存。'], [['Reload', '重新载入', () => location.reload()]]); } // iOS 内存紧张、切后台回来时 WebGL 画布被清掉，整屏白/黑：给一个重新载入（进度在存档里；r3 兼容 #2）
 renderer.domElement.addEventListener('webglcontextlost', (e) => { e.preventDefault(); clearTimeout(glLost.t); glLost.t = setTimeout(() => { if (renderer.getContext().isContextLost()) glLost(); }, 3000); }); // 浏览器常常自己马上恢复（three.js 接着重建）：3 秒还没回来才提示
 document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible' && renderer.getContext().isContextLost()) glLost(); });
 addEventListener('keydown', (e) => { // 弹窗开着：Esc 先关弹窗，不踢出第一人称（UX2）；只有一个按钮时 Esc、E 都等于点它，多个按钮（结局三选一）不替玩家选
@@ -2650,11 +2652,15 @@ function nextDay(n) { // 点「第 n 天早上」：压黑 1.2 秒再刷新，�
   d2.veil = true; veilEl.style.transition = 'opacity 1.2s'; veilEl.style.zIndex = 30; veilEl.style.opacity = 1;
   setTimeout(() => location.reload(), 1250);
 }
-function unlockJournal() { // 第 1 天线索找齐、天黑之后弹；线索卡片 / 遗稿 / 别的弹窗开着就等它们关了
+function unlockJournal() { // 第 1 天线索找齐、天黑之后：左下「遗稿」悄悄出现并闪几下，不弹窗（弹窗和任务行「去看看书记员」同时出，指令打架：文字经济 11-07 #3）；「遗稿启封」那段说明推迟到读完夜里记录、endDay 里再弹
   if (game.found.has('journal')) return;
-  if (!$('card').hidden || !journal.hidden || !$('dlg').hidden) { setTimeout(unlockJournal, 500); return; }
-  game.found.add('journal'); saveGame(); showQuest();
-  dialog(['The Papers Unsealed', '遗稿启封'], ['All that the first day turned up is now written into his Papers. Open the Journal below to read it.', '第一天找到的东西都记进了遗稿，点下方「遗稿」就能翻看。'], [['Very Well', '好']]);
+  game.found.add('journal'); saveGame(); showQuest(); $('jBtn').classList.add('pulse');
+}
+function papersNote(next) { // 遗稿启封：只弹一次（found 'papers' 进存档），点「好」再接 next
+  if (game.found.has('papers')) return false;
+  game.found.add('papers'); saveGame();
+  dialog(['The Papers Unsealed', '遗稿启封'], ['All that the first day turned up is now written into his Papers. Open the Journal below to read it.', '第一天找到的东西都记进了遗稿，点下方「遗稿」就能翻看。'], [['Very Well', '好', () => setTimeout(next, 300)]]);
+  return true;
 }
 function resumeAsk() { // 刷新时有存档才问；「重新开始」只放在这里（网址加 ?reset 也行）
   try { if (sessionStorage.getItem('cabin.nextDay')) { sessionStorage.removeItem('cabin.nextDay'); dayStartNote(); return; } } catch (e) { /* 读不到就照常问 */ } // 刚从「第一天结束」过来：不问，直接说早上
@@ -2690,7 +2696,7 @@ function endOpening() {
 }
 function openingCard() { // 开场飞行被跳过：字幕没播完的话整段放进卡片
   if (!opening || opening.card) return;
-  clearTimeout(opening.timer); opening.card = performance.now(); $('subs').classList.remove('on');
+  clearTimeout(opening.timer); opening.card = performance.now(); stopVoice('sub'); $('subs').classList.remove('on'); // 第一句旁白别再念给看不见的字幕（11-07 评审⑪ 声1）
   const o = $('opening'), box = o.querySelector('.box');
   box.innerHTML = OPENING.map((l) => `<p>${lbl(...l)}</p>`).join('') + `<button>${lbl('Go In', '进去看看')}</button>`;
   o.hidden = false; requestAnimationFrame(() => o.classList.add('on'));
@@ -2843,11 +2849,11 @@ function chgLine(c) { // 'chg:键:1' → 夜里记录那句 [英, 中]（1 = 变
   if (n[3]) return open ? ['The inspector lit again a lamp he had put out.', '稽查把关掉的灯又打开了。'] : ['The inspector put out again a lamp he had lit.', '稽查把开着的灯又关了。'];
   return open ? [`The inspector opened the ${n[0]} again after shutting it.`, `稽查把关上的${n[1]}又打开了。`] : [`The inspector shut the ${n[0]} again after opening it.`, `稽查把${n[1]}又关上了。`];
 }
-window.__voiceLines = () => [ // 要配音的句子（英文原句），tools/voice/make_voice.py 用；漏的靠 __said 补
+window.__voiceLines = () => [ // 要配音的句子（英文原句），tools/voice/make_voice.py 用；漏的靠 __said 补。infoOf 里直接 return 的说明在末尾 concat 手列名字，新加这类说明要同步（11-07 评审⑪ 声3）
   ...OPENING, ...Object.values(ROOM_NOTES), PAGE_SAYS, LETTER_SAYS, CLERK_SAYS, ...Object.values(D2_SAYS), ...Object.values(D3_SAYS), ...Object.values(GEAR_SAYS), [DAY1_TEXT.took[2]], LOOK_THERE, ...Object.values(WHERE), ...Object.values(HINT_NOUN).flatMap((n) => Object.keys(WHERE_N).map((d) => whereSay(d, n))), PAGE_WAY,
   ...Object.values(HINTS).flatMap((h) => [h[0], h[1]]), ...[...Object.keys(CHG_KEYS), 'wall_lamp'].flatMap((k) => [true, false].map((on) => { try { return chgSay(k, on); } catch (e) { return null; } })),
   GEAR_HANG,
-].filter(Boolean).map((l) => l[0]).concat(Object.values(STORY), Object.values(INFO).map((i) => i[2]), Object.values(GEAR_RAIL).map((i) => i[2]), Object.values(X_PLAIN)).filter((t) => typeof t === 'string' && /[a-z]/i.test(t));
+].filter(Boolean).map((l) => l[0]).concat(Object.values(STORY), Object.values(INFO).map((i) => i[2]), Object.values(GEAR_RAIL).map((i) => i[2]), Object.values(X_PLAIN), Object.values(TAKE_INFO).map((i) => i[2]), ['toilet_door_1', 'stove_door', 'hall_pendant_'].map((n) => infoOf(n)[2])).filter((t) => typeof t === 'string' && /[a-z]/i.test(t));
 function chgSay(key, on) {
   const n = chgNoun(key), open = on === n[2];
   if (n[3]) return open ? ['The clerk: "Did you light the lamp?"', '书记员：“灯是你开的？”'] : ['The clerk: "Did you put the lamp out?"', '书记员：“灯是你关的？”'];
@@ -3120,13 +3126,14 @@ function gameSeen2(name, title, add, got) {
 }
 function endDay() { LOG && LOG.ev('day', '第1天结束'); // 第一天读完调查记录：卡片 / 遗稿 / 别的弹窗关了再弹；点了存成第 2 天、重新载入（人物、灯、火都按第 2 天早上重新摆）
   if (!$('card').hidden || !journal.hidden || !$('dlg').hidden) { setTimeout(endDay, 500); return; }
+  if (papersNote(endDay)) return;
   dialog(['The First Day Ends', '第一天结束'], ['The clerk puts out the lamp. In the night the fog comes down over the woods.', '书记员吹熄了灯。夜里，雾把林子盖住了。'],
     [['Next Morning', '第二天早上', () => nextDay(2)]]);
 }
 function dayStartNote() { // 第二天早上：两句开场（第 1 天的旧存档读完了也走这里）
   if (game.day < 2 || game.night) return;
   if (game.day >= 3) { if (game.found.has('xarrive')) return; setTimeout(() => showRoomNote(D3_SAYS.go), 3000); return; }
-  setTimeout(() => showRoomNote(D2_SAYS.clerk), 3000);
+  // 第 2 天早上不再放 D2_SAYS.clerk：任务行已说「留了记号、出去找找」，15 秒内同一个意思说三遍（文字经济 11-07 #5）
 }
 function startDusk2() { // 四样找齐：天慢慢转到傍晚，灯在 updateDay2 里按时刻亮
   setTimeout(() => { sky.play = false; sky.goal = 17.5; sky.goalRate = 0.8; }, 4000);
@@ -4133,7 +4140,7 @@ function select(name, direct) {
   cardData = xp ? { t: title, a: area, lead: xp, zt: zh?.[0] } : { t: title, a: area, lead: desc, story: STORY[title + '|' + area], zt: zh?.[0], zs: zh?.[1] }; // ✕ 那间：讲小溪的只给一句短说明
   const g = gameSeen(name); // 游戏线索：有的换成信 / 日志 / 调查记录的卡片
   hintClick(); // 卡关提示：没进展的点击计数
-  if (g) cardData = { t: g[0], a: g[1], zt: g[2], story: g[3], zs: g[4], lead: g[5], paper: isPaper(g), open: isPaper(g) }; // 纸上的字一打开就展开（原来要再点「走近看」，新玩家多半直接关掉：11-01 评审 #6）
+  if (g) cardData = { t: g[0], a: g[1], zt: g[2], story: g[3], zs: g[4], lead: game.day > 1 && name !== 'person_woman' ? '' : g[5], paper: isPaper(g), open: isPaper(g) }; // 纸上的字一打开就展开（原来要再点「走近看」，新玩家多半直接关掉：11-01 评审 #6）
   $('focus').hidden = !!(cardData.paper || fp); // 第一人称里人自己能走近，「走近看」会切去看房子模式（评审 #9）
   card.classList.toggle('clue', !!(g && gameSeen.got));
   if (g || gameSeen.got || people.has(name) || isClue(name)) { showNote(null); cardOpen(); } // 线索、人物：卡片居中，只能点 × / Esc 关
@@ -4271,13 +4278,14 @@ canvas.addEventListener('pointerleave', () => setHovered(null));
 const FP = { R: 0.17, STEP: 0.22, RUN: 2.6, SENS: 0.0022, HIDE: /^(HeadSkin|Eyebrows|Eyes|Hair_)/ }; // 头和头发眉毛眼睛（three 去掉了名字里的点：她的是 HeadSkin001、Eyes001）
 let fp = null; // { p, yaw, pitch, keys, solid, floors, solidT, eye, paused, climb, crouch, bob, inspect }
 const fpRay = new THREE.Raycaster(); fpRay.firstHitOnly = true;
-const fpHud = document.createElement('div'); fpHud.id = 'fpHud'; fpHud.hidden = true;
+const fpHud = document.createElement('div'); fpHud.id = 'fpHud'; fpHud.hidden = true; if (game.helpSeen) fpHud.classList.add('seen'); // 键位说明看过一次就不再出（存档 seen 里的 'help'，换天刷新也记得）
 const FP_KEYS = ['<b>WASD</b> to walk · <b>Shift</b> to hurry<br><b>E</b> to take a thing · <b>E</b> again to put it back or drop it · hold <b>right button</b> to turn it over', 'WASD 走动 · Shift 快走 · E 拿取，再按 E 放回原处或丢在地上 · 按住右键翻看']; // 键位：开局说明行和「点画面继续」框第二行共用（说明行只出一次，放锁时还能在框里看到，11-05 评审⑨ #3）
-const FP_HELP = '<span class="en"><b>Click</b> to look about · ' + FP_KEYS[0] + '</span><span class="zh">点画面开始 · ' + FP_KEYS[1] + '</span>';
+const FP_HELP = '<span class="en">' + FP_KEYS[0] + '</span><span class="zh">' + FP_KEYS[1] + '</span>'; // 电脑上这行只在锁上指针后才显示（CSS 放锁时藏起），开头不再写「点画面开始」（新手 11-07 新8：点了以后底下还写着点画面开始）
 const FP_HELP_TOUCH = '<span class="en"><b>Tap</b> where to go, or a thing to use it · <b>Drag</b> to look about</span><span class="zh">点哪走到哪，点物件走过去用 · 拖动转头</span>';
 fpHud.innerHTML = '<div class="dot"></div><div class="help">' + FP_HELP + '</div><div class="hint"></div><div class="resume"><span class="en">Click to continue</span><span class="zh">点画面继续</span><div class="keys"><span class="en">' + FP_KEYS[0] + '</span><span class="zh">' + FP_KEYS[1] + '</span></div></div>';
 document.body.append(fpHud);
 const fpHint = fpHud.querySelector('.hint');
+function helpDone() { fpHud.classList.add('seen'); if (!game.helpSeen) { game.helpSeen = true; saveGame(); } }
 // 不挡路的：墙上的挂件（贴着墙，墙本身会挡）、门帘、挂着的大衣、卫生纸架、毛巾架、地毯、正端在手里的东西
 const FP_SOFT = /^(wall_|take_|sink_water_bucket_dipper$|entry_(tp_holder|towel_rack|cleaning_tools|noren|coat$|coat_rail_keys|lantern|doormat)|loft_hanging_towel|dining_stool_1$|.*_rug$)/; // dining_stool_1：和梯子夹出玄关进屋唯一的口，只剩 0.2m 能过（11-01 评审：玄关走不出去）
 function fpSolid() { // 碰撞用的网格：显示着的、不是自己的胶囊
@@ -4640,7 +4648,7 @@ addEventListener('keydown', (e) => {
   if (e.cabinClosed) return; // 这一下已经用来关弹窗 / 遗稿
   if (!card.hidden && !touchFP) { fpCardKey(e); return; }
   if (e.code === 'KeyE' && !e.repeat) { fpUse(); return; }
-  if (!fp.paused && fp.liveAt && !fpHud.classList.contains('seen') && /^(Key[WASD]|Arrow)/.test(e.code)) setTimeout(() => fpHud.classList.add('seen'), Math.max(1500, 6000 - (performance.now() - fp.liveAt))); // 操作说明：真走起来、且锁住满 6 秒才收起（评审④ v2 #1：原来一锁指针就收，「WASD 走动」从来没显示过）
+  if (!fp.paused && fp.liveAt && !fpHud.classList.contains('seen') && /^(Key[WASD]|Arrow)/.test(e.code)) setTimeout(helpDone, Math.max(1500, 6000 - (performance.now() - fp.liveAt))); // 操作说明：真走起来、且锁住满 6 秒才收起（评审④ v2 #1：原来一锁指针就收，「WASD 走动」从来没显示过）
   fp.keys.add(e.code);
 });
 addEventListener('keyup', (e) => { if (fp) fp.keys.delete(e.code); });
@@ -4995,7 +5003,7 @@ canvas.addEventListener('pointerdown', (e) => {
   e.preventDefault(); fpT.at = performance.now(); // 挡掉浏览器补的 mousedown
   if (fpT.id !== null) return; // 第二根手指不管
   Object.assign(fpT, { id: e.pointerId, x: e.clientX, y: e.clientY, x0: e.clientX, y0: e.clientY, t: performance.now(), drag: false });
-  fpHud.classList.add('live', 'seen'); // 碰过屏幕就收起说明
+  fpHud.classList.add('live'); helpDone(); // 碰过屏幕就收起说明
 });
 canvas.addEventListener('pointermove', (e) => {
   if (!fp || e.pointerId !== fpT.id) return;
