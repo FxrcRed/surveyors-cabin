@@ -340,7 +340,7 @@ if (navigator.webdriver || /[?&]nolock\b/.test(location.search)) { let el = null
     <label><span class="en">Strength of the Sun</span><span class="zh">日光强弱</span><input type="range" id="skyStrength" min="0" max="2" step="0.05"></label>
   </div>
   <div id="wxPanel" hidden></div>
-  <div class="btns"><button id="skyBtn"><span id="skyClock">9:00</span><span id="skyName"> · <span class="en">Forenoon</span><span class="zh">上午</span></span></button>
+  <div class="btns"><button id="skyBtn"><span id="skyClock">9:00</span><span id="skyName" hidden> · <span class="en">Forenoon</span><span class="zh">上午</span></span></button>
     <button id="wxBtn"><span id="wxIco" aria-hidden="true"></span><span id="wxName"><span class="en">Fair</span><span class="zh">晴</span></span></button>
     <button id="jBtn" class="wait"><span class="sec">§</span><span class="en">Journal</span><span class="zh">遗稿</span></button></div>
 </div>
@@ -2118,7 +2118,7 @@ function goRoom(r) {
     else { fly.look = lookPlan(fly.fromPos, fly.fromTgt, toPos, fly.toTgt); fly.dur = 0.9 + Math.abs(fly.look.dy) * 0.7; } // 已经站在这间：原地转回视角
   }
   for (const b of roomsBox.children) b.classList.toggle('on', b.dataset.room === r.name);
-  showRoomNote(ROOM_NOTES[r.name], r.name);
+  if (ROOM_NOTES[r.name]) showRoomNote(ROOM_NOTES[r.name], r.name); // 没有说明的房间别调：空句会清空排队的旁白
 }
 // —— 配音（2026-10-28，edge-tts 免费语音，生成脚本 tools/voice/make_voice.py）：voice/manifest.json 记「编号 → 毫秒」，编号 = 英文原句的 FNV-1a ——
 // 配音只有英文（用户定），中文界面也播英文、字幕停到念完；没生成的句子照原来计时。src = 'sub' / 'room' / 'note'，收哪块字幕只停哪块的声音
@@ -2511,16 +2511,10 @@ const LEAD_ZH = {
   'Writing up the day at the desk.': '在书桌前写今天的调查记录。',
   'Looking the house over, room by room.': '一间一间地查看屋子。',
   'In the clerk\'s hand, the ink still wet.': '书记员的笔迹，墨还没干。',
-  'In the clerk\'s hand.': '书记员的笔迹。',
-  'In the clerk\'s hand, the ink still wet. The page from this afternoon is gone.': '书记员的笔迹，墨还没干。下午那页纸不见了。',
 };
 const ROOM_NOTES = {
   'Entry': ['The border where man and forest held their parley: take off the boots, and the wildness stays outside.', '人与森林交涉的边境——脱下靴子，把野性留在门外。'],
-  'Water Closet': ['Behind the curtain: the only room in the cabin with a door of its own.', '布帘后面，木屋里唯一有自己门的房间。'],
-  'Hall': ['Past the curtain the roof opens overhead — one room, rafters to floor, for a man and his fire.', '穿过帘子，屋顶一下子敞开在头顶——从地板到椽子是一整间，留给一个人和他的炉火。'],
   'Kitchen & Dining': ['The weightiest room in the house — every breath of living warmth sets out from here; and on the east wall a narrow board folds down, with two stools, one of them always empty.', '全屋最有分量的房间，所有活着的气息都从这里出发；东墙一块翻上翻下的窄桌板，两张木凳——一张永远空着。'],
-  'Parlour': ['The middle of the cabin. Here is where the Surveyor truly lived.', '小屋正中间。这是测绘员真正生活的中心。'],
-  'Loft': ['Up the ladder, under the roof, where the warm air gathers.', '木梯通上去，在屋顶下面，暖空气聚在这里。'],
 };
 // 三日游戏的新文字（2026-10-21 按 story/story-zh.md 定稿写进来，还没挂到物件上、没按天解锁——归第 1 天做）：键 → [标题, 英, 中]，多段用 \n\n
 const GAME_TEXT = {
@@ -2601,22 +2595,22 @@ const QUEST = { // 屏幕上那一行任务提示：[英, 中]
   page: ['There is a page lying on the writing desk.', '书桌上压着一页纸。'],
   fire: ['It is cold in here. Get the fire going first.', '有点冷，先把火升起来吧。'],
   look: ['Where did he go?', '他往哪儿去了？'],
-  dusk: ['Night is coming on.', '天快黑了。'],
-  night: ['Night. The clerk is writing up the day at the desk — go and see what she has written.', '天黑了。书记员在书桌前写今天的调查记录，去看看她写了什么。'],
-  end: ['The first day is done.', '第一天结束了。'],
+  dusk: ['', ''],
+  night: ['Go and see what the clerk has written.', '去看看书记员写了什么。'],
+  end: ['', ''],
 };
 const CLERK_SAYS = ['The clerk: "This house is newer than the reports made it."', '书记员：“这屋子比报告里写的新。”'];
 // 换掉的卡片：[标题, 区域, 中文标题, 英, 中, 说明]
 // v2：卡片只留一两句，全文在遗稿（Journal）里
-const PAGE_CARD = ['A Page on the Desk', 'Parlour', '书桌上的一页纸', 'Inquiry Notes, the First Day.\n\nThe inspector lit the stove. In the firebox, a letter not burnt through.', '调查记录，第一天。\n\n稽查生了火。炉膛里有一封没烧完的信。', 'In the clerk\'s hand.'];
+const PAGE_CARD = ['A Page on the Desk', 'Parlour', '书桌上的一页纸', 'Inquiry Notes, the First Day.\n\nThe inspector lit the stove. In the firebox, a letter not burnt through.', '调查记录，第一天。\n\n稽查生了火。炉膛里有一封没烧完的信。'];
 const PAGE_SAYS = ['The clerk reads it twice. "That is my hand. But I have not written it yet."', '书记员看了两遍：“是我的字。可我还没写呢。”'];
 const LETTER_SAYS = ['The clerk looks from the letter to the page in her hand, and says nothing.', '书记员看看信，又看看手里那页纸，没说话。'];
 const LETTER_CARD = ['Unburnt Letter', 'Kitchen', '没烧完的信', '"…east-north-east, about four miles. Beneath an old spruce the ground has split… Marked ✕. This place is not fit…"\n\nThe rest is burnt away.', '“……东北偏东，约四英里。老云杉根下地面开裂……已标 ✕。此处不宜……”\n\n后面烧没了。'];
 const MAP_CARD = ['The ✕ on the Map', 'Parlour', '地图上的 ✕', DAY1_TEXT.map[2], DAY1_TEXT.map[3]];
-const BASIN_CARD = ['Washstand', 'Water Closet', '洗脸架', 'Half a basin of water, frozen into one solid block.', '盆里还有半盆水，冻成了一整块冰。', 'The water froze where it stood.'];
-const WATCH_CARD = ['Night Table', 'Loft', '床头柜', 'In the drawer, a pocket-watch, an old compass, a few pine needles. The watch has stopped at seventeen minutes past three.', '抽屉里有怀表、旧罗盘、几根松针。怀表停在三点十七分。', 'The watch is still.']; // 和第 3 天 X_CARDS.xwatch 同一句式，只差「停了 / 在走」
+const BASIN_CARD = ['Washstand', 'Water Closet', '洗脸架', 'Half a basin of water, frozen into one solid block.', '盆里还有半盆水，冻成了一整块冰。'];
+const WATCH_CARD = ['Night Table', 'Loft', '床头柜', 'In the drawer, a pocket-watch, an old compass, a few pine needles. The watch has stopped at seventeen minutes past three.', '抽屉里有怀表、旧罗盘、几根松针。怀表停在三点十七分。']; // 和第 3 天 X_CARDS.xwatch 同一句式，只差「停了 / 在走」
 const LOG_CARD = ['Field Log', 'Parlour', '工作日志', 'His field log, bark paper stitched together: neat at the front, more and more disordered towards the back. Tonight there will be time to read it.', '他的工作日志，桦树皮纸订成的，前面工整，越往后越乱。今晚再细读。'];
-const NOTES_CARD = ['Inquiry Notes', 'Parlour', '调查记录', '', '', 'In the clerk\'s hand, the ink still wet. The page from this afternoon is gone.'];
+const NOTES_CARD = ['Inquiry Notes', 'Parlour', '调查记录', '', '', 'In the clerk\'s hand, the ink still wet.'];
 function notes1Text() { // 第 1 夜的记录 = 下午那页一字不差，加上房间变化那句（写成稽查做的）和最后一行；Journal 和卡片共用
   const c = [...game.found].find((k) => k.startsWith('chg:')), l = c ? chgLine(c) : ['', ''];
   const en = `Inquiry Notes, the First Day.\n\nThe inspector lit the stove. In the firebox, a letter not burnt through.\n\n${l[0] ? l[0] + ' ' : ''}His greatcoat, boots and lantern all in their places. The house is newer than the reports made it.\n\nTomorrow the inspector will go out, east-north-east.`; // 大衣靴子提灯：第 3 天 ✕ 那间衣帽架全空的对照（叙事评审 11-04 #3）
@@ -2628,7 +2622,7 @@ const STOVE_ROOMS = ['Parlour']; // 「先生火」只在进起居室时提示�
 function showQuest() {
   const el = $('quest'), k = questNow();
   const q = k === 'page' && !game.deskSeen ? QUEST.inside : QUEST[k]; // 还没看到书桌：先说进屋看看（评审④ v2 #1：门廊上原来一行任务都没有）
-  el.innerHTML = k === 'fire' && !game.stoveSeen ? '' : lbl(q[0], q[1]);
+  el.innerHTML = (k === 'fire' && !game.stoveSeen) || !q[0] ? '' : lbl(q[0], q[1]); // 空句：画面自己说（天色、收尾弹层）
   $('walkBtn').hidden = !(game.day >= 3 ? !game.found.has('ended') : game.day >= 2 && !game.night) || !!fp; // 第 2 天白天：「出门走走」直接站到门口、第一人称
   enterBtn.classList.toggle('nogo', !!inside && !(game.found.has('ended') || game.day >= 3 || (game.day >= 2 && !game.night))); // 「出门」不常驻：剧情要出去时才有
   $('prog').innerHTML = ''; // v2 删掉「已找到 n · 还剩 m」：找线索不再像清单
@@ -2638,7 +2632,7 @@ function showQuest() {
 // —— 居中小弹窗（解锁遗稿、继续 / 重来）：样式同线索卡片；btns = [[英, 中, 点了做什么], …]，点哪个都先关窗 ——
 function dialog(title, text, btns) {
   const d = $('dlg'), box = d.querySelector('.box');
-  box.innerHTML = `<h2>${lbl(...title)}</h2><p>${lbl(...text)}</p><div class="row"></div>`;
+  box.innerHTML = `<h2>${lbl(...title)}</h2>${text[0] ? `<p>${lbl(...text)}</p>` : ''}<div class="row"></div>`; // 没有正文就只留标题和按钮
   for (const [en, zh, fn] of btns) { const b = document.createElement('button'); b.innerHTML = lbl(en, zh); b.onclick = () => { d.hidden = true; if (fn) fn(); if (d.hidden && fp && !touchFP && !document.pointerLockElement) canvas.requestPointerLock?.()?.catch?.(() => {}); }; box.lastChild.append(b); } // 第一人称点完按钮接着锁回鼠标，不用再点一下画面（UX7）；按钮里又开了下一个弹窗就不锁
   if (document.pointerLockElement) document.exitPointerLock(); // 第一人称：放出鼠标才点得到按钮
   d.hidden = false;
@@ -2667,8 +2661,8 @@ function resumeAsk() { // 刷新时有存档才问；「重新开始」只放在
   if (game.found.has('ended')) { endHome(); endAsk(); return; } // 通关了：刷新只说终章、后记解锁
   if (!game.saved) return;
   if ((game.day === 1 && game.found.has('notes1')) || (game.day === 2 && game.found.has('notes2'))) return; // 读完夜里记录就刷新了：加载时已弹「第 n 天结束」，别用「欢迎回来」盖掉（不然进不了下一天）
-  dialog(['Welcome Back', '欢迎回来'], ['Your inquiry was left part-way. Carry on from where you stopped, or begin the first day again?', '上次的调查还没做完。接着上次的进度，还是从第一天重新开始？'],
-    [['Carry On', '继续上次'], ['Begin Again', '重新开始', () => { SAVE.clear(); location.reload(); }]]);
+  dialog(['Welcome Back', '欢迎回来'], ['Your inquiry was left part-way.', '上次的调查还没做完。'],
+    [['Carry On', '继续上次'], ['From the First Day', '从第一天开始', () => { SAVE.clear(); location.reload(); }]]); // 正文删了「从第一天重新开始」：后果写在按钮上，第 3 天的人别以为只重来当天
 }
 // —— 开场字幕：第一次来（没有任何进度）时跟着开场飞行一句句播；开场被跳过就把整段放进一张卡片，点一下关 ——
 const OPENING = [
@@ -2929,20 +2923,17 @@ function renderJournal() { // 开场一直在；找到工作日志才有序章�
   for (const box of journal.querySelectorAll('.jday')) {
     const zh = box.dataset.lang === 'zh', add = (tag, text, cls) => { const e = document.createElement(tag); e.textContent = text; if (cls) e.className = cls; box.append(e); };
     box.textContent = '';
-    add('h3', zh ? '第一天' : 'The First Day');
     const keys = Object.keys(DAY1_TEXT).filter((k) => f.has(k));
-    if (!keys.length) add('p', zh ? '还什么都没记下。' : 'Nothing written down yet.', 'coda');
+    if (keys.length) add('h3', zh ? '第一天' : 'The First Day'); // 空的一天不列标题
     for (const k of keys) { const t = DAY1_TEXT[k]; add('h4', zh ? t[1] : t[0]); for (const para of (zh ? t[3] : t[2]).split('\n\n')) add('p', para); }
     if (game.day >= 2) { // 第二天：同样只列已找到的
-      add('h3', zh ? '第二天' : 'The Second Day');
       const k2 = Object.keys(DAY2_TEXT).filter((k) => f.has(k));
-      if (!k2.length) add('p', zh ? '还什么都没记下。' : 'Nothing written down yet.', 'coda');
+      if (k2.length) add('h3', zh ? '第二天' : 'The Second Day');
       for (const k of k2) { const t = DAY2_TEXT[k]; add('h4', zh ? t[1] : t[0]); for (const para of (zh ? t[3] : t[2]).split('\n\n')) add('p', para); }
     }
     if (game.day >= 3) { // 第三天
-      add('h3', zh ? '第三天' : 'The Third Day');
       const k3 = Object.keys(DAY3_TEXT).filter((k) => f.has(k));
-      if (!k3.length) add('p', zh ? '还什么都没记下。' : 'Nothing written down yet.', 'coda');
+      if (k3.length) add('h3', zh ? '第三天' : 'The Third Day');
       for (const k of k3) { const t = DAY3_TEXT[k]; add('h4', zh ? t[1] : t[0]); for (const para of (zh ? t[3] : t[2]).split('\n\n')) add('p', para); }
     }
     const ends = [['end_back', 'endBack'], ['end_stay', 'endStay'], ['end_hidden', 'endHidden']], nEnd = ends.filter(([k]) => f.has(k)).length;
@@ -3065,14 +3056,13 @@ const DAY2_TEXT = { // Journal「第二天」：键 → [英标题, 中标题, �
   notes2: ['Inquiry Notes, Night of Day 2', '调查记录 · 第 2 天夜里', GAME_TEXT.notes2[1], GAME_TEXT.notes2[2]],
 };
 Object.assign(QUEST, {
-  out: ['The fog is down. He left his marks along the path — go and find them.', '起雾了。他在小路边留了记号，出去找找。'],
+  out: ['He left his marks along the path — go and find them.', '他在小路边留了记号，出去找找。'],
   out1: ['There are more of his marks along the path. Keep on.', '路上还有他的记号，接着往前走。'], // 找到第一样之后（评审④ #8：原来四样找齐前一直是「出去找找」）
-  dusk2: ['Dusk is coming on. Look about you — is anything rising over the trees?', '天要黑了。四下看看，树梢上有没有什么。'], // 原来写「往小屋走吧」，玩家进了屋就看不到灯（11-01 评审 #4）
+  dusk2: ['Look about you — is anything rising over the trees?', '四下看看，树梢上有没有什么。'], // 原来写「往小屋走吧」，玩家进了屋就看不到灯（11-01 评审 #4）
   home2: ['Go back inside.', '回屋里去。'],
-  end2: ['The second day is done.', '第二天结束了。'],
+  end2: ['', ''],
 });
 const D2_SAYS = {
-  morning: ['Morning. In the night the fog came down over the woods.', '早上。夜里起了雾，把林子盖住了。'],
   clerk: ['The clerk: "He wrote that in fog you find the way by his marks."', '书记员：“他写过，雾里认路靠记号。”'],
   lost: ['The fog turned you round. The cabin is ahead of you again. Something stood by the path, and you did not stop for it.', '雾里绕了一圈，眼前又是小屋。路边好像有什么，你没停下来。'],
   lost0: ['The fog turned you round. The cabin is ahead of you again.', '雾里绕了一圈，眼前又是小屋。'],
@@ -3080,7 +3070,6 @@ const D2_SAYS = {
   passed: ['Something stood by the path back there.', '刚才路边好像立着什么。'], // 走过头以后的第 1 级提示（hintFire）
   change1: ['A second line of tracks runs to the door — going in. Boots the size of yours.', '门口多了一行脚印，往屋里走的，跟你的靴子一样大。'],
   change2: ['No smoke from the chimney. The fire was burning when you went out.', '烟囱不冒烟了。你出门时炉火还烧着。'],
-  dusk: ['The light is going.', '天色暗下来了。'],
   lamp: ['The clerk: "Look — east-north-east. Smoke."', '书记员：“你看——东北偏东，有烟。”'],
 };
 Object.assign(HINTS, {
@@ -3120,12 +3109,11 @@ function endDay() { LOG && LOG.ev('day', '第1天结束'); // 第一天读完调
 }
 function dayStartNote() { // 第二天早上：两句开场（第 1 天的旧存档读完了也走这里）
   if (game.day < 2 || game.night) return;
-  if (game.day >= 3) { if (game.found.has('xarrive')) return; setTimeout(() => showRoomNote(D3_SAYS.morning), 1500); setTimeout(() => showRoomNote(D3_SAYS.go), 6500); return; }
-  setTimeout(() => showRoomNote(D2_SAYS.morning), 1500);
-  setTimeout(() => showRoomNote(D2_SAYS.clerk), 6500);
+  if (game.day >= 3) { if (game.found.has('xarrive')) return; setTimeout(() => showRoomNote(D3_SAYS.go), 3000); return; }
+  setTimeout(() => showRoomNote(D2_SAYS.clerk), 3000);
 }
 function startDusk2() { // 四样找齐：天慢慢转到傍晚，灯在 updateDay2 里按时刻亮
-  setTimeout(() => { showRoomNote(D2_SAYS.dusk); sky.play = false; sky.goal = 17.5; sky.goalRate = 0.8; }, 4000);
+  setTimeout(() => { sky.play = false; sky.goal = 17.5; sky.goalRate = 0.8; }, 4000);
 }
 function startNight2() { // 回屋读到日志中段：天黑、书记员走去书桌、壁灯亮
   game.night = game.dusk = true; showQuest();
@@ -3484,10 +3472,9 @@ const DAY3_TEXT = { // Journal「第三天」：键 → [英标题, 中标题, �
 Object.assign(QUEST, {
   go3: ['Follow his marks through the fog, to the ✕.', '照着他的记号穿过雾，走到 ✕ 去。'],
   x3: ['Look about this house. When you are ready, step out under the porch.', '在这间屋里看看。看够了，就到门廊下去。'],
-  fin: ['The inquiry is closed.', '调查结束了。'],
+  fin: ['', ''],
 });
 const D3_SAYS = {
-  morning: ['The third morning. The fog has not lifted.', '第三天早上。雾还没有散。'],
   lost: ['The fog turned you round. You find his tracks again.', '雾里绕了一圈，又看见了他的脚印。'], // 世界挪过了（loopBack 放回踪迹上）：不能说「回到小屋门口」，玩家会以为又绕回家
   lostX: ['The fog turned you round. You are back under the porch of the other house.', '雾里绕了一圈，又回到了另一间屋的门廊下。'],
   go: ['The clerk: "East-north-east, about four miles. I will stay with the house."', '书记员：“东北偏东，大约四英里。我留在屋里。”'], // 早上就说（日志后段挪到 ✕ 那间，出门不用先读）
@@ -3752,7 +3739,7 @@ function endHome() { // 通关后按结局摆自家屋子（叙事评审 11-04 #
   shadowDirty = true;
 }
 function endAsk() { // 通关后刷新：不问「继续上次」，告诉玩家终章、后记解锁了
-  dialog(['The Papers Complete', '遗稿齐了'], ['The last pages are in the Journal now: where he went, and what came after.', '终章和后记已经收进遗稿：他去了哪里，以及后来。'],
+  dialog(['The Papers Complete', '遗稿齐了'], ['', ''],
     [['Read the Papers', '翻开遗稿', () => $('jBtn').click()], ...(game.snap.length ? [['Back to the Other Porch', '回到另一间屋的门廊下', backToPorch]] : []), ...(LOG ? [['Copy Log', '复制记录', () => { const t = window.__logText(); (navigator.clipboard?.writeText(t) || Promise.reject()).catch(() => { const a = document.createElement('textarea'); a.value = t; document.body.append(a); a.select(); document.execCommand('copy'); a.remove(); }); }]] : []), ['Begin Again', '重新开始', () => { SAVE.clear(); location.reload(); }]]);
 }
 function xPorch(k) { // ✕ 那间（挪世界后）：门廊灯大白天也亮得显眼；走近了太阳压暗（雾在 updateDay2 里跟着 x3.near 加浓），屋子从灰里浮出来（r3 #12）
@@ -4977,7 +4964,7 @@ function sliceTick(dt) {
     if (rn) game.entered = true;
     if (STOVE_ROOMS.includes(rn)) game.stoveSeen = true;
     if (rn === 'Entry' && !SL.seen.has(rn) && !touchFP) { const P = fp.p.root.position; fp.turn = { yaw: Math.atan2(1.2 - P.x, 1.25 - P.z), pitch: -0.05, t: 0, name: null }; } // 电脑第一次进玄关：转向东边通屋里的过道口（帘子在 x 0.64），不脸贴衣钉墙（11-05 评审 #5）
-    if (rn && !SL.seen.has(rn)) { SL.seen.add(rn); saveGame(); showRoomNote(ROOM_NOTES[rn], rn); } // 每间只说一次（走来走去不重复）
+    if (rn && !SL.seen.has(rn)) { SL.seen.add(rn); saveGame(); if (ROOM_NOTES[rn]) showRoomNote(ROOM_NOTES[rn], rn); } // 每间只说一次（走来走去不重复）
     showQuest();
   }
   const w = people.get('person_woman');
@@ -5557,7 +5544,7 @@ renderer.setAnimationLoop(() => {
     if (fly.toFov !== undefined) { camera.fov = fly.fromFov + (fly.toFov - fly.fromFov) * e; camera.updateProjectionMatrix(); }
     if (fly.t === 1) {
       if (fly.out) { controls.minDistance = fly.minD ?? 1; controls.maxDistance = 220; }
-      const came = fly.in; fly = null; if (inside) { lookAround(); placeRooms('side'); if (came && !$('roomNote').classList.contains('on')) showNote({ t: '', zt: '', text: 'Have a look around inside.', ztext: '往室内看看吧。' }); } // 进屋飞到了：房间列表在右侧淡入，下方一句提示
+      fly = null; if (inside) { lookAround(); placeRooms('side'); } // 进屋飞到了：房间列表在右侧淡入
     }
   }
   if (norenOff && !(fly && fly.route)) { norenOff.visible = true; norenOff = null; } // 路线飞完或被打断：门帘放下
