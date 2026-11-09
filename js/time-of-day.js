@@ -112,31 +112,33 @@ const indoorU = { uIndoor: { value: 1 }, uFlashIn: { value: 1 }, uCamIn: { value
 // 屋内灯、炉火是不投影的 PointLight，原来穿墙照亮屋外的院子、路、外墙（夜里地上一圈暖光）。改 three 的着色器块，对所有受光材质：
 // 光源在墙内、片元在墙外时，只有从大门洞（南墙 z=1.8、x ±0.45、高 2.1 以下）穿出去、且门开着才算数。小屋没有窗（射线扫过四面墙，只有原木缝）。
 // uWallDoor 放进各 ShaderLib 的 uniforms，值用普通对象（不是 Vector4）：各材质克隆 uniforms 时会共用这一个引用，改一处全变。
-const wallU = { x: 1, y: 0, z: 0, w: 0 }; // x = 大门开度（1 开 0 关），door_wood 开关动画里设（setupToggles）
-for (const id of ['standard', 'physical', 'lambert', 'phong', 'toon']) THREE.ShaderLib[id].uniforms.uWallDoor = { value: wallU };
+const wallU = { x: 1, y: 0, z: 1, w: 1 }, roomU = { x: 0, y: 1 }; // wallU：x = 大门开度（1 开 0 关，door_wood 开关动画里设），y = 炉门开度，z = 卫生间门开度，w = 门帘放下程度；roomU.x = 折叠餐桌放下程度，roomU.y = 有没有点亮的点光源（0 就跳过屋内遮挡计算，白天省指令）
+for (const id of ['standard', 'physical', 'lambert', 'phong', 'toon']) { THREE.ShaderLib[id].uniforms.uWallDoor = { value: wallU }; THREE.ShaderLib[id].uniforms.uRoomK = { value: roomU }; }
+// 每盏灯一份的代码会被展开 11 遍，ANGLE/D3D 的编译时间和帧时间都跟指令数成正比：试过 9 个盒子的射线求交，冷启动 prewarm 13s → 155s、帧时 11ms → 26ms；楼板隔墙全用平面穿越判断仍要 34s。
+// 所以：灯位固定的遮挡（炉身、吊灯灯罩、壁灯旁的高柜）和家具底下压暗在循环外算，每个片元一次（rFire / rShade / rCab / rU）；屋内分房间查表（ROOM_V），每盏灯只算一次灯在哪间，只有卫生间门洞还做一次平面穿越。
 THREE.ShaderChunk.lights_pars_begin += `
 uniform vec4 uWallDoor;
-float wallPass( vec3 lv, vec3 pv ) {
-  vec3 L = ( vec4( lv - viewMatrix[ 3 ].xyz, 0.0 ) * viewMatrix ).xyz;
-  if ( max( abs( L.x ), abs( L.z ) ) > 1.8 ) return 1.0;
-  vec3 P = ( vec4( pv - viewMatrix[ 3 ].xyz, 0.0 ) * viewMatrix ).xyz;
-  float outK = smoothstep( 1.83, 1.89, max( abs( P.x ), abs( P.z ) ) );
+uniform vec2 uRoomK;
+vec3 lightW( vec3 v ) { return ( vec4( v - viewMatrix[ 3 ].xyz, 0.0 ) * viewMatrix ).xyz; }
+float doorRect( vec3 E ) { return ( 1.0 - smoothstep( 0.4, 0.47, abs( E.x ) ) ) * ( 1.0 - smoothstep( 2.0, 2.12, E.y ) ); }
+float wallPass( vec3 L, vec3 P, vec3 d, float outK ) {
+  if ( max( abs( L.x ), abs( L.z ) ) > 1.8 ) { // 屋外的灯（门廊灯、带出门的提灯）：照屋里只能走开着的大门，照屋子另一边被整栋房子挡住
+    if ( outK >= 1.0 ) { vec3 M = L + 0.5 * d; return smoothstep( 1.55, 1.8, max( abs( M.x ), abs( M.z ) ) ); }
+    float door = 0.0;
+    if ( L.z > 1.8 && d.z < -1e-4 ) door = uWallDoor.x * doorRect( L + d * ( 1.8 - L.z ) / d.z ) * ( L.z > 2.02 ? doorRect( L + d * ( 2.02 - L.z ) / d.z ) : 1.0 );
+    return mix( door, 1.0, outK );
+  }
   if ( outK <= 0.0 ) return 1.0;
-  vec3 d = P - L;
   float tz = d.z > 1e-4 ? ( 1.8 - L.z ) / d.z : 1e9;
   float tx = abs( d.x ) > 1e-4 ? ( sign( d.x ) * 1.8 - L.x ) / d.x : 1e9;
-  vec3 E = L + d * tz;
-  float door = tz < tx ? uWallDoor.x * ( 1.0 - smoothstep( 0.4, 0.47, abs( E.x ) ) ) * ( 1.0 - smoothstep( 2.0, 2.12, E.y ) ) : 0.0;
+  float door = tz < tx ? uWallDoor.x * doorRect( L + d * tz ) : 0.0;
   return mix( 1.0, door, outK );
 }
 // 炉火在铸铁炉身里面，光只能从炉门开口（南面 z=-1.19）出来；uWallDoor.y = 炉门开度，开着时门板挡住右边的光。留 5% 当墙和地反射回来的光
-float stovePass( vec3 lv, vec3 pv ) {
-  vec3 L = ( vec4( lv - viewMatrix[ 3 ].xyz, 0.0 ) * viewMatrix ).xyz;
-  if ( distance( L, vec3( 1.4, 0.62, -1.3 ) ) > 0.03 ) return 1.0;
-  vec3 P = ( vec4( pv - viewMatrix[ 3 ].xyz, 0.0 ) * viewMatrix ).xyz;
+float stoveK( vec3 P ) {
+  vec3 L = vec3( 1.4, 0.62, -1.3 ), d = P - L;
   if ( P.y > 2.35 ) return 0.0;
   if ( P.x > 1.13 && P.x < 1.67 && P.y > 0.13 && P.y < 0.87 && P.z > -1.62 && P.z < -1.22 ) return 1.0;
-  vec3 d = P - L;
   if ( d.z <= 1e-4 ) return 0.05;
   vec3 E = L + d * ( -1.19 - L.z ) / d.z;
   float o = smoothstep( 1.28, 1.32, E.x ) * ( 1.0 - smoothstep( 1.58, 1.62, E.x ) ) * smoothstep( 0.42, 0.46, E.y ) * ( 1.0 - smoothstep( 0.77, 0.81, E.y ) );
@@ -147,14 +149,67 @@ float stovePass( vec3 lv, vec3 pv ) {
   }
   return mix( 0.05, 1.0, o );
 }
+// 大厅吊灯的搪瓷灯罩：灯泡在 y 2.06，上方几乎没直射光，边缘按灯泡大小过渡；灯罩内面离光源只有十来厘米，按平方反比会过曝成一片死白
+float shadeK( vec3 P, float z ) {
+  vec2 r = vec2( P.x - 1.12, P.z - z );
+  return dot( r, r ) > 0.04 || P.y < 1.9 || P.y > 2.2 ? mix( 0.05, 1.0, smoothstep( 0.05, 0.58, ( 2.06 - P.y ) / max( length( r ), 1e-3 ) ) ) : 0.04;
+}
+// 壁灯贴着高柜北侧，柜子（x -1.72～-1.41，到 y 2.10）挡住往南的光
+float cabK( vec3 P ) {
+  if ( P.z < -0.5 || P.y > 2.1 ) return 1.0;
+  return smoothstep( -1.46, -1.38, -1.38 + ( P.x + 1.38 ) * 0.1 / ( P.z + 0.6 ) );
+}
+// 家具底下：灯只从上面来，床底、沙发底、书桌底、放下的餐桌底、树桩茶几根部直接光几乎到不了。用线性 clamp 代替 smoothstep，少算一半
+float rampUp( float a, float b, float x ) { return clamp( ( x - a ) / ( b - a ), 0.0, 1.0 ); }
+float roomUnder( vec3 P ) {
+  float u = 1.0;
+  if ( P.y > 2.26 && P.y < 2.44 ) u = 1.0 - 0.92 * rampUp( -0.98, -0.9, P.x ) * rampUp( 0.16, 0.08, P.x ) * rampUp( 0.38, 0.3, P.z );
+  else if ( P.y > 0.2 && P.y < 0.87 ) {
+    if ( P.y < 0.52 ) u = 1.0 - 0.85 * rampUp( -0.95, -0.87, P.x ) * rampUp( 0.66, 0.58, P.x ) * rampUp( 0.0, 0.08, P.z ) * rampUp( 0.8, 0.76, P.z );
+    u *= 1.0 - 0.8 * rampUp( -1.06, -1.14, P.x ) * rampUp( -0.46, -0.54, P.z );
+    if ( P.y < 0.34 ) u *= 1.0 - 0.65 * rampUp( 1.32, 1.0, length( ( P.xz - vec2( -0.125, -0.655 ) ) / vec2( 0.385, 0.33 ) ) );
+  }
+  if ( uRoomK.x > 0.0 && P.y > 0.1 && P.y < 1.14 && P.x > 1.3 ) u *= 1.0 - 0.8 * uRoomK.x * rampUp( -0.6, -0.54, P.z ) * rampUp( 0.66, 0.6, P.z );
+  return u;
+}
+// 屋内按房间查表（尺寸来自 glb 射线实测）：阁楼楼板 y 2.2、南隔墙 z 0.775、卫生间隔墙 x -0.575、门帘 x 0.64。0 客厅 1 大厅 2 玄关 3 卫生间 4 阁楼 5 大厅上半截（高过楼板，楼下的灯照不到）
+// 行 = 灯所在房间，列 = 片元所在房间：1 通，0 隔死，2 隔着门帘（布，透一半光），-1 玄关 ↔ 卫生间只从门洞过
+const float ROOM_V[ 36 ] = float[ 36 ](
+   1.0, 1.0, 0.0, 0.0, 0.0, 0.0,
+   1.0, 1.0, 2.0, 0.0, 1.0, 1.0,
+   0.0, 2.0, 1.0, -1.0, 0.0, 0.0,
+   0.0, 0.0, -1.0, 1.0, 0.0, 0.0,
+   0.0, 1.0, 0.0, 0.0, 1.0, 1.0,
+   1.0, 1.0, 2.0, 0.0, 1.0, 1.0 );
+float roomId( vec3 p ) { return p.y >= 2.2 ? ( p.x < 0.7 ? 4.0 : 5.0 ) : p.x >= 0.67 ? 1.0 : p.z < 0.775 ? 0.0 : p.x < -0.575 ? 3.0 : 2.0; }
+float roomPass( vec3 L, vec3 d, float pid ) {
+  if ( max( abs( L.x ), abs( L.z ) ) > 1.8 ) return 1.0;
+  float v = ROOM_V[ int( roomId( L ) * 6.0 + pid + 0.5 ) ];
+  if ( v < 0.0 ) { // 卫生间门洞 z 0.83–1.50、高 1.97
+    float t = ( -0.575 - L.x ) / d.x, z = L.z + d.z * t;
+    return uWallDoor.z * smoothstep( 0.81, 0.85, z ) * ( 1.0 - smoothstep( 1.48, 1.52, z ) ) * ( 1.0 - smoothstep( 1.93, 1.99, L.y + d.y * t ) );
+  }
+  return v > 1.5 ? 1.0 - 0.5 * uWallDoor.w : v;
+}
 `;
 // 11 盏点光源一直 visible（切 visible 会重编译），关着的灯、照不到的片元原来也整套算 BRDF：小屋每个像素 11 遍，占帧时大头。现在先判断再算。
 {
-  const lf = THREE.ShaderChunk.lights_fragment_begin, a = lf.indexOf('pointLight = pointLights[ i ];'), b = lf.indexOf('RE_Direct(', a), e = lf.indexOf(';', b) + 1;
-  if (a < 0 || b < 0) throw new Error('lights_fragment_begin 结构变了');
-  THREE.ShaderChunk.lights_fragment_begin = lf.slice(0, a) + 'pointLight = pointLights[ i ];\n\t\tif ( dot( pointLight.color, vec3( 1.0 ) ) > 0.0 && ( pointLight.distance <= 0.0 || distance( pointLight.position, geometryPosition ) < pointLight.distance ) ) {'
+  const lf = THREE.ShaderChunk.lights_fragment_begin, a = lf.indexOf('pointLight = pointLights[ i ];'), b = lf.indexOf('RE_Direct(', a), e = lf.indexOf(';', b) + 1, h = lf.indexOf('#if ( NUM_POINT_LIGHTS > 0 )');
+  if (a < 0 || b < 0 || h < 0) throw new Error('lights_fragment_begin 结构变了');
+  THREE.ShaderChunk.lights_fragment_begin = lf.slice(0, h) + `vec3 rP = lightW( geometryPosition ), rL, rD;
+float rOut = smoothstep( 1.83, 1.89, max( abs( rP.x ), abs( rP.z ) ) ), rIn = 1.0 - step( 1e-4, rOut );
+float rU = 1.0, rFire = 1.0, rShadeS = 1.0, rShadeN = 1.0, rCab = 1.0;
+float rRoom = 0.0;
+if ( uRoomK.y > 0.5 && rIn > 0.0 ) { // 白天灯全灭时整段跳过（uRoomK.y 由 scene.onBeforeRender 设）
+  rU = roomUnder( rP ); rFire = stoveK( rP ); rShadeS = shadeK( rP, 0.71 ); rShadeN = shadeK( rP, -0.49 ); rCab = cabK( rP );
+  rRoom = roomId( rP );
+}
+` + lf.slice(h, a) + 'pointLight = pointLights[ i ];\n\t\tif ( dot( pointLight.color, vec3( 1.0 ) ) > 0.0 && ( pointLight.distance <= 0.0 || distance( pointLight.position, geometryPosition ) < pointLight.distance ) ) {'
     + lf.slice(a + 'pointLight = pointLights[ i ];'.length, b).replace('getPointLightInfo( pointLight, geometryPosition, directLight );',
-      'getPointLightInfo( pointLight, geometryPosition, directLight );\n\t\tdirectLight.color *= wallPass( pointLight.position, geometryPosition ) * stovePass( pointLight.position, geometryPosition );')
+      `getPointLightInfo( pointLight, geometryPosition, directLight );
+		rL = lightW( pointLight.position ); rD = rP - rL + 1e-5;
+		directLight.color *= wallPass( rL, rP, rD, rOut ) * ( abs( rL.x - 1.4 ) + abs( rL.y - 0.62 ) < 0.03 ? rFire : abs( rL.x - 1.12 ) + abs( rL.y - 1.95 ) < 0.02 ? ( rL.z > 0.0 ? rShadeS : rShadeN ) : rL.x < -1.3 && rL.z < -0.5 ? rCab : 1.0 );
+		if ( rIn > 0.0 ) directLight.color *= rU * roomPass( rL, rD, rRoom );`)
     + lf.slice(b, e) + '\n\t\t}' + lf.slice(e);
 }
 function indoorShade(model) {
@@ -250,4 +305,4 @@ function syncSkyUI() {
 
 
 share({ sunRig: [() => sunRig, (v) => { sunRig = v; }] }); // 模型加载后主页面设
-export { WX_ZH, sky, skyEl, skyU, indoorU, indoorShade, PANELS, wallU, updateSky };
+export { WX_ZH, sky, skyEl, skyU, indoorU, indoorShade, PANELS, wallU, roomU, updateSky };

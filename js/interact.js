@@ -1,6 +1,6 @@
 // 点一下会动的东西：门、灯、提灯火苗、水、门帘、摇椅、炉火（2026-10-30 从 index.html 拆出；主页面的变量写 shared.名字，见 web/CLAUDE.md「模块」）
 import * as THREE from 'three';
-import { wallU, indoorU } from './time-of-day.js';
+import { wallU, roomU, indoorU } from './time-of-day.js';
 import { scene, renderer, camera, hemi } from './core.js';
 import { wx } from './weather.js';
 import { shared, share } from './state.js';
@@ -191,6 +191,7 @@ scene.onBeforeRender = () => {
   let n = 0;
   for (const l of lampLights) { let o = l.parent; while (o && o.visible) o = o.parent; if (o) n++; } // 一路往上都 visible 才算数
   for (let i = 0; i < spareLights.length; i++) spareLights[i].visible = i < n;
+  roomU.y = lampLights.some((l) => l.intensity > 0) ? 1 : 0;
 };
 function setupToggles() {
   const pivots = {};
@@ -216,6 +217,8 @@ function setupToggles() {
     });
   }
   toggles.get('door_wood')?.parts.push((k) => { wallU.x = 1 - k; }); // 大门 k=1 是关上：屋内灯只从开着的门洞照到屋外（wallPass）
+  toggles.get('toilet_door_A')?.parts.push((k) => { wallU.z = 1 - k; }); // 卫生间门 k=1 是关上：灯只从开着的门洞过隔墙（roomPass）
+  toggles.get('dining_leaf')?.parts.push((k) => { roomU.x = k; }); // 折叠餐桌放下时给桌下投影
   toggles.get('stove_door')?.parts.push((k) => { fire.door = 1 - k; }); // 炉门 k=1 是关上：关着时炉火点光源只剩玻璃透出的微光（updateFire）
   for (const [name, l] of Object.entries(LAMPS)) {
     const g = shared.layers.get(name);
@@ -231,6 +234,7 @@ function setupToggles() {
   }
   setupLanternFlame();
   setupNoren();
+  toggles.get('entry_noren')?.parts.push((k) => { wallU.w = 1 - k; }); // 门帘 k=1 是卷起：放下时挡住一部分光（roomPass）
   setupRocker();
 }
 // —— 提灯火苗：glb 里只有蜡烛和灯芯，没有火苗 → 在灯芯上加一个小发光水滴；开灯时长出来、轻轻跳（关灯缩到看不见，不切 visible）——
