@@ -476,7 +476,7 @@ import { SimplifyModifier } from 'three/addons/modifiers/SimplifyModifier.js';
 import { scene, sun, hemi, renderer, camera, controls, $, lang, esc, lbl, PR_MAX } from './js/core.js';
 import { shared, share } from './js/state.js';
 import { terrain, terrainH, terrainSlope, sstep, makeGroundGeometry, applyTerrain, setBrook, brookAt, brookCutD, groundSpan, BROOK_WL, BROOK_BANK } from './js/terrain.js';
-import { paperMesh, agedPaper, makeBook, inspectTick, inspecting, inspectBusy, inspectKind, inspectStart, inspectRelease } from './js/props3d.js';
+import { paperMesh, agedPaper, handwrite, makeBook, inspectTick, inspecting, inspectBusy, inspectKind, inspectStart, inspectRelease } from './js/props3d.js';
 import { WX_ZH, sky, skyEl, skyU, indoorU, indoorShade, PANELS, wallU, updateSky } from './js/time-of-day.js';
 import { audioTick, audioStep, audioRung, setIce, sfx, sfxToggle } from './js/audio.js';
 import { updateBirds } from './js/birds.js';
@@ -2892,37 +2892,38 @@ function planWander(p) {
 }
 // 没烧完的信：炉门里那条灰面（y 0.482；柴从 z −1.30 往里），一张纸片，后沿稍翘、斜着放；canvas 画纸色、炭笔字行、一边烧掉的焦边
 const LETTER = { at: [1.385, 0.488, -1.262], size: [0.14, 0.0875], rot: [-Math.PI / 2 + 0.14, 0, 0.35] };
-function makeLetter() { // 纸：js/props3d.js 的 paperMesh（纤维、霉点、折痕、卷边的几何）；这里只画字行和烧焦的那一边
-  const m = paperMesh(...LETTER.size, { seed: 19, tone: '#c4b28a', cutout: true, curl: 0.003, crease: 0.002, draw(x, W0, H0, R) {
+function makeLetter() { // 纸：js/props3d.js 的 paperMesh（纤维、霉点、折痕、卷边的几何）；这里写字、画烧焦的那一边。字是真的英文（卡片里那段），烧掉的一边把行尾吃了
+  const m = paperMesh(...LETTER.size, { seed: 19, tone: '#c4b28a', cutout: true, curl: 0.003, crease: 0.002, folds: [['h', 0.5]], wrinkle: 14, draw(x, W0, H0, R) {
+    handwrite(x, ['…east-north-east, about four miles.', 'Beneath an old spruce the ground has', 'split… Marked ✕. This place is not fit'], { x0: 62, y0: 150, size: 46, pitch: 66, ink: '40,32,26', R, slant: 0.06 });
+    x.strokeStyle = 'rgba(40,32,26,.55)'; x.lineWidth = 3; x.lineCap = 'round'; x.beginPath(); x.moveTo(130, 372); x.bezierCurveTo(240, 360, 330, 392, 460, 366); x.stroke(); // 信末拖出去的一笔
     x.save(); x.scale(W0 / 256, H0 / 160); const W = 256, H = 160;
-    const burn = []; // 烧掉的那一边：从上沿右边斜到下沿中间，往外鼓、锯齿
-    for (let i = 0; i <= 24; i++) { const t = i / 24; burn.push([W * (0.8 - 0.4 * t) + Math.sin(Math.PI * t) * W * 0.14 + (R() - 0.5) * 14, 6 + (H - 12) * t + (R() - 0.5) * 6]); }
+    const burn = []; // 烧掉的那一边：从上沿右边斜到下沿中间，往外鼓、锯齿（两层不同尺度的抖动，放大看是撕烧的毛边，不是折线）
+    for (let i = 0; i <= 120; i++) { const t = i / 120; burn.push([W * (0.8 - 0.4 * t) + Math.sin(Math.PI * t) * W * 0.14 + (R() - 0.5) * 3 + Math.sin(t * 31 + 1) * 4 + Math.sin(t * 11) * 3, 6 + (H - 12) * t + (R() - 0.5) * 1.6]); }
     const line = () => { x.beginPath(); burn.forEach(([px, py], i) => (i ? x.lineTo(px, py) : x.moveTo(px, py))); };
-    x.strokeStyle = 'rgba(45,35,28,.8)'; x.lineWidth = 1.6; // 字行：一段一段的短横
-    for (let y = 26; y < H - 14; y += 15) for (let px = 16; px < W - 20;) { const w = 6 + R() * 22; x.beginPath(); x.moveTo(px, y + (R() - 0.5) * 2); x.lineTo(px + w, y + (R() - 0.5) * 2); x.stroke(); px += w + 4 + R() * 6; }
     x.lineJoin = 'round';
     for (const lw of [64, 48, 34, 22]) { x.strokeStyle = 'rgba(92,52,18,.3)'; x.lineWidth = lw; line(); x.stroke(); } // 焦黄：几层半透明叠出由浅到深
     x.strokeStyle = '#1a120c'; x.lineWidth = 10; line(); x.stroke(); // 焦黑
-    for (let i = 0; i < 26; i++) { x.fillStyle = `rgba(${70 + R() * 30 | 0},${66 + R() * 26 | 0},${62 + R() * 20 | 0},${0.12 + R() * 0.3})`; x.beginPath(); x.arc(R() * W * 0.8, H * (0.35 + R() * 0.7), 4 + R() * 16, 0, 7); x.fill(); } // 压在上面的炉灰
+    x.strokeStyle = 'rgba(190,70,20,.35)'; x.lineWidth = 2.4; line(); x.stroke(); // 炭边上一线余烬的暗红
+    for (let i = 0; i < 34; i++) { const px = R() * W * 0.8, py = H * (0.3 + R() * 0.75), r = 3 + R() * 14, g = x.createRadialGradient(px, py, 0, px, py, r); g.addColorStop(0, `rgba(${70 + R() * 30 | 0},${66 + R() * 26 | 0},${62 + R() * 20 | 0},${0.1 + R() * 0.22})`); g.addColorStop(1, 'rgba(70,66,62,0)'); x.fillStyle = g; x.fillRect(px - r, py - r, r * 2, r * 2); } // 压在上面的炉灰（边缘渐隐，不是一个个实心圆）
     x.globalCompositeOperation = 'destination-in'; x.fillStyle = '#000'; x.beginPath(); // 裁成纸的形状（填充色要不透明，否则整张变半透明被 alphaTest 丢掉）
     x.moveTo(6, 6); for (const [px, py] of burn) x.lineTo(px, py); x.lineTo(6, H - 6); x.closePath(); x.fill();
     x.restore();
   } });
-  m.rotation.set(...LETTER.rot);
+  m.rotation.set(...LETTER.rot); document.fonts.load('italic 40px "IM Fell English"').then(() => m.userData.repaint());
   const g = new THREE.Group(); g.name = 'stove_letter'; g.position.set(...LETTER.at); g.add(m);
   scene.add(g); layers.set('stove_letter', g); meshes.push(m); indoorShade(g);
 }
-function makePage() { // v2：书桌上那页调查记录（干净纸 + 墨水字行），放在桌面 loft_desk 包围盒顶上、靠前一点
+function makePage() { // v2：书桌上那页调查记录（折过三折的纸 + 墨水手写），放在桌面 loft_desk 包围盒顶上、靠前一点；字是卡片里那两句，下面没写的地方留白
   const d = layers.get('loft_desk'); if (!d) return;
-  const m = paperMesh(0.15, 0.2, { seed: 23, tone: '#d9cfb4', curl: 0.004, draw(x, W, H, R) {
-    x.save(); x.scale(W / 192, H / 256); W = 192; H = 256; // 下面的字行按 192×256 的坐标画
-    x.strokeStyle = 'rgba(30,28,48,.85)'; x.lineWidth = 1.8;
-    for (let y = 30; y < H - 40; y += 16) for (let px = 16, end = W - 16 - (y > H - 70 ? 70 : 0); px < end;) { const w = 6 + R() * 20; x.beginPath(); x.moveTo(px, y + (R() - 0.5) * 2); x.lineTo(Math.min(end, px + w), y + (R() - 0.5) * 2); x.stroke(); px += w + 4 + R() * 6; }
-    x.restore();
+  const m = paperMesh(0.15, 0.2, { seed: 23, tone: '#d9cfb4', curl: 0.004, folds: [['h', 0.333], ['h', 0.667]], wrinkle: 10, draw(x, W, H, R) {
+    handwrite(x, ['Inquiry Notes, the First Day.'], { x0: 96, y0: 170, size: 60, pitch: 0, R });
+    x.strokeStyle = 'rgba(28,26,50,.7)'; x.lineWidth = 3.4; x.lineCap = 'round'; x.beginPath(); x.moveTo(94, 200); x.bezierCurveTo(300, 190, 560, 208, 860, 194); x.stroke(); // 标题底下一道墨线
+    handwrite(x, ['The inspector lit the stove.', 'In the firebox, a letter not', 'burnt through.', '', 'Stores counted; all in order.', 'Stove drawing well.'], { x0: 96, y0: 330, size: 52, pitch: 78, R });
+    x.fillStyle = 'rgba(28,26,50,.5)'; x.beginPath(); x.arc(760, 1180, 5 + R() * 2, 0, 7); x.fill(); const g = x.createRadialGradient(742, 1170, 0, 742, 1170, 26); g.addColorStop(0, 'rgba(28,26,50,.35)'); g.addColorStop(1, 'rgba(28,26,50,0)'); x.fillStyle = g; x.fillRect(700, 1130, 90, 90); // 墨点
   } });
-  m.rotation.set(-Math.PI / 2, 0, 0.25);
+  m.rotation.set(-Math.PI / 2, 0, 0.25); document.fonts.load('italic 40px "IM Fell English"').then(() => m.userData.repaint());
   const b = new THREE.Box3().setFromObject(d), g = new THREE.Group(); g.name = 'desk_page';
-  g.position.set((b.min.x + b.max.x) / 2, b.max.y + 0.002, (b.min.z + b.max.z) / 2); g.add(m);
+  g.position.set((b.min.x + b.max.x) / 2, b.max.y + 0.006, (b.min.z + b.max.z) / 2); g.add(m); // 桌面不是一个平面（最高处比包围盒顶只低一点点），纸的中间又因卷曲和折痕凹下去约 2mm，抬 2mm 时桌面会从纸中间穿出来（纸上一块黑），所以抬 6mm
   scene.add(g); layers.set('desk_page', g); meshes.push(m); indoorShade(g);
 }
 // 开场第二盏灯 11-04 删了（叙事评审 #2：湖边那盏灯后面三天接不上；改成 ✕ 那边的烟，手机竖屏整段飞行都不进画面，所以不留替代）
@@ -3170,6 +3171,51 @@ async function messyBed() {
   m.side = THREE.DoubleSide; m.vertexColors = true; lin.geometry = g; lin.material = m; g.computeBoundsTree(); indoorShade(lin);
 }
 function d2Canvas(w, h, draw) { const c = document.createElement('canvas'); c.width = w; c.height = h; draw(c.getContext('2d'), w, h); const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t; }
+// 刻记（d2_blaze）：先画一张高度图——树皮长回来的一圈隆起、削掉树皮后的凹面、刀刻的 V 形槽——再由它出颜色图、法线图和网格位移（槽真的凹下去、边上一圈真的鼓出来，低角度看有明暗）；512×768，第 2 天起建一次
+function blazeTex() {
+  const CW = 512, CH = 768, R = rng(17), mkc = () => { const c = document.createElement('canvas'); c.width = CW; c.height = CH; return c; };
+  const sh = []; for (let i = 0; i < 56; i++) { const a = i / 56 * 6.283, k = 0.92 + 0.1 * R() + 0.05 * Math.sin(a * 4 + 1); sh.push([256 + Math.cos(a) * 200 * k, 330 + Math.sin(a) * 280 * k]); }
+  const path = (c) => { c.beginPath(); sh.forEach(([px, py], i) => (i ? c.lineTo(px, py) : c.moveTo(px, py))); c.closePath(); };
+  const wob = (pts) => { const o = []; for (let i = 0; i < pts.length - 1; i++) { const [a, b] = [pts[i], pts[i + 1]], n = Math.ceil(Math.hypot(b[0] - a[0], b[1] - a[1]) / 14); for (let k = 0; k < n; k++) { const t = k / n; o.push([a[0] + (b[0] - a[0]) * t + (R() - 0.5) * 3, a[1] + (b[1] - a[1]) * t + (R() - 0.5) * 3]); } } o.push(pts[pts.length - 1]); return o; };
+  const line = (c, pts) => { c.beginPath(); pts.forEach(([px, py], i) => (i ? c.lineTo(px, py) : c.moveTo(px, py))); c.stroke(); };
+  const CARVES = [[[256, 400], [256, 140]], [[188, 214], [256, 140], [324, 214]], [[176, 440], [336, 440], [246, 572]]].map(wob); // 箭头（杆、头）和「7」
+  const edgeAt = (t) => sh[Math.floor(t * sh.length) % sh.length]; // 环上随便一点（树皮纹理用）
+  // 高度图（灰度：110 = 削平的木面，> 110 凸，< 110 凹）
+  const hc = mkc(), hx = hc.getContext('2d'); hx.lineCap = hx.lineJoin = 'round';
+  hx.fillStyle = 'rgb(110,110,110)'; hx.fillRect(0, 0, CW, CH);
+  hx.save(); path(hx); hx.clip(); for (let w = 84; w >= 30; w -= 3) { const v = 110 + 26 * (84 - w) / 54; hx.strokeStyle = `rgb(${v},${v},${v})`; hx.lineWidth = w; path(hx); hx.stroke(); } hx.restore(); // 切口边缘往里的斜坡
+  for (let w = 56; w >= 10; w -= 2) { const v = 118 + 110 * Math.pow((56 - w) / 46, 0.9); hx.strokeStyle = `rgb(${v},${v},${v})`; hx.lineWidth = w; path(hx); hx.stroke(); } // 长回来的树皮：圆滑隆起，脊在切口边上
+  for (let i = 0; i < 120; i++) { const [px, py] = edgeAt(R()), a = R() * 6.283, l = 8 + R() * 22; hx.strokeStyle = R() < 0.5 ? 'rgba(0,0,0,.12)' : 'rgba(255,255,255,.09)'; hx.lineWidth = 2 + R() * 3; hx.beginPath(); hx.moveTo(px, py); hx.lineTo(px + Math.cos(a) * l, py + Math.sin(a) * l); hx.stroke(); } // 树皮裂纹
+  hx.save(); path(hx); hx.clip();
+  for (let i = 0; i < 160; i++) { const px = R() * CW; hx.strokeStyle = R() < 0.5 ? 'rgba(255,255,255,.04)' : 'rgba(0,0,0,.05)'; hx.lineWidth = 1 + R() * 2.2; hx.beginPath(); hx.moveTo(px, 0); hx.bezierCurveTo(px + 8, CH * 0.3, px - 8, CH * 0.6, px + (R() - 0.5) * 12, CH); hx.stroke(); } // 木纹
+  for (let w = 34; w >= 4; w -= 3) { const v = 90 - 66 * (34 - w) / 30; hx.strokeStyle = `rgb(${v},${v},${v})`; hx.lineWidth = w; for (const c of CARVES) line(hx, c); } // 刀槽：宽到窄一层层压深，成 V 形
+  hx.restore();
+  const hd = hx.getImageData(0, 0, CW, CH).data, H = new Float32Array(CW * CH); for (let i = 0; i < H.length; i++) H[i] = hd[i * 4];
+  const nc = mkc(), ng = nc.getContext('2d'), nim = ng.createImageData(CW, CH), at = (i, j) => H[Math.min(CH - 1, Math.max(0, j)) * CW + Math.min(CW - 1, Math.max(0, i))];
+  for (let j = 0; j < CH; j++) for (let i = 0; i < CW; i++) { const dx = -(at(i + 1, j) - at(i - 1, j)) * 0.11, dy = (at(i, j + 1) - at(i, j - 1)) * 0.11, l = Math.hypot(dx, dy, 1), p = (j * CW + i) * 4; // 画布 y 向下、贴图 v 向上，所以 dy 不取负
+    nim.data[p] = (dx / l * 0.5 + 0.5) * 255; nim.data[p + 1] = (dy / l * 0.5 + 0.5) * 255; nim.data[p + 2] = (1 / l * 0.5 + 0.5) * 255; nim.data[p + 3] = 255; }
+  ng.putImageData(nim, 0, 0);
+  // 颜色图
+  const cc = mkc(), x = cc.getContext('2d'); x.lineCap = x.lineJoin = 'round';
+  x.strokeStyle = 'rgba(170,110,40,.95)'; x.lineWidth = 16; for (const [px, l] of [[200, 104], [312, 64]]) { x.beginPath(); x.moveTo(px, 600); x.lineTo(px - 4, 600 + l); x.stroke(); x.fillStyle = 'rgba(190,130,50,.95)'; x.beginPath(); x.arc(px - 4, 608 + l, 14, 0, 7); x.fill(); } // 松脂：从切口下沿挂下来
+  x.save(); path(x); x.clip();
+  const gr = x.createLinearGradient(0, 0, 0, CH); gr.addColorStop(0, '#b3a07a'); gr.addColorStop(0.5, '#cdb98d'); gr.addColorStop(1, '#b49c6c'); x.fillStyle = gr; x.fillRect(0, 0, CW, CH); // 削掉树皮露出的木：放了很多年，发灰发黄，不是新白木
+  for (let i = 0; i < 18; i++) { const px = R() * CW, py = R() * CH, r = 30 + R() * 90, g = x.createRadialGradient(px, py, 0, px, py, r); g.addColorStop(0, `rgba(${R() < 0.5 ? '96,70,40' : '224,210,176'},${0.12 + R() * 0.14})`); g.addColorStop(1, 'rgba(0,0,0,0)'); x.fillStyle = g; x.fillRect(px - r, py - r, r * 2, r * 2); }
+  for (let i = 0; i < 150; i++) { const px = R() * CW; x.strokeStyle = R() < 0.65 ? `rgba(${100 + R() * 40 | 0},${72 + R() * 28 | 0},44,${0.07 + R() * 0.1})` : 'rgba(236,222,190,.12)'; x.lineWidth = 1 + R() * 2.4; x.beginPath(); x.moveTo(px, 0); x.bezierCurveTo(px + 8, CH * 0.3, px - 8, CH * 0.6, px + (R() - 0.5) * 12, CH); x.stroke(); } // 竖向木纹
+  for (const [w, o] of [[90, 0.22], [52, 0.3], [26, 0.34]]) { x.strokeStyle = `rgba(36,22,10,${o})`; x.lineWidth = w; path(x); x.stroke(); } // 切口边上暗：被隆起的树皮遮住光
+  for (const [w, c] of [[40, 'rgba(120,88,52,.55)'], [26, '#4a3220'], [12, '#20140b']]) { x.strokeStyle = c; x.lineWidth = w; for (const cv of CARVES) line(x, cv); } // 刀槽：槽壁露新木、槽底暗
+  x.restore();
+  x.strokeStyle = '#5a4128'; x.lineWidth = 54; path(x); x.stroke(); x.strokeStyle = '#6a4d31'; x.lineWidth = 30; path(x); x.stroke(); // 长回来的树皮：深褐一圈
+  for (let i = 0; i < 140; i++) { const [px, py] = edgeAt(R()), a = R() * 6.283, l = 8 + R() * 24; x.strokeStyle = R() < 0.6 ? 'rgba(28,16,8,.3)' : 'rgba(150,112,72,.22)'; x.lineWidth = 2 + R() * 3; x.beginPath(); x.moveTo(px, py); x.lineTo(px + Math.cos(a) * l, py + Math.sin(a) * l); x.stroke(); }
+  const map = new THREE.CanvasTexture(cc), normalMap = new THREE.CanvasTexture(nc); map.colorSpace = THREE.SRGBColorSpace; normalMap.colorSpace = THREE.NoColorSpace; map.anisotropy = normalMap.anisotropy = 8;
+  const hAt = (u, v) => { const fx = u * (CW - 1), fy = (1 - v) * (CH - 1), i = Math.floor(fx), j = Math.floor(fy), a = fx - i, b = fy - j; return (at(i, j) * (1 - a) + at(i + 1, j) * a) * (1 - b) + (at(i, j + 1) * (1 - a) + at(i + 1, j + 1) * a) * b; };
+  return { map, normalMap, hAt };
+}
+function blazeGeo(r, mark) { // 贴着树干的一块弧面，按高度图把顶点沿半径推出去：削平的木面比树干高 1.4cm，边上隆起到 2.7cm，刀槽凹到 0.5cm
+  const g = new THREE.CylinderGeometry(r(1.88) + 0.002, r(1.12) + 0.002, 0.76, 96, 128, true, -0.8, 1.6), P = g.attributes.position, U = g.attributes.uv;
+  for (let i = 0; i < P.count; i++) { const d = 0.014 + (mark.hAt(U.getX(i), U.getY(i)) - 110) / 110 * 0.012, x = P.getX(i), z = P.getZ(i), l = Math.hypot(x, z); P.setX(i, x + x / l * d); P.setZ(i, z + z / l * d); }
+  g.computeVertexNormals(); return g;
+}
 // 斜刀口（木桩、标桩同一个，11-04 环境评审 #8）：贴着木头表面展开的一道斜长条（R(y) = 那个高度圆木的半径；R 为 0 = 平面，在 z = zf），斜 0.55、高 0.13；
 // 上半是朝下的斜面（暗）、下半朝上（亮），上沿一线深色阴影——看着是一道 V 形砍口。斜度、高度、颜色两处一样，只有长短跟着木头粗细
 function notchMesh(len, R, zf, yc) {
@@ -3347,17 +3393,9 @@ function day2Setup() {
   { const p = new THREE.Mesh(new THREE.SphereGeometry(0.15, 8, 5), W.snow); p.scale.set(1.3, 0.35, 0.9); p.position.set(-0.06, 0, -0.12); stk.add(p); } // 迎风那面根部一小堆雪
   // 刻了记号的云杉：林子里同一种云杉放大（比旁边的粗一圈，下面几根枯枝桩），齐眼高剥掉一块树皮露出白木：贴着树干的弧面，边上树皮长回来一圈，下沿挂两道松脂；箭头和「7」是刻出来的槽（暗槽 + 一侧亮边）
   const tree = new THREE.Group();
-  const mark = d2Canvas(128, 192, (x, w, h) => {
-    const R = rng(17), sh = []; for (let i = 0; i < 28; i++) { const a = i / 28 * 6.283, k = 0.9 + 0.12 * R(); sh.push([64 + Math.cos(a) * 54 * k, 84 + Math.sin(a) * 74 * k]); }
-    const path = () => { x.beginPath(); sh.forEach(([px, py], i) => i ? x.lineTo(px, py) : x.moveTo(px, py)); x.closePath(); };
-    x.lineCap = 'round'; x.strokeStyle = 'rgba(170,110,40,.95)'; x.lineWidth = 4; for (const [px, l] of [[50, 26], [78, 16]]) { x.beginPath(); x.moveTo(px, 150); x.lineTo(px - 1, 150 + l); x.stroke(); x.fillStyle = 'rgba(190,130,50,.95)'; x.beginPath(); x.arc(px - 1, 152 + l, 3.5, 0, 7); x.fill(); } // 松脂
-    path(); x.save(); x.clip(); x.fillStyle = '#d8c59c'; x.fillRect(0, 0, w, h); // 白木 + 竖向木纹
-    for (let i = 0; i < 26; i++) { const px = R() * w; x.strokeStyle = `rgba(${110 + R() * 40},${80 + R() * 30},50,.28)`; x.lineWidth = 1 + R() * 1.5; x.beginPath(); x.moveTo(px, 0); x.bezierCurveTo(px + 4, h * 0.3, px - 4, h * 0.6, px + (R() - 0.5) * 6, h); x.stroke(); }
-    const carve = (pts) => { for (const [c, lw, o] of [['rgba(255,246,225,.85)', 3, 2], ['#3a2618', 7, 0]]) { x.strokeStyle = c; x.lineWidth = lw; x.beginPath(); pts.forEach(([px, py], i) => i ? x.lineTo(px + o, py + o) : x.moveTo(px + o, py + o)); x.stroke(); } };
-    carve([[64, 100], [64, 36]]); carve([[47, 54], [64, 36], [81, 54]]); carve([[46, 112], [82, 112], [60, 150]]); x.restore(); // 箭头、7
-    path(); x.strokeStyle = 'rgba(94,65,40,.75)'; x.lineWidth = 6; x.stroke(); }); // 边上长回来的一圈树皮
+  const mark = blazeTex();
   markTree(tree, ...MARK_TREES.blaze).then((r) => {
-    const [cx, cz] = r.c, bz = new THREE.Mesh(new THREE.CylinderGeometry(r(1.88) + 0.006, r(1.12) + 0.006, 0.76, 16, 1, true, -0.8, 1.6), new THREE.MeshStandardMaterial({ map: mark, alphaTest: 0.5, roughness: 0.85 })); bz.position.set(cx, 1.5, cz); tree.add(bz); meshes.push(bz); // 第一版贴在 z 0.235 埋进树干里看不见，又小、离路 3.2m（用户第 2 天卡关）
+    const [cx, cz] = r.c, bz = new THREE.Mesh(blazeGeo(r, mark), new THREE.MeshStandardMaterial({ map: mark.map, normalMap: mark.normalMap, normalScale: new THREE.Vector2(1.1, 1.1), alphaTest: 0.5, roughness: 0.88, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 })); bz.position.set(cx, 1.5, cz); tree.add(bz); meshes.push(bz); // 第一版贴在 z 0.235 埋进树干里看不见，又小、离路 3.2m（用户第 2 天卡关）
     const ry = 1.05, rr = r(ry) + 0.008; tree.add(new THREE.Mesh(new THREE.CylinderGeometry(rr, rr, 0.06, 16, 1, true), RAG.mat).translateY(ry).translateX(cx).translateZ(cz)); // 跟标桩一样系条红布，雾里好认
     for (const [a, l] of [[0.35, 0.3], [0.5, 0.24]]) { const t = ragTail(l, 0, ry, 0); t.position.set(cx + Math.sin(a) * rr, ry, cz + Math.cos(a) * rr); t.rotation.y = a; tree.add(t); }
     for (const [y, a] of [[2.3, 2.2], [2.9, -1.4], [3.4, 0.9], [3.9, 3.6]]) { const d = new THREE.Vector3(Math.sin(a), -0.25, Math.cos(a)).normalize(), st = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.045, 0.5, 5), W.bark); // 枯枝桩
@@ -3601,17 +3639,30 @@ function makeLog(L, rThin, rThick, end, sign = 1) {
 function flatOn(g, geo, mat, y) { mat.polygonOffset = true; mat.polygonOffsetFactor = mat.polygonOffsetUnits = -2; const m = new THREE.Mesh(geo, mat); m.rotation.x = -Math.PI / 2; m.position.y = y; m.receiveShadow = true; g.add(m); return m; }
 function sceneAt(s, off = 0, a = 0) { const [p, rt] = pathAt(s), t = new THREE.Vector3(rt.z, 0, -rt.x); return [p.addScaledVector(rt, off).addScaledVector(t, a), rt, t]; } // 踪迹 s 米处、往右 off、往前 a：[位置, 右手, 前方]
 function putScene(name, g, q, d) { g.position.set(q.x, ground.position.y, q.z); if (d) g.rotation.y = Math.atan2(-d.z, d.x); g.name = name; scene.add(g); OUTDOOR.push(g); return g; } // d = 本地 x 轴朝哪
+// 兔子的跳印（棉尾兔）：一跳留一组四个印——后脚两个长条形并排落在前面（脚掌拖出一道、前端四个趾尖陷得深），前脚两个小圆印一前一后落在后面，合起来是个「Y」形；
+// 每组朝向、两边脚的前后、离中线的偏移、跳距都不一样，整串沿一道缓弯走（原来是 18 组一模一样、都朝同一个方向、沿跑向拉长的短条，低角度看成一排短横线）
+function rabbitTracks(q0, q1, gy) {
+  const ell = (x, y, cx, cy, rx, ry) => Math.hypot((x - cx) / rx, (y - cy) / ry) - 1, smin = (a, b, k) => { const h = Math.min(1, Math.max(0, 0.5 + 0.5 * (b - a) / k)); return b * (1 - h) + a * h - k * h * (1 - h); };
+  const hind = (x, y) => { let d = ell(x, y, 0, 0.22, 0.34, 0.56); for (const tx of [-0.5, -0.17, 0.17, 0.5]) d = smin(d, ell(x, y, tx, -0.56 + Math.abs(tx) * 0.25, 0.17, 0.17), 0.3); return d; }; // 画布 y 向下：y < 0 是前（趾），y > 0 是后（脚掌）
+  const fore = (x, y) => { let d = ell(x, y, 0, 0.1, 0.5, 0.55); for (const tx of [-0.3, 0.3]) d = smin(d, ell(x, y, tx, -0.55, 0.24, 0.24), 0.3); return d; };
+  const mats = [pitMat(32, 64, hind), pitMat(24, 24, fore)], geos = [new THREE.PlaneGeometry(0.085, 0.17).rotateX(-Math.PI / 2), new THREE.PlaneGeometry(0.058, 0.058).rotateX(-Math.PI / 2)];
+  const R = rng(5), d = q1.clone().sub(q0), L = d.length(), n = Math.floor(L / 0.82), ims = [new THREE.InstancedMesh(geos[0], mats[0], n * 2), new THREE.InstancedMesh(geos[1], mats[1], n * 2)];
+  d.normalize(); const side = new THREE.Vector3(-d.z, 0, d.x), m4 = new THREE.Matrix4(), up = new THREE.Vector3(0, 1, 0);
+  const put = (k, i, c, fwd, lat, yaw, sc) => { const p = c.clone().addScaledVector(d, fwd).addScaledVector(side, lat), q = new THREE.Quaternion().setFromAxisAngle(up, yaw); ims[k].setMatrixAt(i, m4.compose(new THREE.Vector3(p.x, gy + 0.012, p.z), q, new THREE.Vector3(sc, 1, sc))); };
+  let s = 0.35 + R() * 0.2;
+  for (let i = 0; i < n; i++, s += 0.7 + R() * 0.25) {
+    const t = s / L, bend = 0.5 * Math.sin(t * 5.2 + 0.6) * (1 - t * 0.4), c = q0.clone().addScaledVector(d, s).addScaledVector(side, bend), dir = Math.atan2(-d.x - side.x * Math.cos(t * 5.2 + 0.6) * 0.5 * 5.2 / L, -d.z - side.z * Math.cos(t * 5.2 + 0.6) * 0.5 * 5.2 / L) + (R() - 0.5) * 0.28, k = 0.92 + R() * 0.16, sp = 0.075 + R() * 0.02;
+    // 后脚：两个并排在前，一个再往前一点、两只略向外撇；前脚：落在后脚后面，一前一后，偏向一边
+    put(0, i * 2, c, 0.34 + R() * 0.04, -sp, dir + 0.13 + (R() - 0.5) * 0.12, k); put(0, i * 2 + 1, c, 0.3 + R() * 0.05, sp, dir - 0.13 + (R() - 0.5) * 0.12, k);
+    const fl = (R() - 0.5) * 0.04; put(1, i * 2, c, 0.04 + R() * 0.03, fl + 0.015, dir + (R() - 0.5) * 0.3, k); put(1, i * 2 + 1, c, -0.07 - R() * 0.04, fl - 0.02, dir + (R() - 0.5) * 0.3, k);
+  }
+  ims.forEach((im) => { im.count = n * 2; im.instanceMatrix.needsUpdate = true; im.computeBoundingSphere(); im.name = 'd2_scene'; im.renderOrder = 2; scene.add(im); OUTDOOR.push(im); });
+}
 function d2Scene() { // 第 2 天路上的小景：只看，不点、不算线索，让一路上不只有雪（11-03 用户：路程做丰富）
   const gy = ground.position.y;
   // 踪迹 D2_SCENE.brook 米处横过的小溪和踏石（原来是第 2 天才有的一道 14m 冻溪）11-04 起三天都有，见 makeBrook
-  if (game.day === 2) { const [q0] = sceneAt(D2_SCENE.rabbit, -6), [q1] = sceneAt(D2_SCENE.rabbit + 2, D2_SCENE.bush), n = 18; // 一串兔子脚印从左边林子横过踪迹，钻进右边的灌木（第 3 天夜里下过雪，没了）
-    const geo = new THREE.PlaneGeometry(0.075, 0.075); geo.rotateX(-Math.PI / 2);
-    const im = new THREE.InstancedMesh(geo, printPool().im.material, n * 4), m4 = new THREE.Matrix4(), d = q1.clone().sub(q0), L = d.length();
-    d.normalize(); const side = new THREE.Vector3(-d.z, 0, d.x), rot = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.atan2(d.x, d.z));
-    for (let i = 0; i < n; i++) { const c = q0.clone().addScaledVector(d, (i + 0.5) / n * (L - 0.6)); // 一跳一组：后脚两个长印并排在前，前脚两个小圆点一前一后在后
-      [[0.1, 0.05, 1, 2.2], [0.1, -0.05, 1, 2.2], [-0.08, 0, 0.8, 1], [-0.17, 0.01, 0.8, 1]].forEach(([a, b, sx, sz], k) => { const p = c.clone().addScaledVector(d, a).addScaledVector(side, b);
-        im.setMatrixAt(i * 4 + k, m4.compose(new THREE.Vector3(p.x, gy + 0.012, p.z), rot, new THREE.Vector3(sx, 1, sz))); }); }
-    im.computeBoundingSphere(); im.name = 'd2_scene'; scene.add(im); OUTDOOR.push(im);
+  if (game.day === 2) { const [q0] = sceneAt(D2_SCENE.rabbit, -6), [q1] = sceneAt(D2_SCENE.rabbit + 2, D2_SCENE.bush); // 一串兔子脚印从左边林子横过踪迹，钻进右边的灌木（第 3 天夜里下过雪，没了）
+    rabbitTracks(q0, q1, gy);
     const b = putScene('d2_scene', new THREE.Group(), q1); TREE_XZ.push(q1.x, q1.z);
     loadTree0(BUSH_URLS[0], true).then((parts) => { for (const { geometry, material } of parts) { const o = new THREE.InstancedMesh(geometry, material, 1); // 林子里同一种灌木，单实例（着色器要 instanceMatrix / 实例色）
       o.setMatrixAt(0, new THREE.Matrix4().makeScale(1.6, 1.1, 1.6)); o.setColorAt(0, new THREE.Color(BUSHES[1][0])); o.computeBoundingSphere(); o.castShadow = o.receiveShadow = true; b.add(o); } }); }
@@ -3840,11 +3891,11 @@ function mmTick(dt) {
 }
 // —— 羊皮纸地图（v3，2026-10-29）：墙上 wall_map 和左下小地图是同一张，按自家世界坐标画（北 = -z 在上），风格照 story/map-sketch.png。
 // 红圈 = 小屋（原点）、黄线 = 卵石路 pathCurve → 湖、河；绿线 = 林间踪迹 trailCurve → ✕（老云杉，踪迹 D3.s 处）。✕ 那间屋墙上同一张图，✕ 画在红圈的位置。
-const MAP = { x0: -200, z0: -100, w: 680, h: 490, W: 1024 }; // 墙上那张纸 0.64×0.46m，横的
+const MAP = { x0: -200, z0: -100, w: 680, h: 490, W: 1024, S: matchMedia('(pointer:coarse)').matches ? 1.5 : 2 }; // 墙上那张纸 0.64×0.46m，横的；W 是画图时的逻辑宽（线宽、字号都按它写），实际画布 W×S 像素（手机 1536、电脑 2048，走到跟前看地图字和等高线才不糊）
 const mapP = (x, z) => [(x - MAP.x0) * MAP.W / MAP.w, (z - MAP.z0) * MAP.W / MAP.w];
 function mapBase() { // 不带记号的底图：做旧的纸、等高线、山丘排线、手绘松树、湖河、两条线、罗盘、标题、比例尺（只画一次）。手绘感：线条加抖动，墨色偏褐
   if (mapBase.c) return mapBase.c;
-  const W = MAP.W, k = W / MAP.w, H = Math.round(MAP.h * k), c = mapBase.c = agedPaper(W, H, '#d3be90', 11), g = c.getContext('2d'), R = rng(11);
+  const W = MAP.W, k = W / MAP.w, H = Math.round(MAP.h * k), c = mapBase.c = agedPaper(W * MAP.S, H * MAP.S, '#d3be90', 11, 1, MAP.S), g = c.getContext('2d'), R = rng(11); g.scale(MAP.S, MAP.S);
   const wob = (v, a = 1.6) => v + (R() - 0.5) * a;
   const hand = (pts, close) => { g.beginPath(); pts.forEach(([a, b], i) => g[i ? 'lineTo' : 'moveTo'](wob(a), wob(b))); if (close) g.closePath(); };
   const RED = 'rgba(138,30,18,.9)', INK = 'rgba(58,38,18,', GREEN = '#456a36', OCHRE = '#a87420';
@@ -3856,7 +3907,7 @@ function mapBase() { // 不带记号的底图：做旧的纸、等高线、山�
   for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) V[j * nx + i] = hf(MAP.x0 + i * st / k, MAP.z0 + j * st / k);
   let li = 0;
   for (let L = -3; L <= 3; L += 0.42, li++) {
-    g.strokeStyle = INK + (li % 3 ? '.32)' : '.5)'); g.lineWidth = li % 3 ? 1.1 : 1.8; g.beginPath();
+    g.strokeStyle = INK + (li % 3 ? '.42)' : '.66)'); g.lineWidth = li % 3 ? 1.1 : 1.9; g.beginPath();
     for (let j = 0; j < ny - 1; j++) for (let i = 0; i < nx - 1; i++) {
       const X = i * st, Y = j * st, q = [];
       const cr = (a, b, x0, y0, x1, y1) => { if ((a < L) !== (b < L)) { const t = (L - a) / (b - a); q.push(x0 + (x1 - x0) * t, y0 + (y1 - y0) * t); } };
@@ -3906,7 +3957,7 @@ function mapBase() { // 不带记号的底图：做旧的纸、等高线、山�
   if (pathCurve) { const P = pathCurve.getSpacedPoints(160).map((p) => mapP(p.x, p.z)); route(P, 'rgba(226,176,60,.5)', 8, []); route(P, OCHRE, 3.2, [11, 5]); }
   if (trailCurve) { const P = trailCurve.getSpacedPoints(80).map((p) => mapP(p.x, p.z)); route(P, 'rgba(90,140,70,.35)', 7, []); route(P, GREEN, 3, [2, 6]); }
   // 注记：湖、路、踪迹（斜体，沿线摆）
-  const label = (t, x, z, ang = 0, size = 22, col = INK + '.78)') => { const [a, b] = mapP(x, z); g.save(); g.translate(a, b); g.rotate(ang); g.fillStyle = col; g.font = `italic ${size}px "IM Fell English", Georgia, serif`; g.textAlign = 'center'; g.fillText(t, 0, 0); g.restore(); };
+  const label = (t, x, z, ang = 0, size = 22, col = INK + '.92)') => { const [a, b] = mapP(x, z); g.save(); g.translate(a, b); g.rotate(ang); g.fillStyle = col; g.font = `italic ${size}px "IM Fell English", Georgia, serif`; g.textAlign = 'center'; g.fillText(t, 0, 0); g.restore(); };
   if (WATER.lake) label('The Lake', lx, lz + lr * 0.05, -0.03, 24, RED);
   if (pathCurve) { const p = pathCurve.getPointAt(0.42), q = pathCurve.getPointAt(0.46); label('Cobble Road', p.x, p.z - 6, Math.atan2(q.z - p.z, q.x - p.x), 19, RED); }
   if (trailCurve) { const p = trailCurve.getPointAt(0.5), q = trailCurve.getPointAt(0.54); label('Forest Trail', p.x, p.z - 7, Math.atan2(q.z - p.z, q.x - p.x), 18, RED); }
@@ -3929,7 +3980,7 @@ function mapBase() { // 不带记号的底图：做旧的纸、等高线、山�
 }
 function mapXat() { const p = trailCurve.getPointAt(Math.min(1, D3.s / trailCurve.getLength())); return [p.x, p.z]; } // 老云杉 = 踪迹 D3.s 处（同 pathAt(D3.s)）
 function mapPaint(c, xHouse) { // 底图 + 记号：家里那张红圈在小屋、✕ 在老云杉；✕ 那间屋的那张 ✕ 在红圈的位置，旁注一样
-  const b = mapBase(); c.width = b.width; c.height = b.height; const g = c.getContext('2d'); g.drawImage(b, 0, 0);
+  const b = mapBase(); c.width = b.width; c.height = b.height; const g = c.getContext('2d'); g.drawImage(b, 0, 0); g.scale(b.width / MAP.W, b.width / MAP.W);
   const [hx, hz] = mapP(0, 0), [xx, xz] = xHouse ? [hx, hz] : mapP(...mapXat());
   g.lineCap = 'round'; g.strokeStyle = '#9c2a18';
   if (!xHouse) { g.lineWidth = 4.5; g.beginPath(); g.ellipse(hx, hz, 19, 15, -0.3, 0.3, Math.PI * 2.15); g.stroke(); g.fillStyle = 'rgba(138,30,18,.9)'; g.font = 'italic 19px "IM Fell English", Georgia, serif'; g.textAlign = 'center'; g.fillText('The Cabin', hx + 4, hz + 38); }
@@ -3943,6 +3994,7 @@ function mapWall() { // 墙上那张：换成画出来的图（材质先克隆�
     m.material = m.material.clone(); m.material.map = mapWall.t; Promise.all(['italic 20px "IM Fell English"', '20px "IM Fell English SC"'].map((f) => document.fonts.load(f))).then(() => { mapBase.c = null; mmDraw.home = null; mmDirty = true; mapWall(); }); } // u 从左到右、v 从下到上，CanvasTexture 默认 flipY 正好对上
   mapPaint(mapWall.c, x3.on); mapWall.t.needsUpdate = true;
 }
+function shrinkTo(big, w) { const c = document.createElement('canvas'); c.width = w; c.height = Math.round(w * big.height / big.width); const g = c.getContext('2d'); g.imageSmoothingQuality = 'high'; g.drawImage(big, 0, 0, c.width, c.height); big.width = big.height = 1; return c; }
 function mmDraw() {
   const c = $('mmap'), W = 260, k = W / MAP.w, H = Math.round(MAP.h * k), f = game.found;
   if (c.width !== W) { c.width = W; c.height = H; }
@@ -3951,7 +4003,7 @@ function mmDraw() {
     mmDirty = false;
     const b = mmDraw.base || (mmDraw.base = document.createElement('canvas')); b.width = W; b.height = H;
     const g = b.getContext('2d');
-    g.drawImage(mmDraw.home || (mmDraw.home = mapPaint(document.createElement('canvas'), false)), 0, 0, W, H);
+    g.imageSmoothingQuality = 'high'; g.drawImage(mmDraw.home || (mmDraw.home = shrinkTo(mapPaint(document.createElement('canvas'), false), 2 * W)), 0, 0, W, H); // 小地图只要 520 宽的版本（大图丢掉，不占内存）
     const mark = (wx, wz, col, r = 3) => { const [a, d] = P(wx, wz); g.fillStyle = col; g.beginPath(); g.arc(a, d, r, 0, 7); g.fill(); };
     for (const n of ['d2_stake', 'd2_blaze', 'd2_cairn']) { const o = layers.get(n); if (o) mark(o.position.x + ox, o.position.z + oz, n === 'd2_stake' ? '#8a3a2a' : n === 'd2_blaze' ? '#2f3a2e' : '#6d6a62', 2.5); }
     mark(D2.lamp[0], D2.lamp[2], '#b8b2a8', 3.5);
@@ -4812,19 +4864,22 @@ function fpClimb(r, dt, f, run) {
   if (r.position.y <= g && f <= 0) { r.position.y = g; r.position.x = LADDER.onX + 0.3; fp.climb = null; } // 下到地上往外落 0.3m，不贴着梯子脚
   else if (r.position.y >= LADDER.top - 0.25 && f > 0 && !C.lock && gateOpen()) fp.climb = { ph: 'board', t: 0, y0: r.position.y };
 }
-// 雪地脚印池（玩家、稽查、书记员共用；第 2 天「只出不进」那串 d2_prints 用同一套几何和材质，大小一致才能比）：固定 400 个循环复用（2026-10-31 起第 1 天下雪时两人走路也留）
-function printPool() {
-  if (d2.pool) return d2.pool;
-  // 靴印是压进雪里的坑：按靴形距离场算深度，生成法线（坑壁受光不同）、暗部（坑底偏蓝灰）和透明度（边缘渐隐），坑外一圈微微隆起
-  const W = 48, H = 96, D = new Float32Array(W * H), A = new Float32Array(W * H), ss = THREE.MathUtils.smoothstep;
-  const boot = (x, y) => { const a = Math.hypot(x / 0.62, (y + 0.28) / 0.6) - 1, b = Math.hypot(x / 0.5, (y - 0.54) / 0.36) - 1, k = 0.6, h = Math.min(1, Math.max(0, 0.5 + 0.5 * (b - a) / k)); return b * (1 - h) + a * h - k * h * (1 - h); };
-  for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) { const d = boot((i + 0.5) / W * 2 - 1, (j + 0.5) / H * 2 - 1), dep = 1 - ss(d, -0.45, 0.1); D[j * W + i] = dep - 0.28 * Math.exp(-(((d - 0.2) / 0.16) ** 2)); A[j * W + i] = 1 - ss(d, 0.12, 0.42); }
+// 雪里压出来的一个坑：dist(x, y) 是形状的距离场（< 0 在里面，x、y 都在 −1…1，y 从画布上往下）。按深度算法线（坑壁受光不同）、暗部（坑底偏蓝灰）和透明度（边缘渐隐），坑外一圈微微隆起
+function pitMat(W, H, dist) {
+  const D = new Float32Array(W * H), A = new Float32Array(W * H), ss = THREE.MathUtils.smoothstep;
+  for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) { const d = dist((i + 0.5) / W * 2 - 1, (j + 0.5) / H * 2 - 1), dep = 1 - ss(d, -0.45, 0.1); D[j * W + i] = dep - 0.28 * Math.exp(-(((d - 0.2) / 0.16) ** 2)); A[j * W + i] = 1 - ss(d, 0.12, 0.42); }
   const paint = (f) => (x, w, h) => { const g = x.createImageData(w, h); for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) { const c = f(i, j), p = (j * w + i) * 4; g.data[p] = c[0]; g.data[p + 1] = c[1]; g.data[p + 2] = c[2]; g.data[p + 3] = 255; } x.putImageData(g, 0, 0); };
   const at = (i, j) => D[Math.min(H - 1, Math.max(0, j)) * W + Math.min(W - 1, Math.max(0, i))];
   const pm = d2Canvas(W, H, paint((i, j) => { const a = A[j * W + i] * 255; return [a, a, a]; }));
   const tm = d2Canvas(W, H, paint((i, j) => { const s = 255 * (1 - 0.42 * Math.max(0, D[j * W + i])); return [s, s, s]; }));
   const nm = d2Canvas(W, H, paint((i, j) => { const dx = -(at(i + 1, j) - at(i - 1, j)) * 5, dy = (at(i, j + 1) - at(i, j - 1)) * 5, l = Math.hypot(dx, dy, 1); return [(-dx / l * 0.5 + 0.5) * 255, (-dy / l * 0.5 + 0.5) * 255, (1 / l * 0.5 + 0.5) * 255]; })); nm.colorSpace = THREE.NoColorSpace;
-  const im = new THREE.InstancedMesh(new THREE.PlaneGeometry(0.16, 0.34).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ color: '#d4deec', map: tm, alphaMap: pm, normalMap: nm, transparent: true, opacity: 0.95, depthWrite: false, roughness: 0.95, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -8 }), 400);
+  return new THREE.MeshStandardMaterial({ color: '#d4deec', map: tm, alphaMap: pm, normalMap: nm, transparent: true, opacity: 0.95, depthWrite: false, roughness: 0.95, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -8 });
+}
+// 雪地脚印池（玩家、稽查、书记员共用；第 2 天「只出不进」那串 d2_prints 用同一套几何和材质，大小一致才能比）：固定 400 个循环复用（2026-10-31 起第 1 天下雪时两人走路也留）
+function printPool() {
+  if (d2.pool) return d2.pool;
+  const boot = (x, y) => { const a = Math.hypot(x / 0.62, (y + 0.28) / 0.6) - 1, b = Math.hypot(x / 0.5, (y - 0.54) / 0.36) - 1, k = 0.6, h = Math.min(1, Math.max(0, 0.5 + 0.5 * (b - a) / k)); return b * (1 - h) + a * h - k * h * (1 - h); };
+  const im = new THREE.InstancedMesh(new THREE.PlaneGeometry(0.16, 0.34).rotateX(-Math.PI / 2), pitMat(48, 96, boot), 400);
   im.count = 0; im.frustumCulled = false; im.name = 'fp_prints'; im.renderOrder = 2; scene.add(im); OUTDOOR.push(im);
   return (d2.pool = { im, i: 0, n: 0, o: new THREE.Object3D() });
 }
