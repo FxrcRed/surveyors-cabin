@@ -730,7 +730,7 @@ float wNoise(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 *
 float wH(vec2 p) { vec2 q = p + 3.0 * vec2(wNoise(p * 0.06 + uT * 0.03), wNoise(p * 0.06 + 7.3 - uT * 0.025));
   return 0.10 * wNoise(q * 0.35 + uT * vec2(0.21, 0.13)) + 0.05 * wNoise(q * 0.9 - uT * vec2(0.17, 0.29)) + 0.025 * wNoise(q * 2.3 + uT * vec2(-0.4, 0.3)); }
 ` + s.fragmentShader
-      .replace('#include <lights_fragment_end>', '#include <lights_fragment_end>' + String.fromCharCode(10) + 'reflectedLight.directSpecular *= 1.0 - smoothstep(0.1, 0.28, dot(normalize((viewMatrix * vec4(0.0, 1.0, 0.0, 0.0)).xyz), normalize(vViewPosition))); reflectedLight.indirectSpecular = vec3(0.0);') // 环境图是间屋子的亮灯板，水面反出来就是白斑，天色反光由下面的菲涅尔混雾色代替。太阳波光只在远处贴水面看时才有；近处往下看时，扰动的法线会把阳光反成大块白斑
+      .replace('#include <lights_fragment_end>', '#include <lights_fragment_end>' + String.fromCharCode(10) + 'reflectedLight.directSpecular *= 1.0 - smoothstep(0.1, 0.28, dot(normalize((viewMatrix * vec4(0.0, 1.0, 0.0, 0.0)).xyz), normalize(vViewPosition))); reflectedLight.indirectSpecular = min(reflectedLight.indirectSpecular, vec3(0.09));') // 环境图是间屋子的亮灯板，水面反出来会成白斑，封顶后只留波纹的明暗，天色反光由下面的菲涅尔混雾色代替。太阳波光只在远处贴水面看时才有；近处往下看时，扰动的法线会把阳光反成大块白斑
       .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
   float wAmp = mix(0.12, 1.0, smoothstep(0.3, 0.75, wNoise(vWP.xz * 0.012 + vec2(uT * 0.006, -uT * 0.004))));
   float h0 = wH(vWP.xz), hx = wH(vWP.xz + vec2(0.15, 0.0)), hz = wH(vWP.xz + vec2(0.0, 0.15));
@@ -740,9 +740,9 @@ float wH(vec2 p) { vec2 q = p + 3.0 * vec2(wNoise(p * 0.06 + uT * 0.03), wNoise(
     gl_FragColor.rgb = mix(gl_FragColor.rgb, vec3(0.045, 0.05, 0.032), inL * smoothstep(0.84, 1.0, k) * 0.6); // 近岸浅水，泛泥绿（线性值；原 0.36/0.40/0.33 显示出来是一圈灰白）
     gl_FragColor.a = mix(1.0, 0.4, inL * smoothstep(0.93, 0.995, k)); // 最外 ~6m 变透，看得到水下泥底（地面着色器把岸线内外涂成湿泥）
     gl_FragColor.rgb += 0.035 * inL * smoothstep(0.985, 0.997, k) * (1.0 - smoothstep(0.997, 1.0, k)); // 水线一条细亮边（水膜反光）
-    float fr = pow(1.0 - clamp(dot(normalize(mix(normal, (viewMatrix * vec4(0.0, 1.0, 0.0, 0.0)).xyz, 0.75)), normalize(vViewPosition)), 0.0, 1.0), 4.0); // 菲涅尔用压平的法线：直接用扰动法线时，往下看也有波纹被算成贴水面，混进雾色成白斑
+    vec3 wUp = normalize((viewMatrix * vec4(0.0, 1.0, 0.0, 0.0)).xyz), wV = normalize(vViewPosition); float fr = 0.32 + 0.68 * pow(1.0 - clamp(dot(wUp, wV), 0.0, 1.0), 4.0); // 反射强弱按水平面算（用扰动法线会忽明忽暗成白斑），反射到的天色才按波纹的朝向取，波纹靠这个看得见
 #ifdef USE_FOG
-    gl_FragColor.rgb = mix(gl_FragColor.rgb, mix(fogColor, vec3(0.018, 0.022, 0.014), inL * smoothstep(0.82, 0.97, k)), fr * 0.6); // 斜看映出天色；近岸映的是岸上那排深色树林（假倒影，10-31；原来近岸一圈灰白）
+    gl_FragColor.rgb = mix(gl_FragColor.rgb, mix(fogColor * mix(1.15, 0.32, smoothstep(0.0, 0.3, dot(reflect(-wV, normal), wUp))), vec3(0.018, 0.022, 0.014), inL * smoothstep(0.82, 0.97, k)), fr * 0.6); // 斜看映出天色；近岸映的是岸上那排深色树林（假倒影，10-31；原来近岸一圈灰白）
 #endif
   }
 #include <fog_fragment>`);
@@ -790,6 +790,14 @@ float wH(vec2 p) { vec2 q = p + 3.0 * vec2(wNoise(p * 0.06 + uT * 0.03), wNoise(
       log([row[0][0], deckY - 0.1, row[0][1]], [row[1][0], deckY - 0.1 + (R() - 0.5) * 0.03, row[1][1]], 0.05, 0.045);
       if (prev) [0, 1].forEach((i) => log([prev[i][0], deckY - 0.075, prev[i][1]], [row[i][0], deckY - 0.075, row[i][1]], 0.05, 0.042));
       prev = row; });
+    // 船靠在木栈右舷（BS = 船中点沿木栈的位置），两根缆绳从船头船尾系到两根高桩上，绳子在桩头绕两圈、中间略垂
+    const BS = 6.6, BOFF = W / 2 + 0.05 + 0.62 + 0.2, BH = heading(BS), BP = side(BS, BOFF), toDock = (x, y, z) => [BP[0] + x * Math.cos(BH) - z * Math.sin(BH), wy - 0.2 + y, BP[1] + x * Math.sin(BH) + z * Math.cos(BH)], ropes = [];
+    for (const [ps, bx] of [[BS + 1.5, 2.2], [BS - 1.5, -2.2]]) { const q = side(ps, W / 2 + 0.1), topY = deckY + 0.5, ty = topY - 0.1, end = toDock(bx, 0.78, 0);
+      log([q[0], -1.6, q[1]], [q[0], topY, q[1]], 0.1, 0.08);
+      for (const y of [ty, ty - 0.03]) ropes.push(new THREE.TorusGeometry(0.09, 0.013, 5, 12).rotateX(Math.PI / 2).translate(q[0], y, q[1]));
+      const a = new THREE.Vector3(q[0], ty, q[1]), b = new THREE.Vector3(...end), mid = a.clone().lerp(b, 0.5); mid.y = Math.min(a.y, b.y) - 0.14;
+      ropes.push(new THREE.TubeGeometry(new THREE.CatmullRomCurve3([a, a.clone().lerp(mid, 0.5).setY(a.y - 0.09), mid, b.clone().lerp(mid, 0.5).setY(b.y - 0.09), b]), 18, 0.013, 5)); }
+    { const o = new THREE.Mesh(mergeGeometries(ropes), new THREE.MeshStandardMaterial({ color: '#a8926c', roughness: 1 })); o.castShadow = true; dock.add(o); }
     const patch = propMat(cabinMap('partition_weathered_planks') || new THREE.Texture(), { rep: [0.3, 1], color: 0x9a8a7c });
     for (const [gs, m] of [[planks, DW.planks], [patched, patch], [logs, DW.bark]]) { const o = new THREE.Mesh(mergeGeometries(gs), m); o.castShadow = o.receiveShadow = true; dock.add(o); }
     dock.position.set(p0.x + d.x * (ts - 0.0), 0, p0.y + d.y * (ts - 0.0)); dock.rotation.y = -Math.atan2(d.y, d.x); scene.add(dock);
@@ -810,10 +818,10 @@ float wH(vec2 p) { vec2 q = p + 3.0 * vec2(wNoise(p * 0.06 + uT * 0.03), wNoise(
     { const pos = [], uv = [], idx = []; for (let k = 0; k <= 24; k++) { const u = -0.93 + 1.86 * k / 24, w = widthAt(u, FLOOR) * 0.99; for (const s of [-1, 1]) { pos.push(u * HL, FLOOR, s * w); uv.push(s * 0.5, u * 1.5); } } for (let k = 0; k < 24; k++) { const a = k * 2; idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2); } const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); g.setIndex(idx); g.computeVertexNormals(); seats.push(g); } // 底板盖住船里的水面（湖面是一整张平面，不盖会从船底透上来）
     logs.length = 0; const blades = [];
     for (const [hx, hz, ex, ez] of [[1.2, 0.26, -1.45, -0.1], [1.05, -0.3, -1.5, 0.14]]) { const y0 = 0.56, y1 = 0.6, a = new THREE.Vector3(hx, y0, hz), b = new THREE.Vector3(ex, y1, ez), v = b.clone().sub(a).normalize(); log([hx, y0, hz], [ex, y1, ez], 0.022, 0.018, 6); const g = new THREE.BoxGeometry(0.13, 0.46, 0.012); g.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(up, v)); g.translate(b.x + v.x * 0.2, b.y + v.y * 0.2, b.z + v.z * 0.2); blades.push(g); }
-    const pm = cabinMap('partition_weathered_planks') || new THREE.Texture(), hullM = propMat(pm, { rep: [0.3, 1], color: 0x6b5a4b }), trimM = propMat(pm, { rep: [0.3, 1], color: 0x463a30 }); hullM.side = THREE.DoubleSide;
+    const pm = cabinMap('partition_weathered_planks') || new THREE.Texture(), hullM = propMat(pm, { rep: [0.3, 1], color: 0xc2a888 }), trimM = propMat(pm, { rep: [0.3, 1], color: 0x8a7158 }); hullM.side = THREE.DoubleSide;
     const boat = new THREE.Group(); boat.name = 'boat';
     for (const [gs, m] of [[strakes, hullM], [trim, trimM], [seats, DW.planks], [[...logs, ...blades], DW.pale]]) { const o = new THREE.Mesh(mergeGeometries(gs), m); o.castShadow = true; o.receiveShadow = true; boat.add(o); }
-    boat.position.set(dock.position.x + d.x * 7 + nrm.x * 2.0, wy - 0.2, dock.position.z + d.y * 7 + nrm.y * 2.0); boat.rotation.y = -Math.atan2(d.y, d.x) + 0.04; scene.add(boat);
+    dock.updateMatrixWorld(true); boat.position.set(BP[0], wy - 0.2, BP[1]).applyMatrix4(dock.matrixWorld); boat.position.y = wy - 0.2; boat.rotation.y = dock.rotation.y - BH; scene.add(boat);
     WATER.dock = [dock.position.x, dock.position.z]; WATER.dockDir = [d.x, d.y]; OUTDOOR.push(dock, boat);
   }
   OUTDOOR.push(path, leaves, lake, rv);
