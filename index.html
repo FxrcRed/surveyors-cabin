@@ -2190,10 +2190,10 @@ for (const ev of ['pointerdown', 'keydown', 'touchend', 'click']) addEventListen
 let noteTimer = 0, pumpT = 0, noteQ = [], noteEnd = 0, noteCur = null;
 const roomNoteStale = (it) => !!it && !!it.room && (!inside || inside.name !== it.room);
 function endRoomNote() { clearTimeout(noteTimer); $('roomNote').classList.remove('on'); stopVoice('room'); noteEnd = 0; noteCur = null; }
-function showRoomNote(text, room, hintKey, jump) { // hintKey：这句是找某样线索的提示，找到了就不再念（评审④ #8）；jump：插队马上念，正在念的剧情句排到它后面从头再念（出门取大衣提灯那句不能晚，叙事 r4 #6）
+function showRoomNote(text, room, hintKey, jump) { // hintKey：这句是找某样线索的提示，找到了就不再念（评审④ #8）；jump：插队马上念，正在念的剧情句没念到一半就排到它后面从头再念，念过一半就算念过了（出门取大衣提灯那句不能晚，叙事 r4 #6）
   if (!text) { clearTimeout(pumpT); noteQ = []; endRoomNote(); return; }
   const it = { text, room: room || null, t: performance.now(), hint: hintKey };
-  if (jump) { if (noteCur && !noteCur.room) noteQ.unshift(noteCur); noteQ.unshift(it); endRoomNote(); } else noteQ.push(it);
+  if (jump) { const c = noteCur; if (c && !c.room && !(c.at && it.t - c.at >= (noteEnd - c.at) / 2)) noteQ.unshift(c); noteQ.unshift(it); endRoomNote(); } else noteQ.push(it);
   if (roomNoteStale(noteCur)) endRoomNote(); // 正在念的那句人已经走开了：不念完，让位
   pumpNote();
 }
@@ -2211,7 +2211,7 @@ function pumpNote() {
   const el = $('roomNote'), text = it.text;
   el.innerHTML = lbl(text[0], text[1]);
   el.classList.add('on');
-  noteCur = it; (window.__noteLog ||= []).push(text[0]); // __noteLog：无头测试数同时出现的旁白
+  noteCur = it; it.at = performance.now(); (window.__noteLog ||= []).push(text[0]); // __noteLog：无头测试数同时出现的旁白
   const ms = say(text[0], 'room', !it.room) || 7000;
   noteEnd = performance.now() + ms; clearTimeout(noteTimer); noteTimer = setTimeout(() => { el.classList.remove('on'); noteCur = null; pumpNote(); }, ms);
   if (noteQ.length) pumpT = setTimeout(pumpNote, ms + 300);
@@ -4682,7 +4682,7 @@ function gearRestore() { // 刷新 / 关掉再回来：存档里当天穿着大�
 function gearTake(name, quiet) { // → true = 拿了（不再出卡片 / 说明）
   if (!gearCan(name)) return false;
   const k = gearOf(name); gearOn(k); gearSave(); if (!quiet) sfx('pick');
-  if (!quiet) showRoomNote(GEAR_SAYS[k]); // 手动拿也出一行字（UX4）；自动取下的那句由 updateGear 补
+  if (!quiet) showRoomNote(GEAR_SAYS[k], null, null, true); // 手动拿也出一行字（UX4）；自动取下的那句由 updateGear 补
   if (hovered) tip.textContent = nameOf(infoOf(hovered)); // 准星还对着衣帽架：名字马上换成空衣帽架
   return true;
 }
