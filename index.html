@@ -1893,10 +1893,11 @@ loader.load('cabin.glb', async (gltf) => {
   window.cabin = { infoOf, nameOf, isClue, scene, camera, controls, model, box, renderer, layers, toggles, cover, wx, sky, roofWx, closeView, select, meshes, people, THREE, get intro() { return intro; }, get fly() { return fly; }, get held() { return held; }, get hand() { return hand; }, get HAND() { return HAND; }, wake: (id, a) => wakePerson(id, a), get drops() { return drops; }, hov: () => [hovered, hoverDirty, !!fly, !!(intro || morn), pointer.lastEvent && pointer.lastEvent.clientX] }; // 调试用
   window.cabin.game = game;
   T('setup');
+  const bedReady = messyBed().catch(console.error); // 第 2 天起的乱床，也要在预热前到齐
   const peopleReady = loadPeople().catch(console.error); // 和种树一起加载，预热前要到齐（材质一起编译）
   await yieldFrame();
   // 树种好再揭开加载页、开始开场动画，免得飞行中树一棵棵冒出来
-  plantForest(center, ground.position.y).catch(console.error).then(clearOrbitView).then(() => { brookWire(); FLOOR_U.uFloor.value = floorMap(); makeFogWalls(); if (x3.pending) { x3.pending = false; applyX(); } gearRestore(); }).then(() => peopleReady).finally(async () => { // 地面雪坑图等树都定下来（删掉挡视线的）再画
+  plantForest(center, ground.position.y).catch(console.error).then(clearOrbitView).then(() => { brookWire(); FLOOR_U.uFloor.value = floorMap(); makeFogWalls(); if (x3.pending) { x3.pending = false; applyX(); } gearRestore(); }).then(() => Promise.all([peopleReady, bedReady])).finally(async () => { // 地面雪坑图等树都定下来（删掉挡视线的）再画
     T('forest');
     await prewarm(); const w0 = performance.now(); await Promise.all(bvhJobs); window.__bvhWait = performance.now() - w0; sceneReady = true; // __bvhWait 调试用：后台 BVH 没赶上时多等了多久
     T('prewarm');
@@ -2853,7 +2854,7 @@ window.__voiceLines = () => [ // 要配音的句子（英文原句），tools/vo
   ...OPENING, ...Object.values(ROOM_NOTES), PAGE_SAYS, LETTER_SAYS, CLERK_SAYS, ...Object.values(D2_SAYS), ...Object.values(D3_SAYS), ...Object.values(GEAR_SAYS), [DAY1_TEXT.took[2]], LOOK_THERE, ...Object.values(WHERE), ...Object.values(HINT_NOUN).flatMap((n) => Object.keys(WHERE_N).map((d) => whereSay(d, n))), PAGE_WAY,
   ...Object.values(HINTS).flatMap((h) => [h[0], h[1]]), ...[...Object.keys(CHG_KEYS), 'wall_lamp'].flatMap((k) => [true, false].map((on) => { try { return chgSay(k, on); } catch (e) { return null; } })),
   GEAR_HANG,
-].filter(Boolean).map((l) => l[0]).concat(Object.values(STORY), Object.values(INFO).map((i) => i[2]), Object.values(GEAR_RAIL).map((i) => i[2]), Object.values(X_PLAIN), Object.values(TAKE_INFO).map((i) => i[2]), ['toilet_door_1', 'stove_door', 'hall_pendant_'].map((n) => infoOf(n)[2])).filter((t) => typeof t === 'string' && /[a-z]/i.test(t));
+].filter(Boolean).map((l) => l[0]).concat(Object.values(STORY), [BED_USED[0]], Object.values(INFO).map((i) => i[2]), Object.values(GEAR_RAIL).map((i) => i[2]), Object.values(X_PLAIN), Object.values(TAKE_INFO).map((i) => i[2]), ['toilet_door_1', 'stove_door', 'hall_pendant_'].map((n) => infoOf(n)[2])).filter((t) => typeof t === 'string' && /[a-z]/i.test(t));
 function chgSay(key, on) {
   const n = chgNoun(key), open = on === n[2];
   if (n[3]) return open ? ['The clerk: "Did you light the lamp?"', '书记员：“灯是你开的？”'] : ['The clerk: "Did you put the lamp out?"', '书记员：“灯是你关的？”'];
@@ -3102,6 +3103,8 @@ Object.assign(HINTS, {
   d2light: [['Look up, over the treetops.', '抬头看看树梢。'], ['East-north-east, past the cabin.', '东北偏东，小屋那边过去。'], 'd2_lamp'],
 });
 const HINT_ORDER2 = ['d2block', 'd2stake', 'd2blaze', 'd2cairn', 'd2light'];
+const BED_USED = ['The blankets he folded so square lie in a heap now. The clerk slept here in the night, and was up before you.', '他叠得方方正正的被子，现在乱堆在床上。书记员夜里睡在这儿，比你起得早。']; // 第 2 天起床是乱的（messyBed）
+if (game.day >= 2) { STORY['Bed|Loft'] = BED_USED[0]; STORY_ZH['Bed|Loft'][1] = BED_USED[1]; }
 for (const [n, c] of Object.entries(D2_CARDS)) { INFO[n] = [c[0], c[1], c[5]]; STORY[c[0] + '|' + c[1]] = c[3]; STORY_ZH[c[0] + '|' + c[1]] = [c[2], c[4]]; }
 function quest2() {
   const f = game.found;
@@ -3149,6 +3152,23 @@ function pathAt(s) { // 小路上离院子边 s 米处：[位置, 右手方向]
   return [p.clone(), new THREE.Vector3(-t.z, 0, t.x)];
 }
 function d2Mat(color, map) { return new THREE.MeshStandardMaterial({ color, map: map || null, roughness: 0.95 }); }
+// 第 1 夜书记员睡在阁楼，第 2 天起床是乱的。bed/messy-bed.glb 是 Blender 布料模拟的结果（tools/promo/bed_sim.py、bed_export.py），褶皱暗部烘在顶点色里。
+// 直接换掉原来被褥那一块网格的几何体：高亮、点选、藏图层照旧。颜色乘进顶点色，三块布只用一个材质
+async function messyBed() {
+  if (game.day < 2) return;
+  const src = (await loader.loadAsync('bed/messy-bed.glb')).scene; let lin = null;
+  layers.get('loft_bed').traverse((o) => { if (o.isMesh && o.material.name === 'loft_bedding_linen_natural') lin = o; });
+  if (!lin) return;
+  const TINT = { sheet: [1, 0.97, 0.9], quilt: [0.56, 0.4, 0.3], pillow: [1, 0.96, 0.88] }, parts = [];
+  src.updateMatrixWorld(true); lin.updateMatrixWorld(true);
+  src.traverse((o) => { if (!o.isMesh) return;
+    const a = o.geometry.attributes, t = TINT[o.material.name] || [1, 1, 1], c = new Float32Array(a.position.count * 3), g = new THREE.BufferGeometry();
+    for (let i = 0; i < a.position.count; i++) { c[i * 3] = a.color.getX(i) * t[0]; c[i * 3 + 1] = a.color.getY(i) * t[1]; c[i * 3 + 2] = a.color.getZ(i) * t[2]; }
+    g.setAttribute('position', a.position); g.setAttribute('normal', a.normal); g.setAttribute('uv', a.uv); g.setAttribute('color', new THREE.BufferAttribute(c, 3)); g.setIndex(o.geometry.index);
+    parts.push(g.applyMatrix4(o.matrixWorld)); });
+  const g = mergeGeometries(parts).applyMatrix4(lin.matrixWorld.clone().invert()), m = lin.material.clone();
+  m.side = THREE.DoubleSide; m.vertexColors = true; lin.geometry = g; lin.material = m; g.computeBoundsTree(); indoorShade(lin);
+}
 function d2Canvas(w, h, draw) { const c = document.createElement('canvas'); c.width = w; c.height = h; draw(c.getContext('2d'), w, h); const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t; }
 // 斜刀口（木桩、标桩同一个，11-04 环境评审 #8）：贴着木头表面展开的一道斜长条（R(y) = 那个高度圆木的半径；R 为 0 = 平面，在 z = zf），斜 0.55、高 0.13；
 // 上半是朝下的斜面（暗）、下半朝上（亮），上沿一线深色阴影——看着是一道 V 形砍口。斜度、高度、颜色两处一样，只有长短跟着木头粗细
@@ -3367,7 +3387,7 @@ function day2Setup() {
   if (game.day >= 3) day3Setup(); // 小路尽头的老云杉、✕ 那边的灯
 }
 function makePrints(name, pts, side0 = 0.11) { // 一行靴印，沿 pts 连成的曲线走（和你的一样大，复用 printPool 的几何和材质）；side0 = 左右脚离中心线
-  const route = new THREE.CatmullRomCurve3(pts), n = Math.floor(route.getLength() / 0.38), pp = printPool();
+  const route = new THREE.CatmullRomCurve3(pts), n = Math.floor(route.getLength() / 0.6), pp = printPool();
   const im = new THREE.InstancedMesh(pp.im.geometry, pp.im.material, n), o = new THREE.Object3D();
   let k = 0;
   for (let i = 0; i < n; i++) { const u = (i + 0.5) / n, p = route.getPointAt(u), t = route.getTangentAt(u), side = i % 2 ? 1 : -1, b = brookAt(p.x + terrain.ox, p.z + terrain.oz, 3);
@@ -3585,8 +3605,8 @@ function d2Scene() { // 第 2 天路上的小景：只看，不点、不算线�
   const gy = ground.position.y;
   // 踪迹 D2_SCENE.brook 米处横过的小溪和踏石（原来是第 2 天才有的一道 14m 冻溪）11-04 起三天都有，见 makeBrook
   if (game.day === 2) { const [q0] = sceneAt(D2_SCENE.rabbit, -6), [q1] = sceneAt(D2_SCENE.rabbit + 2, D2_SCENE.bush), n = 18; // 一串兔子脚印从左边林子横过踪迹，钻进右边的灌木（第 3 天夜里下过雪，没了）
-    const geo = new THREE.CircleGeometry(0.035, 8); geo.rotateX(-Math.PI / 2);
-    const im = new THREE.InstancedMesh(geo, new THREE.MeshBasicMaterial({ color: '#8b939a', transparent: true, opacity: 0.55, depthWrite: false }), n * 4), m4 = new THREE.Matrix4(), d = q1.clone().sub(q0), L = d.length();
+    const geo = new THREE.PlaneGeometry(0.075, 0.075); geo.rotateX(-Math.PI / 2);
+    const im = new THREE.InstancedMesh(geo, printPool().im.material, n * 4), m4 = new THREE.Matrix4(), d = q1.clone().sub(q0), L = d.length();
     d.normalize(); const side = new THREE.Vector3(-d.z, 0, d.x), rot = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.atan2(d.x, d.z));
     for (let i = 0; i < n; i++) { const c = q0.clone().addScaledVector(d, (i + 0.5) / n * (L - 0.6)); // 一跳一组：后脚两个长印并排在前，前脚两个小圆点一前一后在后
       [[0.1, 0.05, 1, 2.2], [0.1, -0.05, 1, 2.2], [-0.08, 0, 0.8, 1], [-0.17, 0.01, 0.8, 1]].forEach(([a, b, sx, sz], k) => { const p = c.clone().addScaledVector(d, a).addScaledVector(side, b);
@@ -3598,13 +3618,6 @@ function d2Scene() { // 第 2 天路上的小景：只看，不点、不算线�
   { const [q, rt] = sceneAt(D2_SCENE.glade), g = new THREE.Group(), W = woodMats(); // 空地要看得见：地面亮一点、一道从树冠缺口漏下的光柱
     // 11-04 环境评审 #9：原来叠加发光圆片（看得到硬边圆）→ 地面着色器 floorMap 的 B 通道提亮；光柱贴地亮、往上淡；8 根倒木围成的八边形像沙池 → 三根随便倒的树（一根带翘起的根盘）、两个树桩，边上几棵幼树和灌木（路的去向 ±z 留开）
     FLOOR_U.uGlade.value = 1;
-    const beam = d2Canvas(4, 128, (c, w, h) => { const v = c.createLinearGradient(0, 0, 0, h); v.addColorStop(0, 'rgba(255,240,205,0)'); v.addColorStop(0.6, 'rgba(255,240,205,.32)'); v.addColorStop(0.93, 'rgba(255,240,205,.55)'); v.addColorStop(1, 'rgba(255,240,205,.15)'); c.fillStyle = v; c.fillRect(0, 0, w, h); });
-    const sh = new THREE.Mesh(new THREE.CylinderGeometry(3.4, 4.6, 20, 28, 1, true), new THREE.MeshBasicMaterial({ map: beam, transparent: true, opacity: 0.35, side: THREE.DoubleSide, depthWrite: false, blending: THREE.AdditiveBlending }));
-    sh.material.onBeforeCompile = (s) => { // 11-04 复测 ENV1：人走进筒壁时画面被劈成一半发白 → 离相机 3–8m 渐隐、相机离光柱轴 5–11m 渐隐（站进空地就看不见），侧对着人的筒壁也淡掉（外看没有竖直硬边）
-      for (const k of ['vertexShader', 'fragmentShader']) s[k] = s[k].replace('void main() {', 'varying vec3 vBw, vBn; varying vec2 vBa;\nvoid main() {');
-      s.vertexShader = s.vertexShader.replace('#include <project_vertex>', '#include <project_vertex>\nvBw = (modelMatrix * vec4(transformed, 1.0)).xyz; vBn = mat3(modelMatrix) * normal; vBa = modelMatrix[3].xz;');
-      s.fragmentShader = s.fragmentShader.replace('#include <map_fragment>', '#include <map_fragment>\nvec3 bv = cameraPosition - vBw; float bd = length(bv);\ndiffuseColor.a *= smoothstep(3.0, 8.0, bd) * smoothstep(5.0, 11.0, length(cameraPosition.xz - vBa)) * smoothstep(0.05, 0.5, abs(dot(normalize(vBn), bv / bd)));'); };
-    sh.position.y = 9; sh.renderOrder = 3; g.add(sh);
     putScene('d2_scene', g, q, rt); g.updateMatrixWorld(true);
     const hit = (x, z) => { const v = g.localToWorld(new THREE.Vector3(x, 0, z)); TREE_XZ.push(v.x, v.z); }; // 本地 x = 路右手，z = 沿路；离中线 2.6m 外才放东西
     for (const [x, z, d, L, end, sg] of [[4.3, 1.2, 0.35, 4.4, 'root', 1], [-4.6, -1.5, -0.5, 3.6, 'break', -1], [-3.9, 3.6, 0.9, 2.4, null, 1]]) {
@@ -4802,8 +4815,16 @@ function fpClimb(r, dt, f, run) {
 // 雪地脚印池（玩家、稽查、书记员共用；第 2 天「只出不进」那串 d2_prints 用同一套几何和材质，大小一致才能比）：固定 400 个循环复用（2026-10-31 起第 1 天下雪时两人走路也留）
 function printPool() {
   if (d2.pool) return d2.pool;
-  const pm = d2Canvas(32, 64, (x) => { x.fillStyle = '#fff'; x.beginPath(); x.ellipse(16, 22, 11, 19, 0, 0, 7); x.fill(); x.beginPath(); x.ellipse(16, 52, 8, 10, 0, 0, 7); x.fill(); });
-  const im = new THREE.InstancedMesh(new THREE.PlaneGeometry(0.13, 0.3).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ color: '#3a3128', alphaMap: pm, transparent: true, opacity: 0.6, depthWrite: false, roughness: 1, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -8 }), 400);
+  // 靴印是压进雪里的坑：按靴形距离场算深度，生成法线（坑壁受光不同）、暗部（坑底偏蓝灰）和透明度（边缘渐隐），坑外一圈微微隆起
+  const W = 48, H = 96, D = new Float32Array(W * H), A = new Float32Array(W * H), ss = THREE.MathUtils.smoothstep;
+  const boot = (x, y) => { const a = Math.hypot(x / 0.62, (y + 0.28) / 0.6) - 1, b = Math.hypot(x / 0.5, (y - 0.54) / 0.36) - 1, k = 0.6, h = Math.min(1, Math.max(0, 0.5 + 0.5 * (b - a) / k)); return b * (1 - h) + a * h - k * h * (1 - h); };
+  for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) { const d = boot((i + 0.5) / W * 2 - 1, (j + 0.5) / H * 2 - 1), dep = 1 - ss(d, -0.45, 0.1); D[j * W + i] = dep - 0.28 * Math.exp(-(((d - 0.2) / 0.16) ** 2)); A[j * W + i] = 1 - ss(d, 0.12, 0.42); }
+  const paint = (f) => (x, w, h) => { const g = x.createImageData(w, h); for (let j = 0; j < h; j++) for (let i = 0; i < w; i++) { const c = f(i, j), p = (j * w + i) * 4; g.data[p] = c[0]; g.data[p + 1] = c[1]; g.data[p + 2] = c[2]; g.data[p + 3] = 255; } x.putImageData(g, 0, 0); };
+  const at = (i, j) => D[Math.min(H - 1, Math.max(0, j)) * W + Math.min(W - 1, Math.max(0, i))];
+  const pm = d2Canvas(W, H, paint((i, j) => { const a = A[j * W + i] * 255; return [a, a, a]; }));
+  const tm = d2Canvas(W, H, paint((i, j) => { const s = 255 * (1 - 0.42 * Math.max(0, D[j * W + i])); return [s, s, s]; }));
+  const nm = d2Canvas(W, H, paint((i, j) => { const dx = -(at(i + 1, j) - at(i - 1, j)) * 5, dy = (at(i, j + 1) - at(i, j - 1)) * 5, l = Math.hypot(dx, dy, 1); return [(-dx / l * 0.5 + 0.5) * 255, (-dy / l * 0.5 + 0.5) * 255, (1 / l * 0.5 + 0.5) * 255]; })); nm.colorSpace = THREE.NoColorSpace;
+  const im = new THREE.InstancedMesh(new THREE.PlaneGeometry(0.16, 0.34).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ color: '#d4deec', map: tm, alphaMap: pm, normalMap: nm, transparent: true, opacity: 0.95, depthWrite: false, roughness: 0.95, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -8 }), 400);
   im.count = 0; im.frustumCulled = false; im.name = 'fp_prints'; im.renderOrder = 2; scene.add(im); OUTDOOR.push(im);
   return (d2.pool = { im, i: 0, n: 0, o: new THREE.Object3D() });
 }

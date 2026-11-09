@@ -129,6 +129,24 @@ float wallPass( vec3 lv, vec3 pv ) {
   float door = tz < tx ? uWallDoor.x * ( 1.0 - smoothstep( 0.4, 0.47, abs( E.x ) ) ) * ( 1.0 - smoothstep( 2.0, 2.12, E.y ) ) : 0.0;
   return mix( 1.0, door, outK );
 }
+// 炉火在铸铁炉身里面，光只能从炉门开口（南面 z=-1.19）出来；uWallDoor.y = 炉门开度，开着时门板挡住右边的光。留 5% 当墙和地反射回来的光
+float stovePass( vec3 lv, vec3 pv ) {
+  vec3 L = ( vec4( lv - viewMatrix[ 3 ].xyz, 0.0 ) * viewMatrix ).xyz;
+  if ( distance( L, vec3( 1.4, 0.62, -1.3 ) ) > 0.03 ) return 1.0;
+  vec3 P = ( vec4( pv - viewMatrix[ 3 ].xyz, 0.0 ) * viewMatrix ).xyz;
+  if ( P.y > 2.35 ) return 0.0;
+  if ( P.x > 1.13 && P.x < 1.67 && P.y > 0.13 && P.y < 0.87 && P.z > -1.62 && P.z < -1.22 ) return 1.0;
+  vec3 d = P - L;
+  if ( d.z <= 1e-4 ) return 0.05;
+  vec3 E = L + d * ( -1.19 - L.z ) / d.z;
+  float o = smoothstep( 1.28, 1.32, E.x ) * ( 1.0 - smoothstep( 1.58, 1.62, E.x ) ) * smoothstep( 0.42, 0.46, E.y ) * ( 1.0 - smoothstep( 0.77, 0.81, E.y ) );
+  if ( d.x > 1e-4 ) {
+    float t = ( 1.59 - L.x ) / d.x;
+    vec3 H = L + d * t;
+    if ( t < 1.0 && H.z > -1.21 && H.z < -0.92 && H.y > 0.43 && H.y < 0.79 ) o *= 1.0 - uWallDoor.y;
+  }
+  return mix( 0.05, 1.0, o );
+}
 `;
 // 11 盏点光源一直 visible（切 visible 会重编译），关着的灯、照不到的片元原来也整套算 BRDF：小屋每个像素 11 遍，占帧时大头。现在先判断再算。
 {
@@ -136,7 +154,7 @@ float wallPass( vec3 lv, vec3 pv ) {
   if (a < 0 || b < 0) throw new Error('lights_fragment_begin 结构变了');
   THREE.ShaderChunk.lights_fragment_begin = lf.slice(0, a) + 'pointLight = pointLights[ i ];\n\t\tif ( dot( pointLight.color, vec3( 1.0 ) ) > 0.0 && ( pointLight.distance <= 0.0 || distance( pointLight.position, geometryPosition ) < pointLight.distance ) ) {'
     + lf.slice(a + 'pointLight = pointLights[ i ];'.length, b).replace('getPointLightInfo( pointLight, geometryPosition, directLight );',
-      'getPointLightInfo( pointLight, geometryPosition, directLight );\n\t\tdirectLight.color *= wallPass( pointLight.position, geometryPosition );')
+      'getPointLightInfo( pointLight, geometryPosition, directLight );\n\t\tdirectLight.color *= wallPass( pointLight.position, geometryPosition ) * stovePass( pointLight.position, geometryPosition );')
     + lf.slice(b, e) + '\n\t\t}' + lf.slice(e);
 }
 function indoorShade(model) {

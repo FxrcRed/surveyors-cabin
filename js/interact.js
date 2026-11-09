@@ -601,6 +601,7 @@ function updateFire(dt) {
   const out = k < 0.02; // 熄了就静止：不抖、不闪
   const n = out ? 0.5 : 0.5 + 0.22 * Math.sin(t * 7.3) + 0.15 * Math.sin(t * 13.1 + 1.7) + 0.1 * Math.sin(t * 23.7 + 0.4) + 0.08 * (Math.random() - 0.5);
   if (fire.light) fire.light.intensity = 2.2 * k * (0.7 + 0.6 * n) * (STOVE_GLASS + (1 - STOVE_GLASS) * fire.door);
+  wallU.y = fire.door; // 炉门开度给 stovePass
   for (const m of fire.mats) {
     const b = m.userData.base;
     if (b.e) { m.emissive.copy(b.e); m.emissive.g *= 0.85 + 0.25 * n; m.emissiveIntensity = b.ei * k * (0.65 + 0.7 * n); } // 暗时偏红、亮时偏黄
