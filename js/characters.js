@@ -14,7 +14,7 @@ const PEOPLE = [
   // scale：原模型连头发 1.81m，偏高偏壮；缩到 0.94 ≈ 1.70m（门 1.97m、阁楼下净高 2.0m）
   { id: 'person_man', url: 'characters/man.glb', pos: [0.19, 0.216, 0.07], standY: 0.26, yaw: Math.PI, scale: 0.94, mode: 'sit', seat: 'living_sofa', sitUp: 0.52, // 2026-11-01 换成 Rhino 里的 Male_Peasant：原来自做衬衫下摆垂到骨盆下 8.7cm，新裤子只到 7.7cm，坐低 0.9cm；pos.y = 0.736 − 0.52×0.94
     hand: 'characters/hand.glb', handMat: { HandSkin: 'MI_Regular_Male', HandSleeve: 'MI_Peasant' },
-    coat: 'characters/man_coat.glb' }, // 第 2、3 天出门穿的外套（tools/make_coat.py 从 Quaternius Male_Ranger 取上衣和袖子、绿布换卡其），setOutfit 第一次要用时才加载
+    coat: 'characters/man_coat.glb' }, // 第 2、3 天出门穿的外套（tools/make_coat.py 从 Quaternius Male_Ranger 取上衣和袖子、绿布换卡其），开局和人一起加载（loadPeople）
   // 女调查员：Rhino 模型里的 Female_Peasant（服装 + 女性基础人物的头 + Hair_Buns 盘发），Rhino 里 1.60m、scale 0.896。
   // 打开页面随机二选一：阁楼摇椅上看书（Sitting_Read_Loop + Book），或书桌前写笔记（Sitting_Write_Loop + Notebook、Pen）；这两个动作是 Blender 里用 IK 在坐姿上摆的。
   // 她的坐姿骨盆在脚后 0.324、坐面比根节点高 0.444（未缩放，男的是 0.34 / 0.468）。调试：网址带 ?woman=read / ?woman=desk 固定一种。
@@ -76,7 +76,9 @@ async function loadPeople() {
     indoorShade(root); // 屋里压暗天光，和家具一致
     scene.add(root); shared.layers.set(P.id, root); people.set(P.id, p);
     if (P.hand) p.hand = await loadHand(P, gltf.scene);
-    p.P = P; if (OUTFIT[P.id]) applyOutfit(p); // 存档恢复时 gearOn 可能比人先到
+    p.P = P;
+    if (P.coat) await (p.coatLoad = loadCoat(p).catch(console.error)); // 预热前到齐：原来第 2、3 天开局才下载，3 个材质现编译卡约 0.7 秒（11-09 性能评审）
+    if (OUTFIT[P.id]) applyOutfit(p); // 存档恢复时 gearOn 可能比人先到
   }));
 }
 // —— 外套（2026-11-07 用户定：大衣用 Quaternius Ranger 短上衣）：Ranger 和 Peasant 是同一服装包、同一套骨骼，按骨骼名重新绑到人身上；穿上时藏 Peasant 的上衣和手臂，裤子、鞋不换 ——

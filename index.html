@@ -4100,8 +4100,10 @@ setLang(lang());
 $('langBtn').onclick = () => setLang(lang() === 'zh' ? 'en' : 'zh');
 
 function isShown(o) { for (; o; o = o.parent) if (!o.visible) return false; return true; }
+let canvasBox = null; // 画布在屏幕上的位置：每帧问浏览器会逼它重新排版（手机约 2ms/帧，11-09 性能评审），resize 时作废
+const canvasRect = () => canvasBox || (canvasBox = renderer.domElement.getBoundingClientRect());
 function pick(e) {
-  const rect = renderer.domElement.getBoundingClientRect();
+  const rect = canvasRect();
   pointer.set((e.clientX - rect.left) / rect.width * 2 - 1, -(e.clientY - rect.top) / rect.height * 2 + 1);
   raycaster.setFromCamera(pointer, camera);
   const hit = raycaster.intersectObjects(meshes.filter((m) => isShown(m) && m.parent.name !== 'wall_fixings').concat(roofWx.sides.filter((S) => S.s < 0 && S.slab.visible).map((S) => S.slab)), false).find((h) => !(h.distance < 0.5 && /^person_/.test(h.object.parent.name))); // 墙上的钉子、支架（wall_fixings）不挡点选：点挂钩等于点挂着的东西
@@ -4190,6 +4192,13 @@ async function prewarm() {
     renderer.render(scene, camera);
   }
   for (const o of hidden) o.visible = false;
+  // 手和袖子只在 drawHeld 那一遍画，上面的视角画不到：藏回去之后（灯数和真玩时一样）照真实流程画一遍，袖子两种材质（穿没穿大衣）都画
+  for (const p of people.values()) if (p.hand) {
+    p.hand.visible = true; heldLayer(p.hand, true);
+    drawHeld();
+    if (p.sleeve) { const m = p.sleeve[0].material; p.sleeve[0].material = m === p.sleeve[2] ? p.sleeve[1] : p.sleeve[2]; drawHeld(); p.sleeve[0].material = m; }
+    p.hand.visible = false;
+  }
   // 描边那几遍（遮罩材质、全屏描边着色器、遮罩渲染目标）也先画一次：原来第一次出现提示高光（开场交给第一人称那一下）才现编译，连卡两帧 35ms
   const sz = renderer.getDrawingBufferSize(new THREE.Vector2()); hl.rt.setSize(sz.x, sz.y);
   const hm = [], keep = { mask: camera.layers.mask, bg: scene.background, shadow: renderer.shadowMap.autoUpdate }; // 所有能描边的模型都画一遍遮罩（翻面、蒙皮等是不同的着色器变体），不按视锥裁
@@ -4457,7 +4466,9 @@ function heldLayer(g, on) {
 function drawHeld() {
   const keep = { mask: camera.layers.mask, bg: scene.background, auto: renderer.autoClear };
   scene.background = null; renderer.autoClear = false; renderer.clearDepth();
+  scene.matrixWorldAutoUpdate = false; // 主画面那遍刚算过整个场景的矩阵，这遍只画手
   camera.layers.set(HELD_LAYER); renderer.render(scene, camera);
+  scene.matrixWorldAutoUpdate = true;
   camera.layers.mask = keep.mask; scene.background = keep.bg; renderer.autoClear = keep.auto;
 }
 function eig3(m) { // 对称 3×3 矩阵的特征向量（Jacobi），按特征值从大到小 → [v1, v2, v3]
@@ -4802,7 +4813,7 @@ function fpCardKey(e) { // 第一人称卡片开着：E、空格、Esc 关（E �
 }
 addEventListener('wheel', (e) => { if (fp && !touchFP && !card.hidden && !card.contains(e.target)) card.scrollTop += e.deltaY; }, { passive: true }); // 鼠标锁着时滚轮落在画布上：转给卡片
 function fpCenter() {
-  const r = canvas.getBoundingClientRect();
+  const r = canvasRect();
   return { clientX: r.left + r.width / 2, clientY: r.top + r.height / 2 };
 }
 const _fpV = new THREE.Vector3(), _fpD = new THREE.Vector3(), _fpO = new THREE.Vector3(), _fpU = new THREE.Vector3(0, 1, 0), _fpDn = new THREE.Vector3(0, -1, 0);
@@ -5377,8 +5388,15 @@ addEventListener('keydown', (e) => { if (e.key === 'Escape') select(null); });
 function updateHover() {
   if (!hoverDirty || !home) return;
   hoverDirty = false;
-  const n = fly || intro || spotHot || (fp && (!card.hidden || (fp.paused && !touchFP))) ? null : pick(pointer.lastEvent); // 锁放开（点画面继续）时不留描边和名字
+  const n = fly || intro || spotHot || (fp && (!card.hidden || (fp.paused && !touchFP))) ? null : fp ? fpAimPick() : pick(pointer.lastEvent); // 锁放开（点画面继续）时不留描边和名字
   if (fp) fpHover(n); else setHovered(n);
+}
+const aimAt = { pos: new THREE.Vector3(), q: new THREE.Quaternion(), t: -1e9, n: null, hd: Infinity };
+function fpAimPick() { // 准星每帧都要结果（fpHover 的计时靠它），但相机没动时不用重打射线；东西自己挪到准星上最多晚 200ms
+  const now = performance.now();
+  if (now - aimAt.t < 200 && aimAt.pos.distanceToSquared(camera.position) < 1e-8 && Math.abs(aimAt.q.dot(camera.quaternion)) > 1 - 1e-9) { pick.hd = aimAt.hd; return aimAt.n; }
+  aimAt.n = pick(pointer.lastEvent); aimAt.hd = pick.hd; aimAt.t = now; aimAt.pos.copy(camera.position); aimAt.q.copy(camera.quaternion);
+  return aimAt.n;
 }
 // 第一人称悬停分三级（11-04 交互评审 UX3，原来转一圈弹十几次名字）：2m 内能点的东西准星点变环；同一件停 0.45 秒才出名字和描边，离开后多留 0.3 秒防闪；转头快于 90°/秒不出。
 // hovered 只管显示（名字、描边、E 提示），E 拿取 / 坐下按准星实际对着的 aim 算，不用等名字出来
@@ -5608,6 +5626,7 @@ function hideOutdoors(now) {
   if (hide === camera.layers.isEnabled(OUT_LAYER)) hide ? camera.layers.disable(OUT_LAYER) : camera.layers.enable(OUT_LAYER);
 }
 addEventListener('resize', () => {
+  canvasBox = null;
   camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix();
   renderer.setSize(innerWidth, innerHeight);
 });
