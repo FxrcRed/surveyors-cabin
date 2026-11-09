@@ -114,7 +114,7 @@ const indoorU = { uIndoor: { value: 1 }, uFlashIn: { value: 1 }, uCamIn: { value
 // uWallDoor 放进各 ShaderLib 的 uniforms，值用普通对象（不是 Vector4）：各材质克隆 uniforms 时会共用这一个引用，改一处全变。
 const wallU = { x: 1, y: 0, z: 1, w: 1 }, roomU = { x: 0, y: 1 }; // wallU：x = 大门开度（1 开 0 关，door_wood 开关动画里设），y = 炉门开度，z = 卫生间门开度，w = 门帘放下程度；roomU.x = 折叠餐桌放下程度，roomU.y = 有没有点亮的点光源（0 就跳过屋内遮挡计算，白天省指令）
 for (const id of ['standard', 'physical', 'lambert', 'phong', 'toon']) { THREE.ShaderLib[id].uniforms.uWallDoor = { value: wallU }; THREE.ShaderLib[id].uniforms.uRoomK = { value: roomU }; }
-// 每盏灯一份的代码会被展开 11 遍，ANGLE/D3D 的编译时间和帧时间都跟指令数成正比：试过 9 个盒子的射线求交，冷启动 prewarm 13s → 155s、帧时 11ms → 26ms；楼板隔墙全用平面穿越判断仍要 34s。
+// 每盏灯一份的代码要跑 11 遍（11-09 起是真循环，不再按灯展开源码，编译量已降；帧时仍跟循环体指令数成正比），ANGLE/D3D 的编译时间和帧时间都跟指令数成正比：试过 9 个盒子的射线求交，冷启动 prewarm 13s → 155s、帧时 11ms → 26ms；楼板隔墙全用平面穿越判断仍要 34s。
 // 所以：灯位固定的遮挡（炉身、吊灯灯罩、壁灯旁的高柜）和家具底下压暗在循环外算，每个片元一次（rFire / rShade / rCab / rU）；屋内分房间查表（ROOM_V），每盏灯只算一次灯在哪间，只有卫生间门洞还做一次平面穿越。
 THREE.ShaderChunk.lights_pars_begin += `
 uniform vec4 uWallDoor;
@@ -197,6 +197,7 @@ float roomPass( vec3 L, vec3 d, float pid ) {
 {
   const lf = THREE.ShaderChunk.lights_fragment_begin, a = lf.indexOf('pointLight = pointLights[ i ];'), b = lf.indexOf('RE_Direct(', a), e = lf.indexOf(';', b) + 1, h = lf.indexOf('#if ( NUM_POINT_LIGHTS > 0 )');
   if (a < 0 || b < 0 || h < 0) throw new Error('lights_fragment_begin 结构变了');
+  // 点光源循环去掉 three 的 unroll 标记、删掉点光阴影那段，留成真循环：这里的点光源都不投影，没有 pointShadowMap[ i ] 要展开。ANGLE 给循环加 [loop]，FXC 不用把循环体编 11 遍：46 个受光程序占全部着色器编译时间 99%，冷启动 prewarm 13.8s → 3.0s，画面（夜景最多 3 个像素差 1/255）和帧时不变。以后要让点光源投影，得恢复展开。
   THREE.ShaderChunk.lights_fragment_begin = lf.slice(0, h) + `vec3 rP = lightW( geometryPosition ), rL, rD;
 float rOut = smoothstep( 1.83, 1.89, max( abs( rP.x ), abs( rP.z ) ) ), rIn = 1.0 - step( 1e-4, rOut );
 float rU = 1.0, rFire = 1.0, rShadeS = 1.0, rShadeN = 1.0, rCab = 1.0;
@@ -205,13 +206,13 @@ if ( uRoomK.y > 0.5 && rIn > 0.0 ) { // 白天灯全灭时整段跳过（uRoomK.
   rU = roomUnder( rP ); rFire = stoveK( rP ); rShadeS = shadeK( rP, 0.71 ); rShadeN = shadeK( rP, -0.49 ); rCab = cabK( rP );
   rRoom = roomId( rP );
 }
-` + lf.slice(h, a) + 'pointLight = pointLights[ i ];\n\t\tif ( dot( pointLight.color, vec3( 1.0 ) ) > 0.0 && ( pointLight.distance <= 0.0 || distance( pointLight.position, geometryPosition ) < pointLight.distance ) ) {'
-    + lf.slice(a + 'pointLight = pointLights[ i ];'.length, b).replace('getPointLightInfo( pointLight, geometryPosition, directLight );',
+` + lf.slice(h, a).replace('#pragma unroll_loop_start', '') + 'pointLight = pointLights[ i ];\n\t\tif ( dot( pointLight.color, vec3( 1.0 ) ) > 0.0 && ( pointLight.distance <= 0.0 || distance( pointLight.position, geometryPosition ) < pointLight.distance ) ) {'
+    + lf.slice(a + 'pointLight = pointLights[ i ];'.length, b).replace(/#if defined\( USE_SHADOWMAP \) && \( UNROLLED_LOOP_INDEX[\s\S]*?#endif/, '').replace('getPointLightInfo( pointLight, geometryPosition, directLight );',
       `getPointLightInfo( pointLight, geometryPosition, directLight );
 		rL = lightW( pointLight.position ); rD = rP - rL + 1e-5;
 		directLight.color *= wallPass( rL, rP, rD, rOut ) * ( abs( rL.x - 1.4 ) + abs( rL.y - 0.62 ) < 0.03 ? rFire : abs( rL.x - 1.12 ) + abs( rL.y - 1.95 ) < 0.02 ? ( rL.z > 0.0 ? rShadeS : rShadeN ) : rL.x < -1.3 && rL.z < -0.5 ? rCab : 1.0 );
 		if ( rIn > 0.0 ) directLight.color *= rU * roomPass( rL, rD, rRoom );`)
-    + lf.slice(b, e) + '\n\t\t}' + lf.slice(e);
+    + lf.slice(b, e) + '\n\t\t}' + lf.slice(e).replace('#pragma unroll_loop_end', '');
 }
 function indoorShade(model) {
   const seen = new Set();
