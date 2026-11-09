@@ -16,52 +16,93 @@ function grain(x, W, H, R, amp) {
   for (let i = 0; i < d.length; i += 4) { const n = (R() - 0.5) * amp; d[i] += n; d[i + 1] += n; d[i + 2] += n * 0.9; }
   x.putImageData(im, 0, 0);
 }
-function fibres(x, W, H, R, n, light, dark) {
+function fibres(x, W, H, R, n, light, dark, sc = 1) {
   for (let i = 0; i < n; i++) {
-    const px = R() * W, py = R() * H, a = R() * 6.28, len = 5 + R() * 18;
+    const px = R() * W, py = R() * H, a = R() * 6.28, len = (5 + R() * 18) * Math.min(sc, 1.6);
     x.strokeStyle = R() < 0.5 ? light : dark; x.lineWidth = 0.6 + R() * 0.7;
     x.beginPath(); x.moveTo(px, py); x.quadraticCurveTo(px + Math.cos(a) * len * 0.5 + (R() - 0.5) * 6, py + Math.sin(a) * len * 0.5 + (R() - 0.5) * 6, px + Math.cos(a) * len, py + Math.sin(a) * len); x.stroke();
   }
 }
-function paperBase(W, H, tone, seed, rough = 1) {
-  const c = mkCanvas(W, H), x = c.getContext('2d'), R = rngOf(seed);
-  x.fillStyle = tone; x.fillRect(0, 0, W, H);
-  for (let i = 0; i < 70; i++) { x.fillStyle = R() < 0.6 ? `rgba(120,86,44,${0.02 + R() * 0.05 * rough})` : `rgba(255,248,226,${0.03 + R() * 0.06})`; x.beginPath(); x.arc(R() * W, R() * H, 8 + R() * 60, 0, 7); x.fill(); }
-  for (let i = 0; i < 6 * rough; i++) { const px = R() * W, py = R() * H, r = 6 + R() * 16; const g = x.createRadialGradient(px, py, 0, px, py, r); g.addColorStop(0, `rgba(110,70,30,${0.18 + R() * 0.2})`); g.addColorStop(1, 'rgba(110,70,30,0)'); x.fillStyle = g; x.fillRect(px - r, py - r, r * 2, r * 2); } // 霉点
-  fibres(x, W, H, R, 900, 'rgba(255,250,235,.10)', 'rgba(90,64,36,.08)');
-  const e = Math.min(W, H) * 0.09; // 边缘发黄、发暗
-  for (const [x0, y0, x1, y1, rx, ry, rw, rh] of [[0, 0, e, 0, 0, 0, e, H], [W, 0, W - e, 0, W - e, 0, e, H], [0, 0, 0, e, 0, 0, W, e], [0, H, 0, H - e, 0, H - e, W, e]]) {
+function paperBase(W, H, tone, seed, rough = 1, sc = 1) { // sc：画布像素 / 逻辑像素（逻辑尺寸下的色斑、霉点、边缘大小不变，纤维和颗粒按真实像素画，放大看更细）
+  const c = mkCanvas(W, H), x = c.getContext('2d'), R = rngOf(seed), w = W / sc, h = H / sc;
+  x.save(); x.scale(sc, sc);
+  x.fillStyle = tone; x.fillRect(0, 0, w, h);
+  for (let i = 0; i < 70; i++) { x.fillStyle = R() < 0.6 ? `rgba(120,86,44,${0.02 + R() * 0.05 * rough})` : `rgba(255,248,226,${0.03 + R() * 0.06})`; x.beginPath(); x.arc(R() * w, R() * h, 8 + R() * 60, 0, 7); x.fill(); }
+  for (let i = 0; i < 6 * rough; i++) { const px = R() * w, py = R() * h, r = 6 + R() * 16; const g = x.createRadialGradient(px, py, 0, px, py, r); g.addColorStop(0, `rgba(110,70,30,${0.18 + R() * 0.2})`); g.addColorStop(1, 'rgba(110,70,30,0)'); x.fillStyle = g; x.fillRect(px - r, py - r, r * 2, r * 2); } // 霉点
+  const e = Math.min(w, h) * 0.09; // 边缘发黄、发暗
+  for (const [x0, y0, x1, y1, rx, ry, rw, rh] of [[0, 0, e, 0, 0, 0, e, h], [w, 0, w - e, 0, w - e, 0, e, h], [0, 0, 0, e, 0, 0, w, e], [0, h, 0, h - e, 0, h - e, w, e]]) {
     const g = x.createLinearGradient(x0, y0, x1, y1); g.addColorStop(0, 'rgba(92,60,28,.30)'); g.addColorStop(1, 'rgba(92,60,28,0)'); x.fillStyle = g; x.fillRect(rx, ry, rw, rh);
   }
+  x.restore();
+  fibres(x, W, H, R, Math.round(900 * sc * sc), 'rgba(255,250,235,.10)', 'rgba(90,64,36,.08)', sc);
   grain(x, W, H, R, 14);
   return c;
 }
-export { paperBase as agedPaper };
-function bumpCanvas(W, H, seed, amp = 70) {
+export const agedPaper = (W, H, tone, seed, rough = 1, sc = 1) => paperBase(W, H, tone, seed, rough, sc);
+function bumpCanvas(W, H, seed, amp = 70, sc = 1) {
   const c = mkCanvas(W, H), x = c.getContext('2d'), R = rngOf(seed + 101);
   x.fillStyle = '#808080'; x.fillRect(0, 0, W, H);
-  fibres(x, W, H, R, 1400, 'rgba(255,255,255,.35)', 'rgba(0,0,0,.35)'); grain(x, W, H, R, amp);
+  fibres(x, W, H, R, Math.round(1400 * sc * sc), 'rgba(255,255,255,.35)', 'rgba(0,0,0,.35)', sc); grain(x, W, H, R, amp);
   return c;
 }
+// 手写字：一个字一个字画，基线慢慢漂、字号和斜度各不同、墨色由深到浅（每个词重新蘸墨）、笔画边上洇开一点；✕ 画成两笔。lines：字符串数组
+export function handwrite(x, lines, { x0, y0, size, pitch, ink = '28,26,50', R, slant = 0.1, bleed = 0.035 }) {
+  x.save(); x.textBaseline = 'alphabetic'; x.shadowColor = `rgba(${ink},.55)`; x.shadowBlur = size * bleed;
+  lines.forEach((ln, li) => {
+    const sz = size * (0.95 + R() * 0.1), y = y0 + li * pitch, ph = R() * 6; let px = x0 + (R() - 0.3) * size * 0.4, drift = (R() - 0.5) * size * 0.12;
+    x.font = `italic ${sz}px "IM Fell English", Georgia, serif`;
+    for (const word of ln.split(' ')) {
+      let load = 0.84 + R() * 0.14;
+      for (const ch of word) {
+        drift += (R() - 0.5) * size * 0.02; const w = x.measureText(ch).width, gy = y + drift + Math.sin(px * 0.011 + ph) * size * 0.035;
+        x.fillStyle = `rgba(${ink},${Math.min(1, load * (0.92 + R() * 0.1)).toFixed(2)})`;
+        if (ch === '✕') { x.save(); x.shadowBlur = 0; x.strokeStyle = x.fillStyle; x.lineWidth = size * 0.1; x.lineCap = 'round'; x.beginPath(); x.moveTo(px, gy - size * 0.55); x.lineTo(px + size * 0.52, gy + size * 0.02); x.moveTo(px + size * 0.55, gy - size * 0.58); x.lineTo(px + size * 0.04, gy); x.stroke(); x.restore(); px += size * 0.72; continue; }
+        x.save(); x.translate(px, gy); x.transform(1, 0, -slant + (R() - 0.5) * 0.1, 1, 0, 0); x.rotate((R() - 0.5) * 0.07); x.scale(0.96 + R() * 0.08, 0.93 + R() * 0.14); x.fillText(ch, 0, 0); x.restore();
+        px += w * (0.97 + R() * 0.07); load *= 0.988;
+      }
+      px += size * (0.26 + R() * 0.1);
+    }
+  });
+  x.restore();
+}
 
-// 一张纸：纸的纹理 + 画内容的回调 draw(ctx, W, H, R)；几何带一点卷曲、折痕、翘起的角，不是平面
-export function paperMesh(w, h, { seed = 1, tone = '#d9cdb0', draw, cutout = false, curl = 0.004, crease = 0 } = {}) {
-  const W = 512, H = Math.round(W * h / w), c = paperBase(W, H, tone, seed), x = c.getContext('2d'), R = rngOf(seed + 7);
-  if (crease) { // 折痕：中间一条竖线，一边亮一边暗
-    x.fillStyle = 'rgba(40,26,12,.22)'; x.fillRect(W / 2 - 1, 0, 2, H); x.fillStyle = 'rgba(255,250,235,.28)'; x.fillRect(W / 2 + 1, 0, 2, H);
-    const g = x.createLinearGradient(W / 2 - 40, 0, W / 2 + 40, 0); g.addColorStop(0, 'rgba(60,40,20,0)'); g.addColorStop(0.5, 'rgba(60,40,20,.12)'); g.addColorStop(1, 'rgba(60,40,20,0)'); x.fillStyle = g; x.fillRect(W / 2 - 40, 0, 80, H);
-  }
-  draw?.(x, W, H, R);
-  const nx = 14, ny = Math.max(8, Math.round(14 * h / w)), geo = new THREE.PlaneGeometry(w, h, nx, ny), p = geo.attributes.position, ph = R() * 6;
+// 一张纸：纸的纹理 + 画内容的回调 draw(ctx, W, H, R)；几何带一点卷曲、折痕、翘起的角，不是平面。res = 纹理宽（电脑 1024、手机 768，近看字迹才清楚；draw 回调的坐标一律按 1024 宽写）；
+// folds = [['h'|'v', 0…1], …] 折痕画进颜色和凹凸；wrinkle = 皱纹条数。m.userData.repaint()：字体晚到时重画（颜色图换新画布）
+export function paperMesh(w, h, { seed = 1, tone = '#d9cdb0', draw, cutout = false, curl = 0.004, crease = 0, res = matchMedia('(pointer:coarse)').matches ? 768 : 1024, folds = [], wrinkle = 0 } = {}) {
+  const W = res, H = Math.round(W * h / w), sc = W / 512, BW = res / 2, BH = Math.round(BW * h / w), bump = bumpCanvas(BW, BH, seed, 70, BW / 256), R0 = rngOf(seed + 303);
+  const bx = bump.getContext('2d'), X = (u) => u * BW, Y = (v) => v * BH, seg = (g, A, B, wd) => { g.lineWidth = wd; g.beginPath(); g.moveTo(X(A[0]), Y(A[1])); g.lineTo(X(B[0]), Y(B[1])); g.stroke(); };
+  const mk = [], rw = []; // 折痕和皱纹的位置只算一次，颜色图每次重画都一样
+  for (const [ax, p] of folds) mk.push([ax, p + (R0() - 0.5) * 0.01]);
+  for (let i = 0; i < wrinkle; i++) { const a = R0() * 6.28, L = 0.06 + R0() * 0.16; rw.push([R0(), R0(), Math.cos(a) * L, Math.sin(a) * L * w / h, 0.05 + R0() * 0.07]); }
+  for (const [ax, p] of mk) { const A = ax === 'h' ? [0, p] : [p, 0], B = ax === 'h' ? [1, p] : [p, 1], d = ax === 'h' ? [0, 0.004] : [0.004, 0]; // 凹凸图：折痕一道暗一道亮，皱纹一条亮一条暗
+    bx.strokeStyle = 'rgba(0,0,0,.55)'; seg(bx, A, B, BW / 170); bx.strokeStyle = 'rgba(255,255,255,.5)'; seg(bx, [A[0] + d[0], A[1] + d[1]], [B[0] + d[0], B[1] + d[1]], BW / 170); }
+  for (const [u, v, dx, dy, o] of rw) { bx.strokeStyle = `rgba(255,255,255,${o * 4})`; seg(bx, [u, v], [u + dx, v + dy], BW / 300); bx.strokeStyle = `rgba(0,0,0,${o * 4})`; seg(bx, [u + 0.004, v + 0.004], [u + dx + 0.004, v + dy + 0.004], BW / 300); }
+  const paint = () => {
+    const c = paperBase(W, H, tone, seed, 1, sc), x = c.getContext('2d'), R = rngOf(seed + 7);
+    if (crease) { // 中间一条竖线折痕：一边亮一边暗
+      x.fillStyle = 'rgba(40,26,12,.22)'; x.fillRect(W / 2 - 1, 0, 2, H); x.fillStyle = 'rgba(255,250,235,.28)'; x.fillRect(W / 2 + 1, 0, 2, H);
+      const g = x.createLinearGradient(W / 2 - 40 * sc, 0, W / 2 + 40 * sc, 0); g.addColorStop(0, 'rgba(60,40,20,0)'); g.addColorStop(0.5, 'rgba(60,40,20,.12)'); g.addColorStop(1, 'rgba(60,40,20,0)'); x.fillStyle = g; x.fillRect(W / 2 - 40 * sc, 0, 80 * sc, H);
+    }
+    for (const [ax, p] of mk) { // 折过的纸：折线两侧一道淡淡的暗带、折线上磨白一点
+      const v = ax === 'v', L = (v ? W : H) * p, T = 14 * sc, g = v ? x.createLinearGradient(L - T, 0, L + T, 0) : x.createLinearGradient(0, L - T, 0, L + T);
+      g.addColorStop(0, 'rgba(70,46,22,0)'); g.addColorStop(0.5, 'rgba(70,46,22,.16)'); g.addColorStop(1, 'rgba(70,46,22,0)'); x.fillStyle = g; v ? x.fillRect(L - T, 0, T * 2, H) : x.fillRect(0, L - T, W, T * 2);
+      x.fillStyle = 'rgba(236,224,196,.5)'; v ? x.fillRect(L - sc * 0.6, 0, sc * 1.2, H) : x.fillRect(0, L - sc * 0.6, W, sc * 1.2);
+    }
+    for (const [u, v, dx, dy, o] of rw) { x.lineWidth = sc * 1.2; x.strokeStyle = `rgba(60,40,18,${o})`; x.beginPath(); x.moveTo(u * W, v * H); x.lineTo((u + dx) * W, (v + dy) * H); x.stroke(); x.strokeStyle = `rgba(255,248,226,${o * 1.2})`; x.beginPath(); x.moveTo(u * W + sc * 1.5, v * H + sc * 1.5); x.lineTo((u + dx) * W + sc * 1.5, (v + dy) * H + sc * 1.5); x.stroke(); }
+    x.save(); x.scale(W / 1024, W / 1024); draw?.(x, 1024, Math.round(1024 * h / w), R); x.restore(); return c; // draw 一律按 1024 宽的坐标写，手机 768 的画布自动缩
+  };
+  const nx = 24, ny = Math.max(12, Math.round(24 * h / w)), geo = new THREE.PlaneGeometry(w, h, nx, ny), p = geo.attributes.position, ph = R0() * 6;
   for (let i = 0; i < p.count; i++) {
     const u = p.getX(i) / w, v = p.getY(i) / h; // −0.5…0.5
     let z = curl * (1.6 * u * u - 0.3) + curl * 0.35 * Math.sin(v * 5 + ph) * Math.cos(u * 4 + ph); // 整张微微拱起 + 低频起伏
     z += curl * 1.4 * Math.pow(Math.max(0, u + v), 3) * 2; // 一只角翘起
     if (crease) z += crease * (Math.abs(u) - 0.25); // 折痕：中间凹下去，两边略抬
+    for (const [ax, q] of mk) { const d = Math.abs(ax === 'v' ? u + 0.5 - q : 0.5 - v - q); z -= 0.0004 * Math.max(0, 1 - d * 14); } // 折线处浅浅凹下去
     p.setZ(i, z);
   }
   geo.computeVertexNormals();
-  const m = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ map: tex(c), bumpMap: tex(bumpCanvas(256, Math.round(256 * h / w), seed), false), bumpScale: 1.4, roughness: 0.93, side: THREE.DoubleSide, alphaTest: cutout ? 0.5 : 0 }));
+  const map = tex(paint()), m = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ map, bumpMap: tex(bump, false), bumpScale: 1.4, roughness: 0.93, side: THREE.DoubleSide, alphaTest: cutout ? 0.5 : 0 }));
+  m.userData.repaint = () => { map.image = paint(); map.needsUpdate = true; };
   m.receiveShadow = true; return m;
 }
 
