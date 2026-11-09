@@ -730,7 +730,7 @@ float wNoise(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 *
 float wH(vec2 p) { vec2 q = p + 3.0 * vec2(wNoise(p * 0.06 + uT * 0.03), wNoise(p * 0.06 + 7.3 - uT * 0.025));
   return 0.10 * wNoise(q * 0.35 + uT * vec2(0.21, 0.13)) + 0.05 * wNoise(q * 0.9 - uT * vec2(0.17, 0.29)) + 0.025 * wNoise(q * 2.3 + uT * vec2(-0.4, 0.3)); }
 ` + s.fragmentShader
-      .replace('#include <lights_fragment_end>', '#include <lights_fragment_end>' + String.fromCharCode(10) + 'reflectedLight.directSpecular *= 1.0 - smoothstep(0.1, 0.28, dot(normalize((viewMatrix * vec4(0.0, 1.0, 0.0, 0.0)).xyz), normalize(vViewPosition)));') // 太阳波光只在远处贴水面看时才有；近处往下看时，扰动的法线会把阳光反成大块白斑
+      .replace('#include <lights_fragment_end>', '#include <lights_fragment_end>' + String.fromCharCode(10) + 'reflectedLight.directSpecular *= 1.0 - smoothstep(0.1, 0.28, dot(normalize((viewMatrix * vec4(0.0, 1.0, 0.0, 0.0)).xyz), normalize(vViewPosition))); reflectedLight.indirectSpecular = vec3(0.0);') // 环境图是间屋子的亮灯板，水面反出来就是白斑，天色反光由下面的菲涅尔混雾色代替。太阳波光只在远处贴水面看时才有；近处往下看时，扰动的法线会把阳光反成大块白斑
       .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
   float wAmp = mix(0.12, 1.0, smoothstep(0.3, 0.75, wNoise(vWP.xz * 0.012 + vec2(uT * 0.006, -uT * 0.004))));
   float h0 = wH(vWP.xz), hx = wH(vWP.xz + vec2(0.15, 0.0)), hz = wH(vWP.xz + vec2(0.0, 0.15));
@@ -740,7 +740,7 @@ float wH(vec2 p) { vec2 q = p + 3.0 * vec2(wNoise(p * 0.06 + uT * 0.03), wNoise(
     gl_FragColor.rgb = mix(gl_FragColor.rgb, vec3(0.045, 0.05, 0.032), inL * smoothstep(0.84, 1.0, k) * 0.6); // 近岸浅水，泛泥绿（线性值；原 0.36/0.40/0.33 显示出来是一圈灰白）
     gl_FragColor.a = mix(1.0, 0.4, inL * smoothstep(0.93, 0.995, k)); // 最外 ~6m 变透，看得到水下泥底（地面着色器把岸线内外涂成湿泥）
     gl_FragColor.rgb += 0.035 * inL * smoothstep(0.985, 0.997, k) * (1.0 - smoothstep(0.997, 1.0, k)); // 水线一条细亮边（水膜反光）
-    float fr = pow(1.0 - clamp(dot(normal, normalize(vViewPosition)), 0.0, 1.0), 4.0);
+    float fr = pow(1.0 - clamp(dot(normalize(mix(normal, (viewMatrix * vec4(0.0, 1.0, 0.0, 0.0)).xyz, 0.75)), normalize(vViewPosition)), 0.0, 1.0), 4.0); // 菲涅尔用压平的法线：直接用扰动法线时，往下看也有波纹被算成贴水面，混进雾色成白斑
 #ifdef USE_FOG
     gl_FragColor.rgb = mix(gl_FragColor.rgb, mix(fogColor, vec3(0.018, 0.022, 0.014), inL * smoothstep(0.82, 0.97, k)), fr * 0.6); // 斜看映出天色；近岸映的是岸上那排深色树林（假倒影，10-31；原来近岸一圈灰白）
 #endif
@@ -771,19 +771,48 @@ float wH(vec2 p) { vec2 q = p + 3.0 * vec2(wNoise(p * 0.06 + uT * 0.03), wNoise(
     const p0 = new THREE.Vector2(x0 + 124, z0 + 244), d = new THREE.Vector2(lx - p0.x, lz - p0.y).normalize(), nrm = new THREE.Vector2(-d.y, d.x);
     const inLake = (x, z) => { const u = (x - lx) / 1.35, v = -(z - lz) / 0.85, a = Math.atan2(v, u); return Math.hypot(u, v) < lr * shoreR(a); };
     let ts = 0; while (ts < 80 && !inLake(p0.x + d.x * ts, p0.y + d.y * ts)) ts += 0.25; // 岸线离路尽头的距离
-    const wood = new THREE.MeshStandardMaterial({ color: '#6a4a2c', roughness: 0.9, flatShading: true }), dark = new THREE.MeshStandardMaterial({ color: '#4a3320', roughness: 0.9, flatShading: true });
     const wy = P.y + 0.01, dock = new THREE.Group(); dock.name = 'dock';
-    const box = (g, m, w, h, l, x, y, z) => { const o = new THREE.Mesh(new THREE.BoxGeometry(w, h, l), m); o.position.set(x, y, z); o.castShadow = o.receiveShadow = true; g.add(o); return o; };
-    const L = 11, W = 1.7; // 局部 +x 沿码头往湖里，+z 是右手边
-    for (let i = 0; i < 22; i++) box(dock, i % 3 ? wood : dark, 0.5, 0.08, W, 0.25 + i * 0.5 - 3, wy + 0.5, 0); // 横铺的木板
-    for (const s of [-1, 1]) { box(dock, dark, L + 3, 0.12, 0.14, (L - 3) / 2, wy + 0.42, s * (W / 2 - 0.1));
-      for (let i = 0; i < 5; i++) box(dock, dark, 0.2, 2.2, 0.2, -2.8 + i * 3.2, wy - 0.55, s * (W / 2 - 0.1)); } // 两侧纵梁 + 桩（桩插进水里）
+    // 11-09 按参考（湖边手搭的低矮木栈）重做：离水很低，一路略弯、走到头往左拐；木板宽窄长短不一、有的翘有的换过，桩子粗细高低不齐
+    const R = rng(211), DW = woodMats(), deckY = wy + 0.3, W = 1.35, LT = 13.4, DS = 0.05, PT = [[-2.6, 0]], up = new THREE.Vector3(0, 1, 0), ss = THREE.MathUtils.smoothstep;
+    const planks = [], patched = [], logs = [], heading = (s) => 0.03 + 0.05 * Math.sin(s * 0.7) - 1.0 * ss(s, 8.2, 10);
+    for (let s = DS; s <= LT + DS; s += DS) { const q = PT[PT.length - 1], h = heading(s); PT.push([q[0] + Math.cos(h) * DS, q[1] + Math.sin(h) * DS]); }
+    const at = (s) => PT[Math.min(PT.length - 1, Math.round(s / DS))];
+    const side = (s, off) => { const q = at(s), h = heading(s); return [q[0] - Math.sin(h) * off, q[1] + Math.cos(h) * off]; };
+    const log = (a, b, r0, r1 = r0, n = 7) => { const A = new THREE.Vector3(...a), B = new THREE.Vector3(...b), v = B.clone().sub(A), g = new THREE.CylinderGeometry(r1, r0, v.length(), n, 1); g.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(up, v.clone().normalize())); g.translate((A.x + B.x) / 2, (A.y + B.y) / 2, (A.z + B.z) / 2); logs.push(g); };
+    for (let s = 0.08; s < LT;) { const w = 0.17 + R() * 0.09, h = heading(s), q = side(s, (R() - 0.5) * 0.14), len = W + (R() - 0.5) * 0.34;
+      if (s < 6 || R() > 0.05) { const g = new THREE.BoxGeometry(w, 0.05, len), uv = g.attributes.uv, du = Math.floor(R() * 4); for (let i = 0; i < uv.count; i++) uv.setX(i, uv.getX(i) + du);
+        g.rotateX((R() - 0.5) * 0.04); g.rotateZ((R() - 0.5) * 0.03); g.rotateY(-h + (R() - 0.5) * 0.07); g.translate(q[0], deckY + (R() - 0.5) * 0.022, q[1]); (R() < 0.2 ? patched : planks).push(g); }
+      s += w + 0.012 + R() * 0.03; }
+    const rows = []; for (let s = 0.3; s < LT - 0.1; s += 1.5 + R() * 0.6) rows.push(s); rows.push(LT - 0.08);
+    let prev = null;
+    rows.forEach((s, k) => { const off = W / 2 + 0.05, last = k === rows.length - 1, row = [-1, 1].map((sg) => { const q = side(s, sg * (off + R() * 0.04)), r = 0.07 + R() * 0.035, tall = last || R() < 0.3, top = deckY + (tall ? 0.22 + R() * 0.42 : -0.05 + R() * 0.04), lx1 = (R() - 0.5) * 0.09, lz1 = (R() - 0.5) * 0.09;
+        log([q[0] - lx1, -1.6, q[1] - lz1], [q[0] + lx1 * 0.5, top, q[1] + lz1 * 0.5], r * 1.15, r * 0.9); return q; });
+      log([row[0][0], deckY - 0.1, row[0][1]], [row[1][0], deckY - 0.1 + (R() - 0.5) * 0.03, row[1][1]], 0.05, 0.045);
+      if (prev) [0, 1].forEach((i) => log([prev[i][0], deckY - 0.075, prev[i][1]], [row[i][0], deckY - 0.075, row[i][1]], 0.05, 0.042));
+      prev = row; });
+    const patch = propMat(cabinMap('partition_weathered_planks') || new THREE.Texture(), { rep: [0.3, 1], color: 0x9a8a7c });
+    for (const [gs, m] of [[planks, DW.planks], [patched, patch], [logs, DW.bark]]) { const o = new THREE.Mesh(mergeGeometries(gs), m); o.castShadow = o.receiveShadow = true; dock.add(o); }
     dock.position.set(p0.x + d.x * (ts - 0.0), 0, p0.y + d.y * (ts - 0.0)); dock.rotation.y = -Math.atan2(d.y, d.x); scene.add(dock);
-    const hs = new THREE.Shape(); hs.moveTo(-2.4, 0); hs.quadraticCurveTo(-0.7, 1.4, 1.8, 0.0); hs.quadraticCurveTo(-0.7, -1.4, -2.4, 0); // 船体俯视：船头在 +x。10-31 按真实划艇：长 4.2m、宽 1.4m（二次曲线最宽处 = 控制点的一半；原 3.7×0.85m）
-    const hullG = new THREE.ExtrudeGeometry(hs, { depth: 0.6, bevelEnabled: false }).rotateX(-Math.PI / 2);
+    // 11-09 按参考（瑞典北部湖区的尖头划艇）重做：两头收尖翘起，木板一层压一层（每列木板下沿比上沿外凸），船身是空的，里面有肋骨、坐板、底板和两支桨。船身坐标：x 沿船长、y 朝上、z 朝船舷，水面在 y 0.2
+    const HL = 2.3, BM = 0.62, HT = 0.54, NST = 6, NU = 44, FLOOR = 0.235, PI2 = Math.PI / 2;
+    const hullAt = (u, v) => { const a = Math.abs(u), keel = 0.14 * a ** 4, sheer = HT + 0.34 * a ** 3; return [u * HL * (1 + 0.06 * v * a ** 4), keel + (sheer - keel) * v, BM * Math.pow(Math.max(0, 1 - a ** 2.3), 0.85) * Math.pow(Math.sin(v * PI2), 0.7)]; };
+    const widthAt = (u, y) => { const a = Math.abs(u), keel = 0.14 * a ** 4, sheer = HT + 0.34 * a ** 3, v = Math.max(0, Math.min(1, (y - keel) / (sheer - keel))); return hullAt(u, v)[2]; };
+    const strakes = [], trim = [], seats = [];
+    for (const sg of [-1, 1]) for (let i = 0; i < NST; i++) { const pos = [], uv = [], idx = [];
+      for (let k = 0; k <= NU; k++) { const u = -0.998 + 1.996 * k / NU; for (let r = 0; r < 2; r++) { const p = hullAt(u, (i + r) / NST); pos.push(p[0], Math.max(p[1], 0.19), sg * (p[2] + (r ? 0 : 0.014 * Math.min(1, p[2] * 8)))); /* 水面以下压平：水是半透明的，透出整个船底看着像浮在水上 */ uv.push(i * 0.37 + r * 0.16, u * 1.4); } }
+      for (let k = 0; k < NU; k++) { const a = k * 2, b = a + 1, c = a + 2, d = a + 3; idx.push(a, c, b, b, c, d); }
+      const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); g.setIndex(idx); g.computeVertexNormals(); strakes.push(g); }
+    const tube = (pts, r, n = 20, rad = 5) => trim.push(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts.map((p) => new THREE.Vector3(...p))), n, r, rad));
+    for (const sg of [-1, 1]) { const rail = []; for (let k = 0; k <= 30; k++) { const p = hullAt(-0.99 + 1.98 * k / 30, 1); rail.push([p[0], p[1] + 0.008, sg * (p[2] + 0.012)]); } tube(rail, 0.026, 44); tube([0.08, 0.14, 0.2].map((_, j) => { const p = hullAt(0.02, 1); return [p[0] + (j - 1) * 0.11, p[1] + 0.05, sg * p[2]]; }), 0.012, 4, 4); }
+    for (const e of [-1, 1]) { const st = []; for (let j = 0; j <= 8; j++) { const p = hullAt(e * 0.998, j / 8); st.push([p[0] + e * 0.012, Math.max(p[1] + j * 0.01, 0.19), 0]); } tube(st, 0.03, 12); }
+    for (let j = 0; j < 9; j++) { const u = -0.78 + 1.56 * j / 8, pts = []; for (let i = 0; i <= 8; i++) { const p = hullAt(u, 1 - i / 8); pts.push([p[0], p[1] + 0.012, 0.975 * p[2]]); } for (let i = 1; i <= 8; i++) { const p = hullAt(u, i / 8); pts.push([p[0], p[1] + 0.012, -0.975 * p[2]]); } tube(pts, 0.014, 18, 4); }
+    for (const u of [-0.42, 0.02, 0.46]) { const w = widthAt(u, 0.5) * 2 * 0.97, g = new THREE.BoxGeometry(0.22, 0.035, w); g.translate(u * HL, 0.5, 0); seats.push(g); }
+    { const pos = [], uv = [], idx = []; for (let k = 0; k <= 24; k++) { const u = -0.93 + 1.86 * k / 24, w = widthAt(u, FLOOR) * 0.99; for (const s of [-1, 1]) { pos.push(u * HL, FLOOR, s * w); uv.push(s * 0.5, u * 1.5); } } for (let k = 0; k < 24; k++) { const a = k * 2; idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2); } const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2)); g.setIndex(idx); g.computeVertexNormals(); seats.push(g); } // 底板盖住船里的水面（湖面是一整张平面，不盖会从船底透上来）
+    logs.length = 0; const blades = [];
+    for (const [hx, hz, ex, ez] of [[1.2, 0.26, -1.45, -0.1], [1.05, -0.3, -1.5, 0.14]]) { const y0 = 0.56, y1 = 0.6, a = new THREE.Vector3(hx, y0, hz), b = new THREE.Vector3(ex, y1, ez), v = b.clone().sub(a).normalize(); log([hx, y0, hz], [ex, y1, ez], 0.022, 0.018, 6); const g = new THREE.BoxGeometry(0.13, 0.46, 0.012); g.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(up, v)); g.translate(b.x + v.x * 0.2, b.y + v.y * 0.2, b.z + v.z * 0.2); blades.push(g); }
+    const pm = cabinMap('partition_weathered_planks') || new THREE.Texture(), hullM = propMat(pm, { rep: [0.3, 1], color: 0x6b5a4b }), trimM = propMat(pm, { rep: [0.3, 1], color: 0x463a30 }); hullM.side = THREE.DoubleSide;
     const boat = new THREE.Group(); boat.name = 'boat';
-    const hull = new THREE.Mesh(hullG, new THREE.MeshStandardMaterial({ color: '#5d4630', roughness: 0.85, flatShading: true })); hull.castShadow = true; boat.add(hull);
-    for (const bx of [-1.0, 0.35]) box(boat, wood, 0.28, 0.06, 1.15, bx, 0.48, 0);
+    for (const [gs, m] of [[strakes, hullM], [trim, trimM], [seats, DW.planks], [[...logs, ...blades], DW.pale]]) { const o = new THREE.Mesh(mergeGeometries(gs), m); o.castShadow = true; o.receiveShadow = true; boat.add(o); }
     boat.position.set(dock.position.x + d.x * 7 + nrm.x * 2.0, wy - 0.2, dock.position.z + d.y * 7 + nrm.y * 2.0); boat.rotation.y = -Math.atan2(d.y, d.x) + 0.04; scene.add(boat);
     WATER.dock = [dock.position.x, dock.position.z]; WATER.dockDir = [d.x, d.y]; OUTDOOR.push(dock, boat);
   }
