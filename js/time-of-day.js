@@ -139,7 +139,7 @@ float stoveK( vec3 P ) {
   vec3 L = vec3( 1.4, 0.62, -1.3 ), d = P - L;
   if ( P.y > 2.35 ) return 0.0;
   if ( P.x > 1.13 && P.x < 1.67 && P.y > 0.13 && P.y < 0.87 && P.z > -1.62 && P.z < -1.22 ) return 1.0;
-  if ( d.z <= 1e-4 ) return 0.05;
+  if ( P.z <= -1.19 ) return 0.05; // 炉门面以后（炉底、炉身两侧、背后）光出不去；只判 d.z > 0 的话，炉底 z 在 -1.3 到 -1.19 之间的柴会算成从炉门照到
   vec3 E = L + d * ( -1.19 - L.z ) / d.z;
   float o = smoothstep( 1.28, 1.32, E.x ) * ( 1.0 - smoothstep( 1.58, 1.62, E.x ) ) * smoothstep( 0.42, 0.46, E.y ) * ( 1.0 - smoothstep( 0.77, 0.81, E.y ) );
   if ( d.x > 1e-4 ) {
@@ -170,6 +170,7 @@ float roomUnder( vec3 P ) {
     if ( P.y < 0.34 ) u *= 1.0 - 0.65 * rampUp( 1.32, 1.0, length( ( P.xz - vec2( -0.125, -0.655 ) ) / vec2( 0.385, 0.33 ) ) );
   }
   if ( uRoomK.x > 0.0 && P.y > 0.1 && P.y < 1.14 && P.x > 1.3 ) u *= 1.0 - 0.8 * uRoomK.x * rampUp( -0.6, -0.54, P.z ) * rampUp( 0.66, 0.6, P.z );
+  if ( P.y < 0.36 ) u *= 1.0 - 0.9 * rampUp( 1.08, 1.16, P.x ) * rampUp( 1.72, 1.64, P.x ) * rampUp( -1.7, -1.62, P.z ) * rampUp( -1.14, -1.22, P.z ); // 铸铁炉底下：炉身挡住所有灯 放在最后，前面的分支会给 u 重新赋值
   return u;
 }
 // 屋内按房间查表（尺寸来自 glb 射线实测）：阁楼楼板 y 2.2、南隔墙 z 0.775、卫生间隔墙 x -0.575、门帘 x 0.64。0 客厅 1 大厅 2 玄关 3 卫生间 4 阁楼 5 大厅上半截（高过楼板，楼下的灯照不到）

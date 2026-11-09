@@ -730,6 +730,7 @@ float wNoise(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 *
 float wH(vec2 p) { vec2 q = p + 3.0 * vec2(wNoise(p * 0.06 + uT * 0.03), wNoise(p * 0.06 + 7.3 - uT * 0.025));
   return 0.10 * wNoise(q * 0.35 + uT * vec2(0.21, 0.13)) + 0.05 * wNoise(q * 0.9 - uT * vec2(0.17, 0.29)) + 0.025 * wNoise(q * 2.3 + uT * vec2(-0.4, 0.3)); }
 ` + s.fragmentShader
+      .replace('#include <lights_fragment_end>', '#include <lights_fragment_end>' + String.fromCharCode(10) + 'reflectedLight.directSpecular *= 1.0 - smoothstep(0.1, 0.28, dot(normalize((viewMatrix * vec4(0.0, 1.0, 0.0, 0.0)).xyz), normalize(vViewPosition)));') // 太阳波光只在远处贴水面看时才有；近处往下看时，扰动的法线会把阳光反成大块白斑
       .replace('#include <normal_fragment_maps>', `#include <normal_fragment_maps>
   float wAmp = mix(0.12, 1.0, smoothstep(0.3, 0.75, wNoise(vWP.xz * 0.012 + vec2(uT * 0.006, -uT * 0.004))));
   float h0 = wH(vWP.xz), hx = wH(vWP.xz + vec2(0.15, 0.0)), hz = wH(vWP.xz + vec2(0.0, 0.15));
@@ -1885,7 +1886,7 @@ loader.load('cabin.glb', async (gltf) => {
   shared.sunRig = { center, r }; // 太阳位置由 applySky 按时刻算
   precipHole(center, box.max.y);
   setupRoofWeather();
-  indoorShade(model);
+  indoorShade(model); softenCandles(model);
   setupWaterFx();
   sun.target.position.copy(center);
   const s = sun.shadow.camera, sr = Math.max(r, 9.5); s.left = s.bottom = -sr; s.right = s.top = sr; s.near = 0.1; s.far = r * 5; // sr：罩到门前开场站位（z 8.4），两人的影子才画得出来
@@ -3169,6 +3170,14 @@ async function messyBed() {
     parts.push(g.applyMatrix4(o.matrixWorld)); });
   const g = mergeGeometries(parts).applyMatrix4(lin.matrixWorld.clone().invert()), m = lin.material.clone();
   m.side = THREE.DoubleSide; m.vertexColors = true; lin.geometry = g; lin.material = m; g.computeBoundsTree(); indoorShade(lin);
+}
+// 壁灯的点光源贴在蜡烛上方几厘米，按平方反比把蜡烛照成一片死白：蜡烛受的直射光压缩一下，保留上亮下暗；模型里的火苗只有 2–4cm 高，放大到看得见
+function softenCandles(root) {
+  const seen = new Set(), c = new THREE.Vector3();
+  root.traverse((o) => { if (!o.isMesh) return; const m = o.material, n = m.name || '';
+    if (/candle_wax/.test(n) && !seen.has(m)) { seen.add(m); const prev = m.onBeforeCompile;
+      m.onBeforeCompile = (s, r) => { prev.call(m, s, r); s.fragmentShader = s.fragmentShader.replace('#include <lights_fragment_end>', '#include <lights_fragment_end>' + String.fromCharCode(10) + 'reflectedLight.directDiffuse /= 1.0 + reflectedLight.directDiffuse / 0.55; reflectedLight.directSpecular *= 0.2;'); }; m.needsUpdate = true; }
+    if (/flame_(core|outer)/.test(n)) { const g = o.geometry; g.computeBoundingBox(); g.boundingBox.getCenter(c); const y = g.boundingBox.min.y; g.translate(-c.x, -y, -c.z).scale(1.7, 1.7, 1.7).translate(c.x, y, c.z); } });
 }
 function d2Canvas(w, h, draw) { const c = document.createElement('canvas'); c.width = w; c.height = h; draw(c.getContext('2d'), w, h); const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t; }
 // 刻记（d2_blaze）：先画一张高度图——树皮长回来的一圈隆起、削掉树皮后的凹面、刀刻的 V 形槽——再由它出颜色图、法线图和网格位移（槽真的凹下去、边上一圈真的鼓出来，低角度看有明暗）；512×768，第 2 天起建一次
