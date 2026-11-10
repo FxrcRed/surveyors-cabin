@@ -28,7 +28,7 @@ if (navigator.webdriver || /[?&]nolock\b/.test(location.search)) { let el = null
   #loader { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; background: var(--paper); transition: opacity .6s; z-index: 10; }
   #loader.done { opacity: 0; pointer-events: none; }
   #loader :is(#startBtn, #retryBtn) { font: inherit; font-size: var(--fs-m); letter-spacing: 2px; color: inherit; background: none; box-shadow: none; border: 1px solid currentColor; border-radius: 6px; padding: 6px 26px; cursor: pointer; }
-  #loader #retryBtn { min-height: 44px; } #ldLine { max-width: min(30em, calc(100vw - 48px)); text-align: center; line-height: 1.6; } #ldSub { font-size: var(--fs-s); opacity: .6; letter-spacing: 1px; }
+  #loader #retryBtn { min-height: 44px; } #ldLine { max-width: min(30em, calc(100vw - 48px)); text-align: center; line-height: 1.6; } #ldLine .ch { font-size: 1.7em; letter-spacing: 6px; margin-bottom: 14px; } #ldSub { font-size: var(--fs-s); opacity: .6; letter-spacing: 1px; }
   #bar { width: min(320px, 70vw); height: 6px; background: #e2d8c8; border-radius: 3px; overflow: hidden; }
   #bar > div { height: 100%; width: 0; background: var(--accent); transition: width .2s; }
   #loader.dark { background: #000; color: #d9d2c4; } #loader.dark #pct { display: none; } #loader.dark #bar { height: 1px; background: rgba(217,210,196,.15); } #loader.dark #bar > div { background: rgba(217,210,196,.55); } /* 换天刷新：黑场，接上一页压黑的 #veil（UX5） */
@@ -296,8 +296,8 @@ if (navigator.webdriver || /[?&]nolock\b/.test(location.search)) { let el = null
 <div id="loader"><div id="ldLine"></div><div id="ldSub"><span class="en">Three days · about 20 minutes</span><span class="zh">三天 · 约 20 分钟</span></div><div id="bar"><div></div></div><div id="pct">0%</div></div>
 <script>/* 试玩：?day=2 / ?day=3 写一份「前一夜记录读完」的存档（同无头 day2.py / day3.py），直接从那天早上开始；会覆盖真存档，只在本机 / 局域网或带 &debug 时生效（11-05 评审 #6：原来发布版也认） */ try { const d = +(location.search.match(/[?&]day=([23])\b/) || [])[1]; if (d && (/^(localhost|127\.|\[::1\]|10\.|172\.|192\.168\.)/.test(location.hostname) || /[?&]debug\b/.test(location.search))) { const f = ['opening', 'fire', 'letter', 'map', 'drawer', 'coat', 'boots', 'lantern', 'log', 'took', 'journal', 'notes1'].concat(d === 3 ? ['d2block', 'd2stake', 'd2blaze', 'd2cairn', 'd2light', 'log2', 'notes2'] : []); localStorage.setItem('cabin.game.v1', JSON.stringify({ day: d, found: f })); sessionStorage.setItem('cabin.nextDay', '1'); } } catch (e) { /* 存不了就照常从存档开始 */ }</script>
 <script>try { const rd = (f) => { try { return f(); } catch (e) { return null; } }, K = 'cabin.game.v1', s = rd(() => localStorage.getItem(K)) || rd(() => sessionStorage.getItem(K)) || (window.name.startsWith(K + '=') ? window.name.slice(K.length + 1) : null); // 同 SAVE.get：local 禁了也读得到（r3 #6）
-  const g = /[?&]reset/.test(location.search) ? {} : JSON.parse(s || '{}') || {}, t = g.found && g.found.includes('ended') ? null : g.day >= 3 ? ['The third morning. Still the fog has not lifted…', '第三天早上。雾还是没有散……'] : g.day === 2 ? ['The second morning. The fog came down in the night…', '第二天早上。夜里起的雾还没有散……'] : null; // 加载页按存档的天数换字
-  if (t) { document.getElementById('ldLine').innerHTML = `<span class="en">${t[0]}</span><span class="zh">${t[1]}</span>`; document.getElementById('ldSub').hidden = true; }
+  const g = /[?&]reset/.test(location.search) ? {} : JSON.parse(s || '{}') || {}, t = g.found && g.found.includes('ended') ? null : g.day >= 3 ? ['The Third Day', '第三天', 'The inspector says I was mistaken. I was not mistaken.', '稽查说是看错了。我没有看错。'] : g.day === 2 ? ['The Second Day', '第二天', 'Tomorrow the inspector will go out, east-north-east.', '明天稽查会出门，往东北偏东。'] : null; // 第 2、3 天的加载页是章节卡（11-10，动机评审 #3）：大字第几天 + 昨晚记录的最后一句（悬念接到第二天，原来是一句讲雾的话）+ 小字说进度存了（换天是最容易关网页的地方）
+  if (t) { document.getElementById('ldLine').innerHTML = `<div class="ch"><span class="en">${t[0]}</span><span class="zh">${t[1]}</span></div><span class="en">${t[2]}</span><span class="zh">${t[3]}</span>`; document.getElementById('ldSub').innerHTML = '<span class="en">Your place is kept. Close this, and it will wait for you.</span><span class="zh">进度已存，关掉也能接着来。</span>'; }
   if (sessionStorage.getItem('cabin.nextDay')) document.getElementById('loader').classList.add('dark'); } catch (e) { /* 读不到存档就用第 1 天那句 */ }</script>
 <script>/* 不认 importmap（iOS 16.4 以下）：整页起不来，加载页换成升级提示（r3 #8；不引 shim，shim 要联外网） */ if (!(window.HTMLScriptElement && HTMLScriptElement.supports && HTMLScriptElement.supports('importmap'))) { document.getElementById('ldLine').innerHTML = '<span class="en">This browser is too old to open it. Please update to iOS 16.4 or later, or use a newer browser.</span><span class="zh">这个浏览器太旧，打不开。请升级到 iOS 16.4 以上，或换用新版浏览器。</span>'; for (const id of ['ldSub', 'bar', 'pct']) document.getElementById(id).hidden = true; }</script>
 <div id="title"><h1><span class="en">The Surveyor's Cabin</span><span class="zh">无名测绘员的遗稿</span></h1></div>
@@ -5042,6 +5042,9 @@ function floorAt(x, z) { // 门廊地板高（从 1.4m 往下找，别打到门�
   return h ? h.point.y : ground.position.y;
 }
 function sliceEye() { const [x, z] = SL.man; return new THREE.Vector3(x, floorAt(x, z) + 1.62 * 0.94, z - 0.12 * 0.94); } // 同 updateFP 的眼睛：眼高 1.62×scale、朝门往前 12cm
+// 开场飞完不让玩家自己找路：跟着书记员走进屋（她一路开灯），停在书桌那页纸前、低头看着它（11-10）。第一件怪事原来估真人 2 分钟、只会点鼠标的新手 8 分钟才碰到（动机评审 #2、新手评审 #1 #3）；
+// 走的是触屏「点哪走到哪」那套 fpGo，按 WASD / 点地面随时接管，跳过开场的不带。站点离她停的书架前 ≥0.9m（再近她会让开走掉），她落在画面右边缘外（人物近景不好看）
+const WALK_IN = [-0.6, -0.3, null, false, [Math.atan2(-0.81, -0.81), -0.6]]; // [x, z, 不点物件, 楼下, [朝向, 俯仰]]：朝向 = 站点指向那页纸（-1.41, -1.11）
 function sliceStart() {
   const m = people.get('person_man'), w = people.get('person_woman');
   if (!m) { setTimeout(sliceStart, 200); return; } // 人物还没载完
@@ -5176,14 +5179,18 @@ function sliceTick(dt) {
     SL.room = rn; inside = rn ? ROOMS.find((r) => r.name === rn) : null;
     if (rn) game.entered = true;
     if (STOVE_ROOMS.includes(rn)) game.stoveSeen = true;
-    if (rn === 'Entry' && !SL.seen.has(rn) && !touchFP) { const P = fp.p.root.position; fp.turn = { yaw: Math.atan2(1.2 - P.x, 1.25 - P.z), pitch: -0.05, t: 0, name: null }; } // 电脑第一次进玄关：转向东边通屋里的过道口（帘子在 x 0.64），不脸贴衣钉墙（11-05 评审 #5）
+    if (rn === 'Entry' && !SL.seen.has(rn) && !touchFP && !fp.go) { const P = fp.p.root.position; fp.turn = { yaw: Math.atan2(1.2 - P.x, 1.25 - P.z), pitch: -0.05, t: 0, name: null }; } // 电脑第一次进玄关：转向东边通屋里的过道口（帘子在 x 0.64），不脸贴衣钉墙（11-05 评审 #5）
     if (rn && !SL.seen.has(rn)) { SL.seen.add(rn); saveGame(); if (ROOM_NOTES[rn]) showRoomNote(ROOM_NOTES[rn], rn); } // 每间只说一次（走来走去不重复）
     showQuest();
   }
   const w = people.get('person_woman');
   if (!fp.paused) SL.liveT += 0.3;
-  if (w && SL.w === 'porch' && (SL.liveT > 1.5 || rn)) { // 玩家一拿到操作她就先进屋领路：进门往右穿过帘子、一路开灯，站到书架前看着书桌（评审④ v2 #2：原来等他进门 6 秒才跟，玄关成了死角；不站路点 sw，挡稽查的路；之后照白天的样子在楼下转）
-    SL.w = 'in'; w.tasks = [['walk', ...SL.door[0]], ['walk', ...SL.door[1]], ...goTasks(w, ...SL.door[1], 'entry'), ...lampTasks('ceiling_light_entry'), ...goTasks(w, ...NAV.entry, 'hall'), ...lampTasks('hall_pendant_south'), ...lampTasks('hall_pendant_north'), ...goTasks(w, ...NAV.hall, 'ne'), ...lampTasks('ceiling_light_living'), ...goTasks(w, ...NAV.ne, 'books'), ['walk', ...NAV.books], ['face', -1.4, -1.15]]; w.roam = 25; w.next = 8;
+  if (SL.auto && SL.auto.go && fp.go !== SL.auto.go) SL.auto = null; // 走到了，或者玩家按键 / 点地面接管了
+  if (SL.auto && !SL.auto.go && w && SL.w === 'in' && fp.p.root.position.z - w.root.position.z > 2) { fpGo(...WALK_IN); fp.go.follow = w; SL.auto.go = fp.go; } // 让她先走出 2m 再跟上
+  if (w && SL.w === 'porch' && (SL.liveT > 1.5 || rn || SL.auto)) { // 玩家一拿到操作她就先进屋领路：进门往右穿过帘子、一路开灯，站到书架前看着书桌（评审④ v2 #2：原来等他进门 6 秒才跟，玄关成了死角；不站路点 sw，挡稽查的路；之后照白天的样子在楼下转）
+    const A = SL.auto, lt = (n) => (A ? [['lamp', n]] : lampTasks(n)); // 带玩家进屋（SL.auto）：屋里三盏灯路过就亮，不停下抬手（原来她在过道口停 7 秒，玩家贴着她后背等）；门口那盏照旧抬手开，玩家在门外 2m 看着亮起来
+    const end = A ? [...goTasks(w, ...NAV.ne, 'dish'), ['walk', ...NAV.dish], ['face', NAV.dish[0], -1.9]] : [...goTasks(w, ...NAV.ne, 'books'), ['walk', ...NAV.books], ['face', -1.4, -1.15]]; // 带玩家进屋时她停在东边柜子前：停在书架前会贴着画面右边露出半个身子（人物近景不好看）
+    SL.w = 'in'; w.tasks = [['walk', ...SL.door[0]], ['walk', ...SL.door[1]], ...goTasks(w, ...SL.door[1], 'entry'), ...lampTasks('ceiling_light_entry'), ...goTasks(w, ...NAV.entry, 'hall'), ...lt('hall_pendant_south'), ...lt('hall_pendant_north'), ...goTasks(w, ...NAV.hall, 'ne'), ...lt('ceiling_light_living'), ...end]; w.roam = 25; w.next = 8;
   }
 }
 // 触屏：单指拖动转头（拖世界：手指往右，视线往左），轻点（<600ms、移动 <10px）= 走过去
@@ -5287,6 +5294,8 @@ function fpSteer(r, dt) { // 返回这一帧往哪走（单位向量），到了
   const g = fp.go, P = r.position;
   if (g.last) g.stuck = Math.hypot(P.x - g.last[0], P.z - g.last[1]) < WALK_SPEED * r.scale.x * g.dt * 0.25 ? g.stuck + dt : 0;
   g.last = [P.x, P.z]; g.dt = dt;
+  if (g.follow) { const q = g.follow, d = Math.hypot(q.root.position.x - P.x, q.root.position.z - P.z); // 跟着领路的人走（开场走进屋）：贴近了站住等她，她走开 2.1m 再跟上；她领完路就不管了
+    if (!q.tasks.length) g.follow = null; else if (d < (g.hold ? 2.1 : 1.6)) { g.hold = true; g.stuck = 0; return null; } else g.hold = false; }
   if ((g.chk -= dt) < 0 && !(g.lad && g.nav)) { g.chk = 0.25; while (g.pts.length > 1 && fpClear(P.x, P.y, P.z, ...g.pts[1], g.act && g.pts.length === 2 ? 0.7 : 0)) g.pts.shift(); } // 下一个点看得见就跳过这个，路不绕
   if (g.act && fpNear(g.act.box, P) < g.act.reach) return fpArrive();
   let dx, dz, d;
@@ -5313,7 +5322,7 @@ function fpTouchTick(dt) {
   const t = fp.turn; if (!t) return;
   const k = Math.min(1, dt * 6); t.t += dt;
   fp.yaw += angDiff(fp.yaw, t.yaw) * k; fp.pitch += (t.pitch - fp.pitch) * k;
-  if (t.t < 0.45 || (!t.name && t.t < 1.5 && Math.abs(angDiff(fp.yaw, t.yaw)) > 0.02)) return; // 房间导览的朝向转到位再停（0.45 秒只转到 93%，玄关偏 7° 衣帽架出画）
+  if (t.t < 0.45 || (!t.name && t.t < 1.5 && (Math.abs(angDiff(fp.yaw, t.yaw)) > 0.02 || Math.abs(t.pitch - fp.pitch) > 0.02))) return; // 房间导览的朝向转到位再停（0.45 秒只转到 93%，玄关偏 7° 衣帽架出画）
   fp.turn = null; if (!t.name) return;
   if (toggleOf(t.name)) toggle(t.name);
   select(t.name);
@@ -5572,7 +5581,7 @@ function endIntro(skip) {
   if (!intro) return;
   if (!opening) enterBtn.classList.remove('wait'); // 开场字幕先播完了：endOpening 那时还在飞，没放出「进屋」
   const { homePos, homeTgt } = intro;
-  if (intro.slice) { if (intro.m) intro.m.root.visible = true; intro = null; if (skip) openingCard(); sliceStart(); return; } // 切片：直接交给玩家（跳过也一样，镜头跳到门廊）
+  if (intro.slice) { if (intro.m) intro.m.root.visible = true; intro = null; if (skip) openingCard(); sliceStart(); if (!skip && fp && game.day === 1 && !game.entered) SL.auto = {}; return; } // SL.auto：飞完没跳过，接着被带进屋（sliceTick） // 切片：直接交给玩家（跳过也一样，镜头跳到门廊）
   intro = null; if (skip) openingCard(); controls.enabled = true; spin = true; spinK = skip ? 0 : 1; // 开场结束就绕小屋转着展示
   camera.fov = FOV1; camera.updateProjectionMatrix();
   if (skip) fly = { t: 0, fromPos: camera.position.clone(), fromTgt: controls.target.clone(), toPos: homePos, toTgt: homeTgt };
