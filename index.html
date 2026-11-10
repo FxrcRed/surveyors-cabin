@@ -400,6 +400,7 @@ if (navigator.webdriver || /[?&]nolock\b/.test(location.search)) { let el = null
   <p>I have banked the fire, left the door a crack, and left the lamp burning. It is how we found this house, the day we came.</p>
   <p>Tomorrow I go out of the woods alone; two days to the post-house. The report will say: <em class="k">The inspector stayed. Someone must watch it.</em></p>
   <p>The Office will send someone. One must leave them a light.</p>
+  <p data-end="page">Morning. On my desk, one page more, in his hand, dated yesterday. I did not write it. The ink is not yet dry. I have put it in with the report.</p>
   </div>
 
   <h3>Afterword</h3>
@@ -452,6 +453,7 @@ if (navigator.webdriver || /[?&]nolock\b/.test(location.search)) { let el = null
   <p>我把炉火压好，门留了条缝，灯留着。我们来的那天，这屋子就是这个样子。</p>
   <p>明天我一个人出林子，走两天到驿站。报告上我会写：<em class="k">稽查留下了。总得有人看着它。</em></p>
   <p>局里会再派人来。总得给他们留个亮处。</p>
+  <p data-end="page">早上。我桌上多了一页纸，是他的笔迹，日期是前一天。不是我写的。墨还没干。我把它夹进了报告里。</p>
   </div>
 
   <h3>后记</h3>
@@ -2575,6 +2577,7 @@ const GAME_TEXT = {
   endBack: ['Ending · Going Back', 'You back out of the door and go the way you came. Slowly the compass settles, and points north again. At the end of the fog the porch lamp is burning, the fire is lit, and the clerk is waiting in the rocking chair.\n\nShe hears you out, thinks a long while, and writes in the report: "No irregularity found. The Surveyor\'s whereabouts unknown." Then she puts his field log back on the shelf.', '你退出门，沿着来路走。罗盘慢慢停下来，指回北方。雾的尽头，门廊灯亮着，炉火在烧，书记员在摇椅上等你。\n\n她听你说完，想了很久，在报告上写：“未发现异常。测绘员下落不明。”然后把他的工作日志放回书架。'],
   endStay: ['Ending · Staying', 'You sit down under the porch of that house.\n\nBack in your own cabin, the clerk looks up from the Surveyor\'s papers, goes out under the porch, and looks to the east-north-east. Deep in the woods there is one more light.\n\nShe does not go out to look for you. She finishes that day\'s notes, and the last line reads: "The inspector stayed. Someone must watch it."', '你在那间屋的门廊下坐下。\n\n画面回到你们的小屋。书记员从遗稿上抬起头，走到门廊下，看向东北偏东。林子深处多了一盏灯。\n\n她没有出门找你。她把那天的调查记录写完，最后一行是：“稽查留下了。总得有人看着它。”'],
   endHidden: ['Hidden Ending · only when all four differences are found', 'You come back to the cabin and stamp the snow from your boots. The clerk looks at you, and says:\n\n"You didn\'t take the lantern when you went out."\n\nYou look down. Your hand is empty. The lantern hangs on its peg of the coat rail, just as it did before you left.\n\nYet you remember carrying it into the fog.', '你回到小屋，跺掉靴子上的雪。书记员看着你，说：\n\n“你出门的时候没带提灯。”\n\n你低头看。手上是空的。提灯挂在衣帽架的钉子上，和你出门前一样。\n\n可你记得，你是提着它走进雾里的。'],
+  endPage: ['Hidden Ending · only when all four differences are found', 'Next morning there is one page more on the clerk\'s desk. She did not write it. It is in the inspector\'s hand, dated the day before:\n\n"Day three. Came to the ✕ by the marks. The coat rail bare, the watch going, the fire lit, a page in her hand upon the desk. I have stayed. I have left the lamp burning."\n\nThe ink is not yet dry.', '第二天早上，书记员的桌上多了一页纸，不是她写的。是稽查的笔迹，日期是前一天：\n\n“第三天。照着记号走到 ✕。衣帽架空着，怀表在走，炉火烧着，书桌上有一页她的字。我留下了。灯我留着。”\n\n墨还没干。'], // 「留下」+ 四处齐（设计评审 #7）：和隐藏结局对等；✕ 那间桌上有她写的今天，这边桌上多一页他写的那边
 };
 const LIGHT_ROOMS = { living: 'Parlour', entry: 'Entry', toilet: 'Water Closet', loft_bed: 'Loft', loft_rocker: 'Loft' };
 function infoOf(name) {
@@ -3044,8 +3047,8 @@ function renderJournal() { // 开场一直在；找到工作日志才有序章�
       if (k3.length) add('h3', zh ? '第三天' : 'The Third Day');
       for (const k of k3) { const t = DAY3_TEXT[k]; add('h4', zh ? t[1] : t[0]); for (const para of (zh ? t[3] : t[2]).split('\n\n')) add('p', para); }
     }
-    const ends = [['end_back', 'endBack'], ['end_stay', 'endStay'], ['end_hidden', 'endHidden']], nEnd = ends.filter(([k]) => f.has(k)).length;
-    if (nEnd) { add('h3', zh ? `结局 ${nEnd}/3` : `Endings ${nEnd}/3`); for (const [k, t] of ends) add('p', f.has(k) ? END_TITLE[t][zh ? 1 : 0] : zh ? '？？' : '??', 'coda'); } // 通关后才有：没看过的写「？？」，让人知道还有别的结局（r3 #15）
+    const ends = [['end_back', 'endBack'], ['end_stay', 'endStay'], ['end_hidden', 'endHidden'], ['end_page', 'endPage']], nEnd = ends.filter(([k]) => f.has(k)).length;
+    if (nEnd) { add('h3', zh ? `结局 ${nEnd}/${ends.length}` : `Endings ${nEnd}/${ends.length}`); for (const [k, t] of ends) add('p', f.has(k) ? END_TITLE[t][zh ? 1 : 0] : zh ? '？？' : '??', 'coda'); } // 通关后才有：没看过的写「？？」，让人知道还有别的结局（r3 #15）
     if (!f.has('ended')) add('p', zh ? '还有一些纸页没找到。' : 'Some pages are still to be found.', 'coda');
   }
 }
@@ -3611,8 +3614,14 @@ const X_HIDE = ['entry_coat', 'entry_boots', 'entry_lantern']; // ✕ 那间：�
 const X_PLAIN = { // ✕ 那间旁边没有小溪、水轮（叙事 r2 #7）：门廊灯、水桶不出讲小溪的故事，换成这一句（英文；中文在 LEAD_ZH）
   'Porch Lamp': 'The porch lamp is lit. Yet here there is no sound of water.',
   'Water Bucket & Slop Pail': 'The bucket is full of clean water.',
+  'Kettle & Reservoir': 'The kettle stands upon the stovetop, and a thread of steam escapes about the lid.', // 回声（动机评审 #12）：第 1 天卡片写他在时「壶盖缝里总冒一丝白气」，那天炉子是冷的；这边真在冒（updateDay3 一直烧着）
+  'Ladder & Railing': 'The ladder stands beneath the opening, and the bar is up. No one has slid it back.', // 回声：第 1 天「他最后一次从阁楼下来，把梯子滑回了原位，把横杆放了下来」（applyX 摆好）
 };
-Object.assign(LEAD_ZH, { [X_PLAIN['Porch Lamp']]: '门廊灯亮着。可这里听不见水声。', [X_PLAIN['Water Bucket & Slop Pail']]: '桶里的干净水是满的。' });
+Object.assign(LEAD_ZH, { [X_PLAIN['Porch Lamp']]: '门廊灯亮着。可这里听不见水声。', [X_PLAIN['Water Bucket & Slop Pail']]: '桶里的干净水是满的。', [X_PLAIN['Kettle & Reservoir']]: '水壶放在炉面上，壶盖缝里冒着一丝白气。', [X_PLAIN['Ladder & Railing']]: '梯子架在阁楼口下面，横杆竖着，没有人把它滑回去。' });
+const PORCH_ECHO = { // 门廊下选之前（设计评审 #7）：头顶那盏灯就是「留下」的分量；读过日志后段的回响他那一句，没读的对照你们来的那天
+  read: ['Above you the porch lamp is burning. "…One must leave them a light."', '头顶的门廊灯亮着。“……总得给他们留个亮处。”'],
+  unread: ['Above you the porch lamp is burning, as yours was the day you came. Inside, on the bookcase, the field log is there as well.', '头顶的门廊灯亮着，和你们来的那天一样。屋里书架上，那本日志也在。'],
+};
 const x3 = { on: false, wasIn: false, spruce: null, light: null };
 window.cabinX = x3; // 调试
 const D3_CARDS = { // 图层 → [标题, 区域, 中文标题, 英, 中, 说明]
@@ -3629,7 +3638,7 @@ const X_CARDS = { // 四处不同：卡片只写看到的，不写「它说明�
   xnotes: ['Inquiry Notes', 'Parlour', '调查记录', 'A page of inquiry notes lies open on the desk, in the clerk\'s hand. It is dated today.\n\n' + GAME_TEXT.xNote[1], '书桌上摊着一页调查记录，是书记员的笔迹，写的是今天：\n\n' + GAME_TEXT.xNote[2], 'In the clerk\'s hand.'],
   xfire: ['The Fire', 'Kitchen', '炉火', 'The fire is burning in the stove. Up in the loft the rocking chair is rocking. There is no one in the house.', '炉火烧着，楼上的摇椅在摇，屋里没有人。', 'Someone keeps this fire.'],
 };
-const END_TITLE = { endBack: ['Going Back', '结局 · 回去'], endStay: ['Staying', '结局 · 留下'], endHidden: ['The Lantern', '隐藏结局'] };
+const END_TITLE = { endBack: ['Going Back', '结局 · 回去'], endStay: ['Staying', '结局 · 留下'], endHidden: ['The Lantern', '隐藏结局 · 提灯'], endPage: ['The Page', '隐藏结局 · 那页纸'] };
 const DAY3_TEXT = { // Journal「第三天」：键 → [英标题, 中标题, 英, 中]
   xarrive: ['At the ✕', '✕ 那里', GAME_TEXT.xArrive[1], GAME_TEXT.xArrive[2]],
   xcoat: ['A Bare Coat Rail', '空的衣帽架', X_CARDS.xcoat[3], X_CARDS.xcoat[4]],
@@ -3641,6 +3650,7 @@ const DAY3_TEXT = { // Journal「第三天」：键 → [英标题, 中标题, �
   end_back: [END_TITLE.endBack[0], END_TITLE.endBack[1], GAME_TEXT.endBack[1], GAME_TEXT.endBack[2]],
   end_stay: [END_TITLE.endStay[0], END_TITLE.endStay[1], GAME_TEXT.endStay[1], GAME_TEXT.endStay[2]],
   end_hidden: [END_TITLE.endHidden[0], END_TITLE.endHidden[1], GAME_TEXT.endHidden[1], GAME_TEXT.endHidden[2]],
+  end_page: [END_TITLE.endPage[0], END_TITLE.endPage[1], GAME_TEXT.endPage[1], GAME_TEXT.endPage[2]],
 };
 Object.assign(QUEST, {
   go3: ['Follow the marks through the fog, to the ✕.', '照着记号穿过雾，走到 ✕ 去。'],
@@ -3675,7 +3685,7 @@ function gameSeen3(name, title, add, got) {
     else if (title === 'Writing Desk, Chair & Wall Lamp') { add('xnotes'); over = X_CARDS.xnotes; }
     else if (title === 'Map') { add('xnotes'); over = X_MAP; }
     else if (title === 'Bookcase') { add('log3'); over = LOG3_CARD; } // 日志后段：选读，不算四处之一
-    else if (/^stove_/.test(name) || title === 'Rocking Chair' || title === 'The Fire' || title === 'Cast-Iron Stove') { add('xfire'); over = X_CARDS.xfire; }
+    else if ((/^stove_/.test(name) && title !== 'Kettle & Reservoir') || title === 'Rocking Chair' || title === 'The Fire' || title === 'Cast-Iron Stove') { add('xfire'); over = X_CARDS.xfire; }
     else if (name === 'x_light') add('xlook');
     else if (name === 'entry_porch_lamp') setTimeout(porchAsk, 300); // 鸟瞰时也能从这里选
   } else if (name === 'person_woman') { const z = STORY_ZH['The Clerk|Loft']; over = ['The Clerk', 'Parlour', z[0], STORY['The Clerk|Loft'], z[1].replace(/^[^。]*。/, ''), INFO.person_woman[2]]; }
@@ -3870,7 +3880,14 @@ function shiftWorld() { // 第 3 天离家够远（家已被雾盖住）：屋�
   if (fp) mv(fp.p.root);
   xLook(); mmDirty = true;
 }
-function applyX() { x3.on = true; x3.ground?.forEach((m) => { m.visible = true; }); shiftWorld(); xLook(); mapWall(); }
+function applyX() { x3.on = true; x3.ground?.forEach((m) => { m.visible = true; }); shiftWorld(); xLook(); mapWall(); xEcho(); }
+function xEcho() { // 回声（动机评审 #12）：第 1 天看过的人才会注意到的不同，只换同一模型的状态。梯子架在阁楼口、横杆竖着（第 1 天他滑回去、放下了）；第 1 天被「变回去」的那件（chg:），这边是玩家当时弄成的样子。水壶在 updateDay3 里一直烧
+  const snap = (n, on) => { const d = toggles.get(n); if (d) { d.on = on; d.k = on ? 1 : 0; for (const p of d.parts) p(d.k); } };
+  snap('loft_ladder', true); snap('loft_gate', false);
+  const c = [...game.found].find((k) => k.startsWith('chg:')), [, key, v] = c ? c.split(':') : [];
+  if (CHG_KEYS[key]) snap(key, v !== '1'); // 灯不算：白天看不出，灯的开关还归 LIGHT_ROOMS 管
+  shadowDirty = true;
+}
 function enterX() { // 走到那间屋的门廊下：不压黑，记一笔、一句感受
   game.found.add('xarrive'); game.snap = endFree(); saveGame(); renderJournal(); applyX(); mmDirty = true; select(null); showQuest();
   const show = () => { // 卡片晚 2.5 秒：先让门洞、门廊灯干净地停在画面里（r3 #13）；那时别的卡片、弹窗开着就等它关
@@ -3891,17 +3908,17 @@ function backToPorch() { // 通关后：回到 ✕ 门廊下那一刻（同刷�
 function porchAsk() { // ✕ 那间屋的门廊下：回去 / 留下 / 再看看
   if (!x3.on || game.found.has('ended') || !$('dlg').hidden) return;
   if (!game.found.has('xlook')) { game.found.add('xlook'); saveGame(); renderJournal(); }
-  const log = game.found.has('log3') ? ['', ''] : [' Inside, on the bookcase, the field log is there as well.', '屋里书架上，那本日志也在。']; // 叙事 r2 #3：还没读日志后段，引去书架（点「再看看」回屋就能读）
-  dialog(['Under the Other Porch', '另一间屋的门廊下'], [GAME_TEXT.xLook[1] + log[0], GAME_TEXT.xLook[2] + log[1]],
+  const log = game.found.has('log3') ? PORCH_ECHO.read : PORCH_ECHO.unread; // 叙事 r2 #3：还没读日志后段，引去书架（点「再看看」回屋就能读）
+  dialog(['Under the Other Porch', '另一间屋的门廊下'], [GAME_TEXT.xLook[1] + '\n\n' + log[0], GAME_TEXT.xLook[2] + '\n\n' + log[1]],
     [['Go Back', '回去', () => ending('back')], ['Stay', '留下', () => ending('stay')], ['Not Yet', '再看看']]);
 }
 function ending(kind) { LOG && LOG.ev('end', `结局 ${kind}`); LOG && LOG.ev('day', '第3天结束'); // 压黑、存 ended、重新载入回自己那间屋；结局文字在载入后压着画面放（endShotStart）。11-10 前是在这里黑底弹窗一张张放完才刷新
-  const hidden = kind === 'back' && X_NEED.every((k) => game.found.has(k));
+  const all = X_NEED.every((k) => game.found.has(k)), hidden = kind === 'back' && all, page = kind === 'stay' && all; // 四处齐：回去 = 提灯，留下 = 那页纸
   if (fp) stopFP();
   d2.veil = true; veilEl.style.transition = 'opacity 1.6s'; veilEl.style.zIndex = 30; veilEl.style.opacity = 1;
   setTimeout(() => {
-    game.snap = endFree(); game.found.add('end_' + kind); if (hidden) game.found.add('end_hidden'); game.found.add('ended'); // 快照更新到选结局这一刻（进 ✕ 后又找到的也带上）
-    game.found.add('endshow:' + (hidden ? 'hidden' : kind)); saveGame(); // 还没放的结局：记在存档里（不用 sessionStorage，存不进也读得到；中途关掉下次打开接着放），放完 endShotStart 里删
+    game.snap = endFree(); game.found.add('end_' + kind); if (hidden) game.found.add('end_hidden'); if (page) game.found.add('end_page'); game.found.add('ended'); // 快照更新到选结局这一刻（进 ✕ 后又找到的也带上）
+    game.found.add('endshow:' + (hidden ? 'hidden' : page ? 'page' : kind)); saveGame(); // 还没放的结局：记在存档里（不用 sessionStorage，存不进也读得到；中途关掉下次打开接着放），放完 endShotStart 里删
     location.reload();
   }, 1900);
 }
@@ -3916,8 +3933,8 @@ function endShotStart(kind) {
   fly = { t: 0, dur: E.dur, fromPos: V(E.from), toPos: V(E.to), fromTgt: V(E.tgt), toTgt: V(E.tgt), ease: (t) => t * (2 - t) }; // 越推越慢，停在 to
   const stand = () => { const w = people.get('person_woman'); if (!w) { setTimeout(stand, 300); return; } // 人物还没载完
     placeMan(w, ...E.woman, Math.atan2(D2.lamp[0] - E.woman[0], D2.lamp[2] - E.woman[1])); w.root.position.y = floorAt(...E.woman); w.roam = w.next = 1e9; }; // 脸朝那柱烟
-  if (kind === 'stay') stand();
-  const pages = (kind === 'stay' ? ['endStay'] : kind === 'hidden' ? ['endBack', 'endHidden'] : ['endBack']).flatMap((k) => { const t = GAME_TEXT[k], zh = t[2].split('\n\n'); return t[1].split('\n\n').map((p, i) => [i ? ['', ''] : END_TITLE[k], [p, zh[i] || '']]); });
+  if (kind === 'stay' || kind === 'page') stand();
+  const pages = ({ stay: ['endStay'], page: ['endStay', 'endPage'], hidden: ['endBack', 'endHidden'] }[kind] || ['endBack']).flatMap((k) => { const t = GAME_TEXT[k], zh = t[2].split('\n\n'); return t[1].split('\n\n').map((p, i) => [i ? ['', ''] : END_TITLE[k], [p, zh[i] || '']]); });
   const next = (i) => {
     if (i >= pages.length) { d.classList.remove('end'); document.body.classList.remove('endshot'); game.found.delete('endshow:' + kind); saveGame(); fly = null; controls.enabled = true; endAsk(); return; } // 镜头停在推到的地方，交还拖动（不停的话 fly 会和拖动抢相机）
     dialog(pages[i][0], pages[i][1], [[i < pages.length - 1 ? 'Continue' : 'The End', i < pages.length - 1 ? '继续' : '完', () => next(i + 1)]]); d.classList.add('end');
@@ -3963,6 +3980,7 @@ function updateDay3(dt) {
   if (x3.glow) x3.glow.visible = false;
   const w = people.get('person_woman'); if (w && w.root.visible) { w.root.visible = false; w.hit.visible = false; } // 这边屋里没有人
   const rk = toggles.get('loft_rocking_chair'); if (rk && rocker.g && rocker.t > 3) rk.click(); // 摇椅一直在摇
+  const kt = window.cabinWater?.kettle; if (kt && !kt.on) { kt.on = true; kt.t = 0; } // 水壶一直冒白气（xEcho）
   x3.light.visible = outdoors(camera.position);
   if (x3.light.visible) updatePlume(x3.light, dt, 1);
   if (!fp || d2.veil) return;
