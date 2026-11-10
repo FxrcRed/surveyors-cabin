@@ -356,14 +356,15 @@ function floorBelow(x, y, z) { // 人物走路贴地：起居室木台 0.25、�
   const h = npcRay.intersectObjects(npcFloors, false)[0]; return h ? h.point.y : null;
 }
 const _npcO = new THREE.Vector3();
-function blockedBy(p, ux, uz) { // 走的方向上正前方 0.6m、左右 0.3m 内站着别人（同一层）；坐着的不算，路线已经绕开座位，等也等不走
+function blockedBy(p, ux, uz) { // 走的方向上正前方 0.6m、左右 0.3m 内站着别人（同一层）；坐着的不算，路线已经绕开座位，等也等不走。挡路的是玩家：看前方 0.9m、左右 0.55m，返回 'player'（11-07 新6）
   const r = p.root.position;
   for (const q of people.values()) {
-    if (q === p || q.mode === 'sit') continue; const o = q.root.position, x = o.x - r.x, z = o.z - r.z, ahead = x * ux + z * uz;
-    if (Math.abs(o.y - r.y) < 1 && ahead > 0 && ahead < 0.6 && Math.abs(x * uz - z * ux) < 0.3) return true;
+    if (q === p || q.mode === 'sit') continue; const o = q.root.position, x = o.x - r.x, z = o.z - r.z, ahead = x * ux + z * uz, pl = q.player;
+    if (Math.abs(o.y - r.y) < 1 && ahead > 0 && ahead < (pl ? 0.9 : 0.6) && Math.abs(x * uz - z * ux) < (pl ? 0.55 : 0.3)) return pl ? 'player' : true;
   }
   return false;
 }
+const playerBusy = () => !document.getElementById('card').hidden || !document.getElementById('journal').hidden; // 玩家在读卡片、遗稿：挡着她的路也别挤他
 function runTask(p, dt) {
   const T = p.tasks[0], k = T[0], r = p.root, C = CLIMB_TASKS[k];
   if (!T.on && C && C.need && !C.need(p)) { p.tasks.unshift(...C.fix(p)); return; } // 条件不满足：先把要做的插到前面
@@ -403,7 +404,7 @@ function runTask(p, dt) {
     const da = shared.angDiff(r.rotation.y, k === 'turn' ? T[1] : Math.atan2(dx, dz)), lim = 4 * dt; // 模型面朝 +Z：朝向 = atan2(dx, dz)
     r.rotation.y += THREE.MathUtils.clamp(da, -lim, lim);
     if (k === 'walk') {
-      const wait = (T.wait || 0) < 1.5 && dist > 0.05 && blockedBy(p, dx / dist, dz / dist); // 前面 0.6m 内有人：原地等，最多 1.5 秒（两人互等也会各自走开）
+      const by = dist > 0.05 && blockedBy(p, dx / dist, dz / dist), wait = !!by && ((T.wait || 0) < (by === 'player' ? 6 : 1.5) || (by === 'player' && (playerBusy() || p.tasks.wander))); // 前面 0.6m 内有人：原地等，最多 1.5 秒（两人互等也会各自走开）；挡路的是玩家等 6 秒（领路、开灯要能解开互等），他在读卡片或她只是闲逛就一直等（原来 1.5 秒后硬走过去，把人挤开、镜头钻进她头里）
       if (wait !== !!T.held) { T.held = wait; p.play(wait ? MOODS.stand.idle : 'Walk_Loop', 0.3); }
       if (wait) T.wait = (T.wait || 0) + dt;
       const v = wait ? 0 : Math.min(dist, WALK_SPEED * r.scale.x * dt * (Math.abs(da) < 1 ? 1 : 0.3)); // 还没转过来先慢走
@@ -431,7 +432,7 @@ function stepPerson(id, p, dt) {
   if (p.player) return; // 玩家在操控：动作由 updateFP 管
   if (ROUTINES[id] && (p.roam -= dt) < 0) { // 隔 1–2.5 分钟自己起来去做点事；不在自己座位上（玩家退出时留在别处）就先回去
     p.roam = 70 + Math.random() * 90;
-    if (!ROUTINES[id].home && !p.home) p.tasks = shared.planWander(p); // 游戏白天的书记员：没有自己的座位，站着在楼下转
+    if (!ROUTINES[id].home && !p.home) { p.tasks = shared.planWander(p); p.tasks.wander = true; } // 游戏白天的书记员：没有自己的座位，站着在楼下转；wander：闲逛，玩家挡路就一直等（runTask）
     else if (p.mode === 'sit' && p.seat === (ROUTINES[id].home || p.home)) wakePerson(id); else goHome(p, id);
     if (p.tasks.length) return;
   }

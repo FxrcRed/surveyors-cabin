@@ -2811,7 +2811,7 @@ function gameSeen(name) { // select 里调：这次点的东西算不算线索�
 // —— 卡关提示：屋里 90 秒没找到新线索、或连点 6 样东西都没进展，就提示下一条没找到的线索；同一条最多三级 ——
 // 一级只暗示，二级说在哪，三级让那件东西一直描边到找到。找到任何线索就从一级重新算。文字在 HINTS：[[英, 中] 一级, [英, 中] 二级, 图层]
 const HINTS = {
-  page: [['Someone has left a page on the writing desk.', '有人在书桌上留了一页纸。'],
+  page: [null, // 第 1 级原来是「有人在书桌上留了一页纸」，和任务行同义（11-07 文7）：在玄关说往哪走（PAGE_WAY），已在起居室直接描边，别处先说位置（hintFire）
     ['The writing desk under the wall lamp, in the Parlour.', '起居室壁灯下的书桌。'], 'desk_page'],
   fire: [['The cold creeps into the bones. Where did his warmth come from?', '冷意往骨头里钻。这屋里的暖和是从哪儿来的？'],
     ['The iron stove on the kitchen side — look into the firebox.', '厨房那边的铁炉子——看看炉膛里。'], 'stove_firebox'],
@@ -2850,12 +2850,13 @@ function hintFire() { // 升一级并显示
   if (!key) return;
   if (key !== hint.key) { hint.key = key; hint.lvl = 0; }
   hint.lvl = Math.min(3, hint.lvl + 1); hintReset();
+  if (key === 'page') { const rm = fp ? roomAt(fp.p.root.position) : inside && inside.name; if (hint.lvl === 1 && ![null, 'Entry', 'Water Closet'].includes(rm)) hint.lvl = rm === 'Parlour' ? 3 : 2; } // 人就在起居室（开场被带到纸前）：跳到描边那级
   const h = HINTS[key], g0 = layers.get(h[2]);
   const via = hint.lvl === 3 && g0 && layers.get('entry_noren') && hintInEntry() && !HINT_ROOMS0.includes(roomAt(new THREE.Box3().setFromObject(g0).getCenter(new THREE.Vector3()))); // 人还在玄关、东西在屋里：三级先描门帘那道门洞（11-07 新手评审 #3：照「在你右边」转过去是墙）
   const t3 = hint.lvl < 3 ? null : via ? PAGE_WAY : hintThere(key);
   LOG && LOG.ev('hint', `第${hint.lvl}级 ${key}：${(t3 || h[hint.lvl - 1]).join(' / ')}`);
   if (hint.lvl === 1 && game.day === 2 && DAY2_MARKS.includes(key) && d2.over && d2.over.n === DAY2_MARKS.filter((k) => game.found.has(k)).length) { showRoomNote(D2_SAYS.passed, null, key); return; } // 已经走过那样记号：别再催往前走（评审④ v2 #6）
-  if (hint.lvl < 3) { showRoomNote(key === 'page' && hint.lvl === 1 && fp && [null, 'Entry', 'Water Closet'].includes(roomAt(fp.p.root.position)) ? PAGE_WAY : h[hint.lvl - 1], null, key); return; } // 还在玄关：第一句先说往哪走（评审④ v2 #2）
+  if (hint.lvl < 3) { showRoomNote(h[hint.lvl - 1] || PAGE_WAY, null, key); return; } // 还在玄关：第一句先说往哪走（评审④ v2 #2）
   showRoomNote(t3);
   const gn = via ? 'entry_noren' : h[2], g = layers.get(gn);
   if (g) {
@@ -4920,6 +4921,15 @@ function fpPush(r, s, upper) { // 身体周围有东西就往外推（小腿、�
     if (hit) { r.position.x -= _fpD.x * (FP.R - hit.distance); r.position.z -= _fpD.z * (FP.R - hit.distance); }
   }
 }
+function fpKeepOff(r, s) { // 身体离站着的人至少 0.6m：她的胶囊半径 0.24、身体 0.17，贴上时镜头（往前探约 12cm）离她脸不到 0.2m，满屏是脸（11-07 新6）；沿墙能挪才挪（fpTryMove）
+  for (const q of people.values()) {
+    if (q.player || q.mode === 'sit' || !q.root.visible) continue; const o = q.root.position, dx = r.position.x - o.x, dz = r.position.z - o.z, d = Math.hypot(dx, dz);
+    if (!(d < 0.6 && d > 1e-4 && Math.abs(o.y - r.position.y) < 1)) continue;
+    let ux = dx / d, uz = dz / d; const T = q.tasks[0], hx = T && T[0] === 'walk' && !T.held ? T[1] - o.x : 0, hz = T && T[0] === 'walk' && !T.held ? T[2] - o.z : 0, hl = Math.hypot(hx, hz);
+    if (hl > 0.05) { const sd = dx * -hz + dz * hx >= 0 ? 1 : -1; ux = -hz / hl * sd; uz = hx / hl * sd; } // 她在走：往她行进方向的侧面让开（原来被她顺着路推进隔壁房间）；靠墙让不开再照原样被推
+    fpTryMove(r, ux * (0.6 - d), uz * (0.6 - d), s);
+  }
+}
 function fpTrees(o) { // 树是 InstancedMesh、不进碰撞网格：按树干位置往外推（原来能直接走进树里，镜头埋在树干里一片黑）
   if (Math.abs(o.x) < 4 && Math.abs(o.z) < 4) return;
   for (let i = 0; i < TREE_XZ.length; i += 2) {
@@ -5063,7 +5073,7 @@ function updateFP(dt) {
       still = !moving && !!fp.last && r.position.distanceToSquared(fp.last) < 1e-10 && fp.ceil != null && !fpBusy(r.position); // 人和东西都没动：上一帧推挤、贴地的结果原样有效，51 条射线全省（11-05 评审 #7）
       if (!still) { const q0 = fpProbe(r.position.x, r.position.y, r.position.z);
       fpPush(r, s, Math.max(0.42 * s, Math.min(1.1 * s, q0.ceil - r.position.y - 0.3)));
-      fpTrees(r.position); fpShrubs(r.position); }
+      fpTrees(r.position); fpShrubs(r.position); fpKeepOff(r, s); }
       const w = people.get('person_woman'); // 书记员站着闲着、玩家走到 0.9m 内：提前去下一处，别堵过道和书桌（11-01 评审）
       if (w && !w.player && w.mode !== 'sit' && !w.tasks.length && w.roam > 0 && w.roam < 1e8 && Math.abs(w.root.position.y - r.position.y) < 1 && Math.hypot(w.root.position.x - r.position.x, w.root.position.z - r.position.z) < 0.9) w.roam = 0;
       if (!still) { const q = fpProbe(r.position.x, r.position.y, r.position.z);
@@ -5162,7 +5172,7 @@ function mornStart() {
   camera.fov = 72; camera.updateProjectionMatrix();
   // 起身（起床过场评审 #2）：坐着时眼睛在站起落脚点后 0.47m（头在坐垫上方），先往前下探 0.45s，再伸直 0.9s 站起来；沙发朝北（yaw π）
   const sit = new THREE.Vector3(sx, f0 + 1.01, sz + 0.47), lean = new THREE.Vector3(sx, f0 + 0.94, sz + 0.25);
-  morn = { t: 0, m, w, D, walk, L: walk.getLength(), sit, lean, yaw: Math.PI - 0.17, pitch: -0.12, P: new THREE.Vector3() };
+  morn = { t: 0, m, w, D, walk, L: walk.getLength(), sit, lean, eh, ey: null, yaw: Math.PI - 0.17, pitch: -0.12, P: new THREE.Vector3() };
   mornTick(0); // 第一帧就到沙发上（原来要等下一帧，第一帧还是鸟瞰机位，评审 #11）
   showQuest();
 }
@@ -5181,6 +5191,7 @@ function mornTick(dt) {
   if (t < 0.45) P.lerpVectors(M.sit, M.lean, smoothstep(0, 0.45, t));
   else { const u = smoothstep(0, 1, Math.min(1, (t - 0.45) / 0.9)); P.lerpVectors(M.lean, W0, u); } // 伸直：缓入缓出，上升峰速约 1 m/s（easeOutCubic 起步就 1.9 m/s，像弹起来）
   P.add(_slD.copy(M.walk.getPointAt(k)).sub(W0)); // 叠上走过的路（起身没做完就起步）
+  const fe = (floorBelow(P.x, 0.3, P.z) ?? 0.16) + M.eh; M.ey = M.ey === null ? W0.y : M.ey + (fe - M.ey) * Math.min(1, dt * 12); P.y += M.ey - M.walk.getPointAt(k).y; // 高度跟脚下地面走（同 updateFP），起居室木台下来那 12cm 在台阶边上 0.25s 内降下去；原来曲线把它摊成整段下坡（起床过场评审 #8）
   P.y += Math.sin(sd * MORN_WALK.step) * 0.012 * Math.sin(Math.PI * k); // 头部起伏：按路程、和第一人称同频；两头乘包络，到站不掉一下（评审 #6）
   if (k > 0 && k < 1) audioStep(sd * MORN_WALK.step / 2, true, false); // 脚步声（评审 #9）
   camera.position.copy(P);
@@ -5229,7 +5240,7 @@ roomList.onclick = (e) => {
   const p = fp.p; select(null);
   if (p.mode === 'sit') p.tasks = fpRise(p);
   const [x, z, yaw, pitch] = ((innerHeight > innerWidth || (touchFP && b.dataset.room === 'Entry')) && ROOM_GO_TALL[b.dataset.room]) || ROOM_GO[b.dataset.room]; // 触屏横屏的玄关也用退到门边那组（交互 r4 #2：原来朝东墙）
-  fpGo(x, z, null, b.dataset.room === 'Loft', [yaw * Math.PI / 180, pitch]);
+  fpGo(x, z, null, b.dataset.room === 'Loft', [yaw * Math.PI / 180, pitch]); if (fp.go) { fp.go.tour = b.dataset.room; SL.tour = { room: b.dataset.room, x, z }; } // tour：导览目的地，路过的房间不念旁白，走到了念目的地（sliceTick，11-07 新4）
 };
 function roomNavSync() { // 每帧（updateFP）：进过屋、不在梯子上才显示
   const on = !!fp && touchFP && game.entered && !fp.climb && !fp.lad;
@@ -5259,9 +5270,10 @@ function sliceTick(dt) {
     if (rn) game.entered = true;
     if (STOVE_ROOMS.includes(rn)) game.stoveSeen = true;
     if (rn === 'Entry' && !SL.seen.has(rn) && !touchFP && !fp.go && !SL.walked) { const P = fp.p.root.position; fp.turn = { yaw: Math.atan2(1.2 - P.x, 1.25 - P.z), pitch: -0.05, t: 0, name: null }; } // 电脑第一次进玄关：转向东边通屋里的过道口（帘子在 x 0.64），不脸贴衣钉墙（11-05 评审 #5）
-    if (rn && !SL.seen.has(rn) && !(SL.auto && SL.auto.go)) { SL.seen.add(rn); saveGame(); if (ROOM_NOTES[rn]) showRoomNote(ROOM_NOTES[rn], rn); } // 每间只说一次（走来走去不重复）；被带进屋的路上不说也不算看过（不然玄关、厨房两段旁白排着队念，人到了书桌前字幕还在讲厨房的桌板），等玩家自己走到再说
+    if (rn && !SL.seen.has(rn) && !(SL.auto && SL.auto.go) && !(fp.go && fp.go.tour && fp.go.tour !== rn)) { SL.seen.add(rn); saveGame(); if (ROOM_NOTES[rn]) showRoomNote(ROOM_NOTES[rn], rn); } // 每间只说一次（走来走去不重复）；被带进屋的路上、「房间」导览路过的房间不说也不算看过（不然玄关、厨房两段旁白排着队念，人到了书桌前字幕还在讲厨房的桌板），等玩家自己走到再说
     showQuest();
   }
+  if (SL.tour && !(fp.go && fp.go.tour)) { const t = SL.tour, P = fp.p.root.position; SL.tour = null; if (rn !== t.room && Math.hypot(P.x - t.x, P.z - t.z) < 0.5 && !SL.seen.has(t.room) && ROOM_NOTES[t.room]) { SL.seen.add(t.room); saveGame(); showRoomNote(ROOM_NOTES[t.room]); } } // 导览走到了、按位置却不在那间（竖屏玄关站在门槛外 z 2.4）：照样念目的地
   const w = people.get('person_woman');
   if (!fp.paused) SL.liveT += 0.3;
   if (SL.auto && SL.auto.go && fp.go !== SL.auto.go) { SL.auto = null; if (rn && !SL.seen.has(rn)) { SL.seen.add(rn); saveGame(); if (ROOM_NOTES[rn]) showRoomNote(ROOM_NOTES[rn], rn); } } // 走到了，或者玩家按键 / 点地面接管了：这时所在的房间算看过（存档靠 seen 认「进过屋」，不记的话刷新后又带一遍），有旁白的现在念
