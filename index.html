@@ -298,10 +298,32 @@ if (navigator.webdriver || /[?&]nolock\b/.test(location.search)) { let el = null
   @media (max-width: 600px) { #subs, #note, #roomNote, #quest:not(.end) { z-index: 7; bottom: 106px; font-size: var(--fs-s); } #quest.end { bottom: 106px; } #fpHud .help { bottom: 150px; } #fpHud .help { width: calc(100vw - 32px); box-sizing: border-box; white-space: normal; } #prog { z-index: 7; bottom: 70px; } #opening .box { font-size: var(--fs-s); } }
   @media (max-width: 600px) { body:has(#card:not([hidden])) :is(#quest, #prog) { opacity: 0; } }
   @media (max-width: 600px) { #card { left: 16px; top: 50%; transform: translateY(-50%); width: calc(100vw - 32px); max-height: calc(100vh - 160px); max-height: calc(100dvh - 160px); } #rooms { right: 8px; gap: 2px; } #rooms button { font-size: var(--fs-s); padding: 2px 6px; } #rooms button .zh { font-size: var(--fs-xs); } #rooms.bottom { gap: 0 4px; } #skyPresets { grid-template-columns: repeat(3, 1fr); } #skyL .btns { flex-direction: column; align-items: flex-start; gap: 0; } #skyName { display: none; } }
+  /* 手机横屏（画面高 ≤500px，11-10 用户：手机上得横屏）：字幕、任务行压到左下那排按钮上面一行，不挡画面正中；房间列表改成右上一横排（竖排 6×44 比屏幕高）；卡片把高度用满 */
+  @media (orientation: landscape) and (max-height: 500px) {
+    #subs, #note, #roomNote, #quest, #quest.end { z-index: 7; bottom: 76px; font-size: var(--fs-s); max-width: min(560px, calc(100vw - 264px - env(safe-area-inset-left, 0px) - env(safe-area-inset-right, 0px))); } body:has(#fpHud:not([hidden])) :is(#subs, #note, #roomNote, #quest) { bottom: 54px; }
+    #prog { z-index: 7; bottom: 22px; } #fpHud .help { bottom: 92px; } #opening .box { font-size: var(--fs-s); line-height: 1.6; }
+    body:has(#card:not([hidden])) :is(#quest, #prog) { opacity: 0; }
+    #roomList { top: 46px; right: 58px; margin-right: env(safe-area-inset-right, 0px); flex-direction: row; align-items: center; transform-origin: right center; } #viewBtn[hidden] ~ #roomList { top: 3px; }
+    #roomList button { padding: 0 8px; white-space: nowrap; }
+    #card, #card.side { max-height: calc(100vh - 24px); max-height: calc(100dvh - 24px); }
+    #card.side { left: auto; right: 16px; top: 50%; bottom: auto; margin-right: env(safe-area-inset-right, 0px); transform: translateY(-50%); width: min(360px, 46vw); }
+    #dlg.end { padding-bottom: 14px; } #dlg.end .box { margin-bottom: env(safe-area-inset-bottom, 0px); }
+  }
+  /* 手机竖屏：盖一层「把手机横过来」的图（网页锁不了方向）；点一下就照竖屏玩（系统锁了竖屏、微信默认不跟着转的人转不过来）。无头测试不出，网址带 ?rot 才出 */
+  #rot { display: none; position: fixed; inset: 0; z-index: 60; align-items: center; justify-content: center; background: rgba(12,11,9,.95); color: #f4efe6; -webkit-user-select: none; user-select: none; }
+  @media (pointer: coarse) and (orientation: portrait) and (max-width: 600px) { html.rot #rot { display: flex; } }
+  #rot svg { width: 132px; height: 132px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+  #rot .arc { opacity: .5; } #rot .ph { transform-origin: 60px 60px; animation: rotPh 2.8s ease-in-out infinite; }
+  @keyframes rotPh { 0%, 20% { transform: rotate(0deg); } 55%, 90% { transform: rotate(-90deg); } 100% { transform: rotate(0deg); } }
+  @media (prefers-reduced-motion: reduce) { #rot .ph { animation: none; transform: rotate(-90deg); } }
 </style>
 </head>
 <body>
 <div id="app"></div>
+<div id="rot" role="img" aria-label="Rotate your phone · 请把手机横过来"><svg viewBox="0 0 120 120"><path class="arc" d="M47.1 11.7A50 50 0 0 0 11.7 47.1M8.3 37.7L11.7 47.1L19.4 40.7"/><g class="ph"><rect x="42" y="24" width="36" height="72" rx="7"/><path d="M55 31.5h10"/></g></svg></div>
+<script>/* 竖屏提示（样式见 #rot）：点过一次这个标签页里就不再出（换天会刷新页面） */ (() => { const K = 'cabin.rotOK', H = document.documentElement; let ok = false; try { ok = !!sessionStorage.getItem(K); } catch (e) { /* 读不到就当没点过 */ }
+  if (!ok && (!navigator.webdriver || /[?&]rot\b/.test(location.search))) H.classList.add('rot');
+  document.getElementById('rot').addEventListener('click', () => { H.classList.remove('rot'); try { sessionStorage.setItem(K, '1'); } catch (e) { /* 存不了：这一页不再出就行 */ } }); })();</script>
 <div id="loader"><div id="ldLine"></div><div id="ldSub"><span class="en">Three days · about 20 minutes</span><span class="zh">三天 · 约 20 分钟</span></div><div id="bar"><div></div></div><div id="pct">0%</div></div>
 <script>/* 试玩：?day=2 / ?day=3 写一份「前一夜记录读完」的存档（同无头 day2.py / day3.py），直接从那天早上开始；会覆盖真存档，只在本机 / 局域网或带 &debug 时生效（11-05 评审 #6：原来发布版也认） */ try { const d = +(location.search.match(/[?&]day=([23])\b/) || [])[1]; if (d && (/^(localhost|127\.|\[::1\]|10\.|172\.|192\.168\.)/.test(location.hostname) || /[?&]debug\b/.test(location.search))) { const f = ['opening', 'fire', 'letter', 'map', 'drawer', 'coat', 'boots', 'lantern', 'log', 'took', 'journal', 'notes1'].concat(d === 3 ? ['d2block', 'd2stake', 'd2blaze', 'd2cairn', 'd2light', 'log2', 'notes2'] : []); localStorage.setItem('cabin.game.v1', JSON.stringify({ day: d, found: f })); sessionStorage.setItem('cabin.nextDay', '1'); } } catch (e) { /* 存不了就照常从存档开始 */ }</script>
 <script>try { const rd = (f) => { try { return f(); } catch (e) { return null; } }, K = 'cabin.game.v1', s = rd(() => localStorage.getItem(K)) || rd(() => sessionStorage.getItem(K)) || rd(() => window.name.split('\n').find((l) => l.startsWith(K + '=')).slice(K.length + 1)); // 同 SAVE.get：local 禁了也读得到（r3 #6）
@@ -1181,6 +1203,37 @@ function walkCull(fog) {
     o.count = k; o.visible = k > 0; o.instanceMatrix.needsUpdate = true; if (C) o.instanceColor.needsUpdate = true;
   }
 }
+// 树分块（11-10，手机开场一卡一卡：开场每帧 660 万面，其中树 470 万、小屋 180 万，镜头后面和屏幕外的一棵没少画）
+// InstancedMesh 整个网格只有一个包围球，一种树一次 plant() 几百棵散在几百米里，视锥剔除等于没有。chunkForest 把大的那几组（一组 8 万面以上）按 90m 一格拆开，每格一个网格，three 自己就能按格剔除；
+// 树冠再配一个减到约 1/12 面的远模（同一个网格换 geometry，实例矩阵、颜色不动），一棵 14m 的树在屏幕上不到 LOD_PX 个物理像素高时整格换远模（farLod，手机横屏约 165m 外、1080p 约 350m 外、4K 不换）
+const FAR_LOD = [], LOD_PX = 36;
+async function chunkForest() {
+  const CELL = 90, keep = [], lodOf = new Map(), t0 = performance.now(), far = new Set(FAR_DETAIL), skip = new Set(NEAR_CONES); let nCh = 0;
+  const lodGeo = (g, tri) => { if (!lodOf.has(g)) { const src = new THREE.BufferGeometry(); src.setAttribute('position', (g.index ? g.toNonIndexed() : g).attributes.position.clone());
+    const m = mergeVertices(src), lo = new SimplifyModifier().modify(m, Math.floor(m.attributes.position.count * (1 - Math.max(110 / tri, 0.08)))).toNonIndexed(); lo.computeVertexNormals(); lo.computeBoundingSphere(); lodOf.set(g, lo); } return lodOf.get(g); };
+  for (const o of scene.children.filter((q) => q.isInstancedMesh && q.name === 'forest' && !skip.has(q))) { // 远处细模（FAR_DETAIL）和屋子周围、步行走廊的细模都拆
+    const g = o.geometry, tri = (g.index ? g.index.count : g.attributes.position.count) / 3, M = o.instanceMatrix.array, C = o.instanceColor && o.instanceColor.array;
+    if (o.count * tri < 80000) { if (far.has(o)) keep.push(o); continue; } // 小组不拆：省不了几个面，白多 draw call
+    const cells = new Map();
+    for (let i = 0; i < o.count; i++) { if (!M[i * 16 + 5]) continue; const k = Math.floor(M[i * 16 + 12] / CELL) * 4096 + Math.floor(M[i * 16 + 14] / CELL); (cells.get(k) || cells.set(k, []).get(k)).push(i); } // 缩成 0 的（brookClear 删掉的）不带
+    const lo = C && tri > 300 ? lodGeo(g, tri) : null; if (lo) await maybeYield(); // 带颜色的是树冠；树干、枯树不减
+    for (const ids of cells.values()) {
+      const im = new THREE.InstancedMesh(g, o.material, ids.length);
+      ids.forEach((i, j) => im.instanceMatrix.array.set(M.subarray(i * 16, i * 16 + 16), j * 16));
+      if (C) { im.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(ids.length * 3), 3); ids.forEach((i, j) => im.instanceColor.array.set(C.subarray(i * 3, i * 3 + 3), j * 3)); }
+      im.name = o.name; im.visible = o.visible; im.castShadow = o.castShadow; im.receiveShadow = o.receiveShadow; im.renderOrder = o.renderOrder; im.layers.mask = o.layers.mask; im.position.copy(o.position); im.customDepthMaterial = o.customDepthMaterial; im.customDistanceMaterial = o.customDistanceMaterial;
+      im.computeBoundingSphere(); scene.add(im); OUTDOOR.push(im); if (far.has(o)) keep.push(im); nCh++;
+      if (lo) FAR_LOD.push({ im, hi: g, lo, c: im.boundingSphere.center, r: im.boundingSphere.radius, isFar: false });
+    }
+    scene.remove(o); OUTDOOR.splice(OUTDOOR.indexOf(o), 1); o.dispose();
+  }
+  FAR_DETAIL.length = 0; FAR_DETAIL.push(...keep); window.__chunk = { ms: Math.round(performance.now() - t0), chunks: nCh, lod: FAR_LOD.length, geo: [...lodOf].map(([g, l]) => [(g.index ? g.index.count : g.attributes.position.count) / 3, l.attributes.position.count / 3]), FAR_LOD }; // 调试
+}
+function farLod() { // 每帧（渲染循环）：整格离镜头够远就换远模，近了换回来（前后留 10m，不来回跳）
+  const D = 14 * renderer.domElement.height / (2 * Math.tan(camera.fov * Math.PI / 360) * LOD_PX), cp = camera.position;
+  for (const q of FAR_LOD) { const P = q.im.position, d = Math.hypot(q.c.x + P.x - cp.x, q.c.y + P.y - cp.y, q.c.z + P.z - cp.z) - q.r;
+    if (q.isFar ? d < D - 10 : d > D + 10) { q.isFar = !q.isFar; q.im.geometry = q.isFar ? q.lo : q.hi; } }
+}
 let seeS = null; const FAR_DETAIL = [], NEAR_CONES = [], WALK_CULL = []; let farOn = null; // farOn：FAR_DETAIL 现在显示没有（null = 还没设过，加载后第一帧按当时状态设一次）
 function introSees(x, z) {
   if (!seeS) { seeS = []; const L = pathCurve.getLength(), [dx, dz] = WATER.dockDir || [0, 1], [kx, kz] = WATER.dock || [0, 0];
@@ -1857,6 +1910,7 @@ async function plantForest(center, y) {
     await maybeYield(); Y.push(...await ringPoints(r5, 28 * f, 9, 26, 1.6, center, yt, (x, z) => nearDoor(x, z) && free(x, z)), ...await ringPoints(r5, 14 * f, 12, 20, 1.6, X, yt, free)); // 幼树（同上面，不进 taken）；门口树冠已排满，大树多半种不下（plant 里按树冠缩成 0）
     plant(pine, P, r5, 3.5, 9, y, true); plant([...dead], D, r5, 3, 6, y, true); /* 枯立木没有树冠：拷一份不带 radius 的，不和旁边的树冠互相避让（原来走廊 45 棵大多被缩成 0） */ plant(lodP, Y, r5, 0.9, 2.1, y, true); window.__plant5 = [P.length, D.length, Y.length]; } // 调试
   brookClear();
+  await chunkForest();
   for (const o of scene.children) if (o.isInstancedMesh && /^(forest|floor)$/.test(o.name) && !FAR_DETAIL.includes(o) && !NEAR_CONES.includes(o)) WALK_CULL.push(o); // 第一人称在雾里时按距离藏（见渲染循环）
   window.cabin.forest = { FAR_DETAIL, NEAR_CONES, WALK_CULL }; // 调试
 }
@@ -3448,6 +3502,19 @@ function makeFogWalls() {
 // 第一人称雾里离小屋超过「雾远 + 屋子半径」：整栋不画（11-04 r3 #3：第 3 天挪世界后 ✕ 屋在 25–77m 外、早被雾盖白，还在画，s60–s120 是 3.0–3.4M 面，藏掉 1.1M）。
 // 进雾的范围前 3m 就恢复（回差防来回切），不会看到屋子冒出来；屋里的灯由 trackLight 补替身，灯数不变、不重编译；切换时重画阴影
 let houseFar = false; const houseC = new THREE.Vector3(), houseS = new THREE.Vector3();
+// 开场飞行中镜头离小屋 40m 外（11-10）：屋里的东西（家具、摆设、灯具，约 130 万面）不画——屋顶盖着，只能从窗洞门缝看进去，40m 外一扇窗不到 8 个像素高。
+// 不动 visible（图层显隐归剧情管），把网格挪到主相机不看的图层，飞近了挪回来；只管码头那段开场（鸟瞰揭了屋顶时屋里看得见，不能藏）
+const INNER = { list: null, off: false, LAYER: 9 };
+function introInner() {
+  const far = !!(intro && intro.dock) && Math.hypot(camera.position.x, camera.position.z) > (INNER.off ? 38 : 42); // 小屋在原点
+  if (far === INNER.off) return;
+  const m = window.cabin && window.cabin.model; if (!m || !home) return;
+  if (!INNER.list) { const top = window.cabin.box.max.y, bb = new THREE.Box3(); INNER.list = []; // 整个网格都在外墙里面的才算屋里的（屋里 |x|、|z| < 2.3，同 outdoors()；前墙门槛 z 1.9）；烟囱管穿出屋顶、顶到包围盒顶，不算
+    m.traverse((o) => { if (!o.isMesh) return; bb.setFromObject(o); if (bb.min.x > -2.05 && bb.max.x < 2.05 && bb.min.z > -2.05 && bb.max.z < 1.85 && bb.max.y < top - 0.3) INNER.list.push(o); });
+    window.__inner = INNER; } // 调试
+  INNER.off = far;
+  for (const o of INNER.list) { if (far) { o.userData.lay = o.layers.mask; o.layers.set(INNER.LAYER); } else o.layers.mask = o.userData.lay; }
+}
 function fogCullHouse() {
   const m = window.cabin && window.cabin.model; if (!m || !home) return;
   const b = window.cabin.box; b.getCenter(houseC); b.getSize(houseS); // 每帧读：小屋自己的包围盒（加载时先包着整个 glb、约 105m，之后才收窄；home.r 是那时算的，鸟瞰取景用）
@@ -4937,7 +5004,7 @@ function startFP(id) {
   if (p.tasks.some((t) => LAD.includes(t[0]))) fp.climb = { ph: 'after' };
   fp.solid = fpSolid(); fp.floors = fp.solid.concat(ground, ...(BROOK.bed || [])); fpNearMesh(fp.p.root); window.cabin.fp = fp; // 调试；BROOK.bed：溪岸的细网格盖在压下去的地面上
   controls.enabled = false;
-  camera.fov = 72; camera.updateProjectionMatrix();
+  camera.fov = fpFov(); camera.updateProjectionMatrix();
   roomsBox.hidden = true; enterBtn.hidden = true; fpHud.hidden = false; fpHud.classList.remove('live');
   fpHud.querySelector('.help').innerHTML = touchFP ? FP_HELP_TOUCH : FP_HELP; fpHud.classList.toggle('touch', touchFP); // 触屏没有指针锁：不出「点画面继续」
   if (touchFP) fp.paused = false; else if (document.pointerLockElement === canvas) { fp.paused = false; fpHud.classList.add('live'); fp.liveAt = performance.now(); } else canvas.requestPointerLock?.()?.catch?.(() => {}); // 已经锁着（换天点「继续」时锁上的）：直接能走 // 早上那段自然结束时没有用户手势，锁不上就等玩家点画面； 触屏没有指针锁：点哪走哪 + 拖动转头（fpTap），头一次碰屏幕才收起说明
@@ -5238,8 +5305,12 @@ function updateFP(dt) {
 // 2026-10-29 起是默认（用户：旧的环视版第 1 天不要了）；?nofp 只留给老的无头测试 day1.py。?touch：电脑上测触屏那套
 const SLICE = !/[?&]nofp\b/.test(location.search), touchFP = matchMedia('(pointer: coarse)').matches || /[?&]touch\b/.test(location.search);
 const SL = { man: [-0.05, 8.4], woman: [0.75, 8.15], door: [[-0.05, 2.45], [-0.05, 1.5]], sofa: [0.19, -0.17], seen: game.seen, room: undefined, t: 0, w: null, liveT: 0 }; // man/woman：开场停步、第一人称起点（离前墙约 6.4m，定格时小屋约占画面宽 1/3，用户嫌 z 6.0 时屋子撑满画面）；door：门外 → 门里（门轴 x -0.49、z 1.9）；man/woman 离门 4m（2026-10-31，用户：原来 1.5m 只看到门板，门和门廊灯要整体入画）
-const FP_DRAG = 0.006, _slO = new THREE.Vector3(), _slD = new THREE.Vector3();
+const FP_DRAG = 1.5, FP_TURN = 2.1, FP_STEER = 1.2, _slO = new THREE.Vector3(), _slD = new THREE.Vector3();
 const fpT = { id: null, x: 0, y: 0, x0: 0, y0: 0, t: 0, drag: false, at: 0 };
+// 防晕（11-10 用户手机竖屏玩完头晕）。FP_DRAG：手指拖过一个屏宽，视线转 1.5 个横向视场（原来固定 0.006 弧度/像素，竖屏是 2.9 倍、横屏 2.2 倍）；FP_TURN：走到了替玩家转向物件，最快 120°/s（原来每秒补差的 6 倍：书桌前差约 40° 实测 225°/s，差 150° 就是 900°/s），转到位才开卡片；FP_STEER：自动走路时视线跟路转，最快 69°/s（原来 143°/s）
+// 第一人称视场角：16:9 以内竖直 72°（同原来）；更宽的屏（手机横屏 2.19:1）横向封顶 104.5°（= 16:9 时的横向视野，原来 116° 边上拉得厉害）；竖屏横向至少 60°（原来 390×664 只有 46°、全屏 37°），竖直最多 95°
+function fpFov() { const a = camera.aspect, D = 180 / Math.PI; return Math.min(95, Math.max(2 * Math.atan(Math.tan(30 / D) / a) * D, Math.min(72, 2 * Math.atan(Math.tan(52.25 / D) / a) * D))); }
+const fpDrag = () => FP_DRAG * 2 * Math.atan(Math.tan(camera.fov * Math.PI / 360) * camera.aspect) / innerWidth; // 弧度 / 像素
 window.__slice = SL; // 调试 / 无头测试
 function sliceOn() { return SLICE && game.day === 1 && !game.night; }
 function floorAt(x, z) { // 门廊地板高（从 1.4m 往下找，别打到门廊顶）
@@ -5286,7 +5357,7 @@ function mornStart() {
   const eh = 1.62 * m.root.scale.x, fy = (x, z) => floorBelow(x, 0.3, z) ?? 0.16, [sx, sz] = SL.sofa, [tx, tz] = MORN.eye, f0 = fy(sx, sz);
   const walk = new THREE.CatmullRomCurve3([new THREE.Vector3(sx, f0 + eh, sz), new THREE.Vector3(NAV.ne[0], fy(...NAV.ne) + eh, NAV.ne[1]), new THREE.Vector3(tx, fy(tx, tz) + eh, tz)]);
   spin = false; fly = null; controls.enabled = false; inside = ROOMS.find((r) => r.name === 'Parlour'); roomsBox.hidden = true; enterBtn.hidden = true;
-  camera.fov = 72; camera.updateProjectionMatrix();
+  camera.fov = fpFov(); camera.updateProjectionMatrix();
   // 起身（起床过场评审 #2）：坐着时眼睛在站起落脚点后 0.47m（头在坐垫上方），先往前下探 0.45s，再伸直 0.9s 站起来；沙发朝北（yaw π）
   const sit = new THREE.Vector3(sx, f0 + 1.01, sz + 0.47), lean = new THREE.Vector3(sx, f0 + 0.94, sz + 0.25);
   morn = { t: 0, m, w, D, walk, L: walk.getLength(), sit, lean, eh, ey: null, yaw: Math.PI - 0.17, pitch: -0.12, P: new THREE.Vector3() };
@@ -5414,7 +5485,7 @@ canvas.addEventListener('pointermove', (e) => {
   const dx = e.clientX - fpT.x, dy = e.clientY - fpT.y; fpT.x = e.clientX; fpT.y = e.clientY;
   if (!fpT.drag && Math.hypot(e.clientX - fpT.x0, e.clientY - fpT.y0) > 10) fpT.drag = true;
   if (!fpT.drag) return;
-  fp.turn = null; fp.yaw += dx * FP_DRAG; fp.pitch = THREE.MathUtils.clamp(fp.pitch + dy * FP_DRAG, -1.35, 1.25);
+  const k = fpDrag(); fp.turn = null; fp.yaw += dx * k; fp.pitch = THREE.MathUtils.clamp(fp.pitch + dy * k, -1.35, 1.25);
 });
 for (const ev of ['pointerup', 'pointercancel']) canvas.addEventListener(ev, (e) => {
   if (e.pointerId !== fpT.id) return;
@@ -5524,7 +5595,7 @@ function fpSteer(r, dt) { // 返回这一帧往哪走（单位向量），到了
     g.stuck = 0; g.replan = true; SL.wait = q.id; return null; } } // 调试
   if (g.stuck > 0.6 && !g.nav && g.pts.length === 1 && d > 0.5) { const [x, z] = g.pts[0]; Object.assign(g, { pts: fpRoute(P.x, P.y, P.z, x, z, 0, true), nav: true, stuck: 0, chk: 1 }); return null; } // 直走卡住：改沿路网走一次
   if (g.stuck > 0.6) return fpArrive(true);
-  if (!fpT.drag) fp.yaw += THREE.MathUtils.clamp(angDiff(fp.yaw, Math.atan2(dx, dz)), -2.5 * dt, 2.5 * dt); // 视线慢慢转向走的方向（拖着时听手指的）
+  if (!fpT.drag) fp.yaw += THREE.MathUtils.clamp(angDiff(fp.yaw, Math.atan2(dx, dz)) * Math.min(1, 3 * dt), -FP_STEER * dt, FP_STEER * dt); // 视线慢慢转向走的方向（拖着时听手指的）
   return [dx / d, dz / d];
 }
 function fpArrive(stuck) { // 走到了：点的是物件就转过去看着它，再开关 / 出卡片
@@ -5538,9 +5609,9 @@ function fpArrive(stuck) { // 走到了：点的是物件就转过去看着它�
 }
 function fpTouchTick(dt) {
   const t = fp.turn; if (!t) return;
-  const k = Math.min(1, dt * 6); t.t += dt;
-  fp.yaw += angDiff(fp.yaw, t.yaw) * k; fp.pitch += (t.pitch - fp.pitch) * k;
-  if (t.t < 0.45 || (!t.name && t.t < 1.5 && (Math.abs(angDiff(fp.yaw, t.yaw)) > 0.02 || Math.abs(t.pitch - fp.pitch) > 0.02))) return; // 房间导览的朝向转到位再停（0.45 秒只转到 93%，玄关偏 7° 衣帽架出画）
+  const k = RM.matches ? 1 : Math.min(1, dt * 6), dy = angDiff(fp.yaw, t.yaw) * k, dp = (t.pitch - fp.pitch) * k, m = RM.matches ? 1 : Math.min(1, FP_TURN * dt / (Math.hypot(dy, dp) || 1)); t.t += dt; // 减少动态效果：不转，直接切过去
+  fp.yaw += dy * m; fp.pitch += dp * m;
+  if (t.t < 0.45 || (t.t < (t.name ? 2.5 : 3) && (Math.abs(angDiff(fp.yaw, t.yaw)) > (t.name ? 0.06 : 0.02) || Math.abs(t.pitch - fp.pitch) > (t.name ? 0.06 : 0.02)))) return; // 房间导览的朝向转到位再停（0.45 秒只转到 93%，玄关偏 7° 衣帽架出画）
   fp.turn = null; if (!t.name) return;
   if (toggleOf(t.name)) toggle(t.name);
   select(t.name);
@@ -5710,7 +5781,7 @@ function updateDockIntro(now) {
   const w = I.passed || r > 30 ? 0 : Math.min(1 - sm(g, 0.3, 1.5), sm(g, -1.2, -0.2)), top = mp.y + 1.62 * 0.94 + 0.2;
   cp.y = Math.max(cp.y, THREE.MathUtils.lerp(cp.y, top + 0.8, w));
   look.lerp(_slD.copy(cp).add(new THREE.Vector3(0, 4 * Math.tan(SL_PITCH), -4)), 1 - sm(r, 0, 12)); // 最后 12m 视线慢慢抬到 SL_PITCH，停下时朝门（同 sliceStart）
-  camera.lookAt(look); camera.fov = THREE.MathUtils.lerp(THREE.MathUtils.lerp(58, 62, h), 72, 1 - sm(r, 0, 14)); camera.updateProjectionMatrix(); camera.updateMatrixWorld();
+  camera.lookAt(look); camera.fov = THREE.MathUtils.lerp(THREE.MathUtils.lerp(58, 62, h), fpFov(), 1 - sm(r, 0, 14)); camera.updateProjectionMatrix(); camera.updateMatrixWorld();
   const hide = I.passed && g > -1.2; if (m.root.visible === hide) m.root.visible = !hide;
   if (!hide && r < 30) window.__introMinD = Math.min(window.__introMinD, cp.distanceTo(_slD.copy(mp).setY(mp.y + 1.55))); // 调试：镜头离他的头最近多远（他显示着的时候）
   const rem = Math.hypot(mp.x - SL.man[0], mp.z - SL.man[1]);
@@ -5831,17 +5902,24 @@ setInterval(() => { // 开场飞行：等了 10 秒、或已经点过 / 按过�
   skipHint.classList.toggle('on', performance.now() - introSeen > 10000 || VOICE.unlockAt != null);
 }, 500);
 
-// 自适应分辨率：帧间隔平均持续 >24ms（不到 ~42 帧）就把像素比降 0.25（最低 1，大屏/高分屏上像素着色是大头）；持续 <12ms 再慢慢升回去
-const RES_MAX = PR_MAX, res = { ema: 0.016, at: 0 };
+// 自适应分辨率：帧间隔平均持续 >24ms（不到 ~42 帧）就把像素比降 0.25（最低 1，大屏/高分屏上像素着色是大头）；跑满屏幕刷新率再慢慢升回去
+// 11-10 手机「画质很差」的原因：① 加载页盖着时也在量，加载的长帧把像素比降到 1，开场又不许调，一开局就是 1；② 升回去要 <12ms，60Hz 的手机帧间隔最少 16.7ms，永远升不回
+// 现在：加载完才开始量；升回的门槛按量到的刷新周期算（per × 1.12）；降了没变快（省电模式锁 30 帧、卡在顶点或 CPU 上）就升回去并暂时不再降；升了撑不住就退回并暂时不再升（两种暂停都是 60 秒起、每次翻倍、最多 8 分钟）；开场飞行中只降不升
+const RES_MAX = PR_MAX, res = { ema: 0.016, at: 0, on: false, per: 1 / 60, tried: null, up: 0, floor: 1, floorT: 0, floorN: 0, cap: PR_MAX, capT: 0, capN: 0 };
 function adaptRes(now, dt) {
-  if (dt <= 0 || document.hidden) return;
-  res.ema += (dt - res.ema) * 0.05;
-  if (now - res.at < 2500 || intro) return;
-  const pr = renderer.getPixelRatio();
+  if (dt <= 0 || document.hidden || !sceneReady) return;
+  if (!res.on) { res.on = true; res.at = now; res.ema = 0.016; window.__res = res; return; } // 加载页刚揭开：从头量；__res 调试
+  res.ema += (dt - res.ema) * 0.05; if (res.ema < res.per) res.per = Math.max(0.004, res.ema);
+  if (now - res.at < 2500) return;
+  if (now > res.floorT) res.floor = 1;
+  if (now > res.capT) res.cap = RES_MAX;
+  const pr = renderer.getPixelRatio(), wait = (n) => now + Math.min(480000, 60000 * 2 ** n), T = res.tried; res.tried = null;
   let np = pr;
-  if (res.ema > 0.024 && pr > 1) np = Math.max(1, pr - 0.25);
-  else if (res.ema < 0.012 && pr < RES_MAX) np = Math.min(RES_MAX, pr + 0.25);
-  if (np !== pr) { renderer.setPixelRatio(np); res.at = now; res.ema = 0.016; }
+  if (T && res.ema > T.ema * 0.9) { np = res.floor = T.pr; res.floorT = wait(res.floorN++); } // 上一轮降了一档，帧间隔没少一成：不是像素的事，升回去
+  else if (res.ema > 0.024 && pr > res.floor) { np = Math.max(res.floor, pr - 0.25);
+    if (now - res.up < 8000) { res.cap = np; res.capT = wait(res.capN++); } else res.tried = { pr, ema: res.ema }; } // 刚升上来就撑不住：退回去，这一档先不试；否则记下降之前的帧间隔，下一轮比
+  else if (!intro && res.ema < Math.max(0.012, res.per * 1.12) && pr < res.cap) { np = Math.min(res.cap, pr + 0.25); res.up = now; }
+  if (np !== pr) { renderer.setPixelRatio(np); res.at = now; }
 }
 // 人在屋里（头顶、四面都挡着）且门洞不在视野里：屋外的树、灌木、草、芦苇、石头（屋外的 InstancedMesh，屋里画面约 136 万面）都看不见，不画（2026-11-02 mobile-perf）
 // 用 layer 不用 visible：FAR_DETAIL 的 visible 归渲染循环那行管；这些物体挪到 OUT_LAYER，主相机和太阳阴影相机都开这一层，在屋里时主相机关掉它
@@ -5862,7 +5940,8 @@ function hideOutdoors(now) {
 }
 addEventListener('resize', () => {
   canvasBox = null;
-  camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix();
+  camera.aspect = innerWidth / innerHeight; if (fp || morn) camera.fov = fpFov(); // 转屏：第一人称视场角跟着画面比例变
+  camera.updateProjectionMatrix();
   renderer.setSize(innerWidth, innerHeight);
 });
 // 标题颜色跟着身后画面亮度变：暗背景白字、亮背景黑字，中间平滑过渡。
@@ -5986,7 +6065,7 @@ renderer.setAnimationLoop(() => {
   if (FAR_DETAIL.length && sceneReady) { // 远处细模：开场或走远时才画；第一人称在雾里（第 2/3 天）不画——雾 26m 就到底，原来走出 45m 后白画 200 多万面（11-04 环境评审 #2）。原来按 FAR_DETAIL[0].visible 比较、加载途中就开始切，后加进来的几组状态对不上（第 2/3 天加载后两组都藏着），改成加载完才切、记 farOn
     const fog = !!fp && scene.fog.far < 60, v = !!intro || (!fog && Math.hypot(camera.position.x, camera.position.z) > 45);
     if (farOn !== v) { farOn = v; for (const o of FAR_DETAIL) o.visible = v; for (const o of NEAR_CONES) o.visible = !v; shadowDirty = true; }
-    walkCull(fog); }
+    farLod(); walkCull(fog); introInner(); }
   if (intro) updateIntro(now);
   else if (fly) {
     // 按真实时间飞（原来每帧固定 +0.025，高刷屏 0.3 秒就到）；smooth = 慢起慢停，否则先快后慢
