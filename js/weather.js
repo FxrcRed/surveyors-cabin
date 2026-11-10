@@ -164,7 +164,7 @@ vec3 ripples(vec2 p, float t, float amt) {
     .replace('#include <lights_fragment_maps>', '#include <lights_fragment_maps>\n    radiance = mix(radiance, iblIrradiance * RECIPROCAL_PI * (1.0 + 1.5 * rip), pud * (1.0 - sn));');
 }
 
-const _grey = new THREE.Color();
+const _grey = new THREE.Color(), _snowB = new THREE.Color();
 const greyOf = (c, k) => _grey.setScalar((0.3 * c.r + 0.59 * c.g + 0.11 * c.b) * k);
 function applyWeather(dt) { // 在 applySky 之后：天空/光照按天气压暗；闪电
   const c = wx.cur, g = wx.goal, k = Math.min(1, dt * 0.8);
@@ -176,6 +176,8 @@ function applyWeather(dt) { // 在 applySky 之后：天空/光照按天气压�
   scene.fog.color.copy(skyU.uHor.value);
   sun.intensity *= 1 - 0.92 * c.cloud;
   hemi.color.lerp(greyOf(hemi.color, 1), c.cloud * 0.7);
+  sun.color.lerp(greyOf(sun.color, 1.3), c.cloud * 0.9); // 阴天、雨雪里直射光被云层散成漫射，没有夕阳那种饱和橙红（11-05 art #9：雪天黄昏树冠成锈红褐色）；1.3 补回去饱和损失的亮度
+  hemi.groundColor.lerp(_snowB.copy(hemi.color).multiplyScalar(0.75), THREE.MathUtils.smoothstep(cover.uSnow.value, 0.3, 0.85)); // 地上有雪时，从下往上的反光是雪（反照率约 0.8 × 天光，中性灰白），不是褐土：树冠、灌木底面不再发褐
   hemi.intensity *= 1 - 0.3 * c.cloud;
   scene.environmentIntensity *= 1 - 0.3 * c.cloud;
   skyU.uSunUp.value *= 1 - c.cloud; skyU.uNight.value *= (1 - c.cloud) ** 2 * (1 - c.fogK); // 阴天、雨雪、雾夜：星星月亮压掉
