@@ -5,7 +5,7 @@
 **On a desk in a cabin in the northern woods lies a page of inquiry notes. It is in your clerk's hand, and it describes what you have not done yet.**
 Thirty years of spring reports from the Surveyor, then this year none. You are the old inspector sent to find out why. A short first-person mystery that plays in your browser.
 
-Three days · about 20 minutes · three endings · English and Chinese, with voice-over
+Three days · about 20 minutes · four endings · English and Chinese, with voice-over
 
 [**▶ Open it in your browser**](https://fxrcred.github.io/surveyors-cabin/) · [中文说明](README.zh.md) · three.js · no build step · code MIT
 
