@@ -19,7 +19,7 @@ Three days · about 20 minutes · four endings · English and Chinese, with voic
 - **Day one:** the door ajar, the porch lamp burning, the stove stone cold. Search the cabin for what he left behind.
 - **Day two:** fog has come down, and something is out there for you to follow.
 - **Day three:** walk to the end of it, and choose.
-- Everything you find is written into the **Journal**, the *Nameless Surveyor's Last Papers*, in period English with the Chinese original underneath.
+- Everything you find is written into the **Papers**, the *Nameless Surveyor's Last Papers*, in period English with the Chinese original underneath.
 
 **How to play.** First person: WASD to walk, mouse to look, click to examine, E to take or climb. On a phone, tap where you want to go, or use *Rooms*. Progress is saved in the browser; close the page and come back later.
 

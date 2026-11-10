@@ -57,4 +57,6 @@ const lang = () => document.documentElement.dataset.lang;
 const esc = (t) => String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;');
 const lbl = (en, zh) => `<span class="en">${esc(en)}</span><span class="zh">${esc(zh)}</span>`;
 
-export { scene, sun, hemi, renderer, camera, controls, $, lang, esc, lbl, PR_MAX };
+const RM = matchMedia('(prefers-reduced-motion: reduce)'); // 系统开了「减少动态效果」：开场不飞、镜头不慢推、换房间直接到、走路不起伏（RM.matches 是活的，设置里改了立刻生效）
+
+export { scene, sun, hemi, renderer, camera, controls, $, lang, esc, lbl, PR_MAX, RM };
