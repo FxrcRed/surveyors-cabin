@@ -18,22 +18,36 @@ const SHOTS = ['thunder', 'fire-light', 'door-open', 'door-close', 'drawer-open'
   'click', 'latch', 'creak', 'paper', 'book', 'pick', 'place', 'step-snow', 'step-ice', 'step-wood', 'step-dirt', 'step-wet'];
 let ctx = null, master, amb, outBus, outLP, musG, steps = null, muted = false;
 const MUSIC_VOL = 0.6, MUSIC_FADE = 6; // 满音量（文件已统一到约 -28 LUFS，乘 0.6 后比林子低约 4dB）、淡入秒数
-let music = null, mk = 0, mduck = 1; // music = { g, src }，mk = 淡入进度 0–1
+const CUT_UP = 0.65, CUT_DUCK = 0.6, CUT_FADE = 1.5; // 过场（开场飞行、被带进屋、起床、结局画面）：音乐是主角，满音量 ×1.65、旁白念时只压到 0.6（平时 0.3）、1.5 秒淡入。
+// 原来过场全程有旁白，音乐一直压在 0.6 × 0.3（约 -43 LUFS，比旁白低 20dB），又要点了「进入」才下载、再淡入 6 秒，手机上等于没有（11-10 用户：过场的时候没有 bgm）
+let music = null, mk = 0, mduck = 1, mcut = 0; // music = { g, src }，mk = 淡入进度 0–1，mcut = 过场程度 0–1
 const buf = {}, loop = {}, lv = {}; // lv = 各路当前音量（平滑用）
 try { muted = localStorage.getItem('cabinMute') === '1'; } catch { /* 无痕模式 */ }
 
+const raw = {}; // 文件字节：加载页上就先下（audioPreload，不用等点击），点了「进入」只剩解码，音乐跟着开场一起响
+const fetchRaw = (n) => raw[n] || (raw[n] = fetch(`sfx/${n}.mp3`).then((r) => (r.ok ? r.arrayBuffer() : null)).catch(() => null));
+const bgmName = () => 'bgm-day' + Math.min(3, Math.max(1, shared.game?.day || 1));
+export function audioPreload() { fetchRaw(bgmName()); for (const n of Object.keys(LOOPS)) fetchRaw(n); for (const n of SHOTS) fetchRaw(n); fetchRaw('crow'); }
 async function load(n) {
-  try { const r = await fetch(`sfx/${n}.mp3`); buf[n] = await ctx.decodeAudioData(await r.arrayBuffer()); } catch { /* 少一个音就不响 */ }
+  try { const a = await fetchRaw(n); delete raw[n]; buf[n] = await ctx.decodeAudioData(a); } catch { /* 少一个音就不响 */ }
   return buf[n];
 }
 function unlock() {
   if (ctx) { if (ctx.state !== 'running') ctx.resume()?.catch?.(() => {}); return; } // iOS 切后台回来是 interrupted，也要 resume
   const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
+  try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch { /* 没有这个接口 */ } // iPhone 侧边静音键开着时 Web Audio 全哑、只剩配音（<audio>）：和配音走同一类，音乐、环境声一起响（iOS 16.4+）
   ctx = new AC();
   master = ctx.createGain(); master.gain.value = muted ? 0 : 1; master.connect(ctx.destination);
   amb = ctx.createGain(); amb.connect(master); // 环境音总线：配音时压低
   outLP = ctx.createBiquadFilter(); outLP.type = 'lowpass'; outLP.frequency.value = 18000; outLP.connect(amb);
   outBus = ctx.createGain(); outBus.connect(outLP);
+  musG = ctx.createGain(); musG.gain.value = 0; musG.connect(master);
+  const mn = bgmName();
+  load(mn).then((b) => { // 先解音乐，再解环境声和短音（解码排队，音乐排第一个）
+    if (!b) return;
+    const s = ctx.createBufferSource(); s.buffer = b; s.loop = true; s.loopStart = 0.05; s.loopEnd = b.duration - 0.05; // 同环境声：跳过 mp3 首尾补的静音；文件首尾已交叉淡化
+    s.connect(musG); s.start(0, 0.05); music = { src: s, name: mn };
+  });
   for (const n of Object.keys(LOOPS)) load(n).then((b) => {
     if (!b) return;
     const s = ctx.createBufferSource(), g = ctx.createGain(); s.buffer = b; s.loop = true;
@@ -43,13 +57,6 @@ function unlock() {
   });
   for (const n of SHOTS) load(n);
   load('crow');
-  musG = ctx.createGain(); musG.gain.value = 0; musG.connect(master);
-  const day = Math.min(3, Math.max(1, shared.game?.day || 1)), mn = 'bgm-day' + day;
-  load(mn).then((b) => {
-    if (!b) return;
-    const s = ctx.createBufferSource(); s.buffer = b; s.loop = true; s.loopStart = 0.05; s.loopEnd = b.duration - 0.05; // 同环境声：跳过 mp3 首尾补的静音；文件首尾已交叉淡化
-    s.connect(musG); s.start(0, 0.05); music = { src: s, name: mn };
-  });
   fetch('sfx/steps.json').then((r) => r.json()).then((j) => { steps = j; }).catch(() => {});
 }
 for (const ev of ['pointerdown', 'keydown', 'touchend', 'click']) addEventListener(ev, unlock, true); // iOS 不把触摸的 pointerdown 当用户操作，要 touchend / click 才放得出声（r3 兼容 #1）
@@ -69,13 +76,14 @@ const isIn = (p) => Math.abs(p.x) < 2.4 && Math.abs(p.z) < 2.4 && p.y < 7; // �
 
 // 每帧调：dt 秒；voice = 配音正在念
 let inK = 0, duck = 1, boltSeen = -1, thunderAt = -99;
-export function audioTick(dt, voice) {
+export function audioTick(dt, voice, cut) { // cut：正在过场
   if (!ctx || ctx.state !== 'running') return;
   const c = wx.cur, k = Math.min(1, dt * 1.5), h = sky.hour;
   inK += ((isIn(camera.position) ? 1 : 0) - inK) * Math.min(1, dt * 4);
   duck += ((voice ? 0.4 : 1) - duck) * Math.min(1, dt * 5);
   amb.gain.value = duck;
-  if (music) { mk = Math.min(1, mk + dt / MUSIC_FADE); mduck += ((voice ? 0.3 : 1) - mduck) * Math.min(1, dt * 3); musG.gain.value = MUSIC_VOL * mk * mk * mduck; }
+  mcut += ((cut ? 1 : 0) - mcut) * Math.min(1, dt * (cut ? 4 : 0.5)); // 进过场快、出过场慢慢退回平时的音量（约 4 秒）
+  if (music) { mk = Math.min(1, mk + dt / (cut ? CUT_FADE : MUSIC_FADE)); mduck += ((voice ? 0.3 + (CUT_DUCK - 0.3) * mcut : 1) - mduck) * Math.min(1, dt * 3); musG.gain.value = MUSIC_VOL * (1 + CUT_UP * mcut) * mk * mk * mduck; }
   outLP.frequency.value = 18000 * Math.pow(600 / 18000, inK); // 屋里：外面的声音只剩低频
   outBus.gain.value = 1 - 0.55 * inK;
   const day = Math.min(1, Math.max(0, Math.min(h - 5, 20 - h))); // 5–6 点鸟慢慢多起来，19–20 点慢慢没了
@@ -170,4 +178,4 @@ export function sfxToggle(name, on) {
 // 其它短音：paper 翻纸、book 开书、pick 拿起、place 放下
 export function sfx(n, vol = 0.6) { play(n, vol, { rate: 0.95 + Math.random() * 0.1 }); }
 share({ sfxToggle: () => sfxToggle, sfx: () => sfx, npcRung: () => npcRung });
-window.cabinAudio = { get ctx() { return ctx; }, buf, lv, get inK() { return inK; }, get duck() { return duck; }, get music() { return music && { name: music.name, gain: musG.gain.value, mk, mduck, loop: music.src.loop, loopStart: music.src.loopStart, loopEnd: music.src.loopEnd, dur: music.src.buffer.duration }; }, get muted() { return muted; }, onIce, get ice() { return ice; } }; // 调试 / 无头测试读状态
+window.cabinAudio = { get ctx() { return ctx; }, buf, lv, get inK() { return inK; }, get duck() { return duck; }, get music() { return music && { name: music.name, gain: musG.gain.value, mk, mduck, mcut, loop: music.src.loop, loopStart: music.src.loopStart, loopEnd: music.src.loopEnd, dur: music.src.buffer.duration }; }, get muted() { return muted; }, onIce, get ice() { return ice; } }; // 调试 / 无头测试读状态

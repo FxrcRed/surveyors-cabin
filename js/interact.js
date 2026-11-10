@@ -446,9 +446,10 @@ function setupNoren() {
   if (!g) return;
   const tieMat = new THREE.MeshStandardMaterial({ color: 0x8a6a48, roughness: 0.85 });
   for (const m of [...g.children]) if (m.isMesh) {
-    // 焊接：位置 + UV 相同的顶点合成一个（合并后的网格是非索引的，直接算法线会一面一面的）
-    const src = m.geometry, P = src.attributes.position, U = src.attributes.uv, map = new Map(), pos = [], uv = [], index = [];
-    for (let i = 0; i < P.count; i++) {
+    // 焊接：位置 + UV 相同的顶点合成一个（法线不同的也合：直接算法线会一面一面的）。11-02 起合并后的网格带索引，要按索引走三角面；
+    // 原来按顶点顺序当三角面，布成了一堆乱面、看不见（11-10 用户：帘子的模型没了）
+    const src = m.geometry, P = src.attributes.position, U = src.attributes.uv, I = src.index, map = new Map(), pos = [], uv = [], index = [];
+    for (let n = 0, N = I ? I.count : P.count; n < N; n++) { const i = I ? I.getX(n) : n;
       const key = [P.getX(i), P.getY(i), P.getZ(i)].map((x) => x.toFixed(5)).join() + '|' + U.getX(i).toFixed(4) + ',' + U.getY(i).toFixed(4);
       let j = map.get(key);
       if (j === undefined) { j = pos.length / 3; map.set(key, j); pos.push(P.getX(i), P.getY(i), P.getZ(i)); uv.push(U.getX(i), U.getY(i)); }

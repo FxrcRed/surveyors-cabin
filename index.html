@@ -491,7 +491,7 @@ import { shared, share } from './js/state.js';
 import { terrain, terrainH, terrainSlope, sstep, makeGroundGeometry, applyTerrain, setBrook, brookAt, brookCutD, groundSpan, BROOK_WL, BROOK_BANK } from './js/terrain.js';
 import { paperMesh, agedPaper, handwrite, makeBook, inspectTick, inspecting, inspectBusy, inspectKind, inspectStart, inspectRelease } from './js/props3d.js';
 import { WX_ZH, sky, skyEl, skyU, indoorU, indoorShade, PANELS, wallU, updateSky } from './js/time-of-day.js';
-import { audioTick, audioStep, audioRung, setIce, sfx, sfxToggle } from './js/audio.js';
+import { audioTick, audioPreload, audioStep, audioRung, setIce, sfx, sfxToggle } from './js/audio.js';
 import { updateBirds } from './js/birds.js';
 import { LOG } from './js/playlog.js';
 import { applyWeather, wsPos, WS, groundCover, cover, precipHole, setupRoofWeather, wx, roofWx, setWeather, wxTimer, slideSnow, updatePrecip, updateRoofWeather } from './js/weather.js';
@@ -1953,7 +1953,7 @@ loader.load('cabin.glb', async (gltf) => {
   await yieldFrame();
   // 树种好再揭开加载页、开始开场动画，免得飞行中树一棵棵冒出来
   plantForest(center, ground.position.y).catch(console.error).then(clearOrbitView).then(() => { brookWire(); FLOOR_U.uFloor.value = floorMap(); makeFogWalls(); if (x3.pending) { x3.pending = false; applyX(); } gearRestore(); }).then(() => Promise.all([peopleReady, bedReady])).finally(async () => { // 地面雪坑图等树都定下来（删掉挡视线的）再画
-    T('forest');
+    T('forest'); audioPreload(); // 模型下完了、网络闲着：趁编译着色器把声音文件先下好
     await prewarm(); const w0 = performance.now(); await Promise.all(bvhJobs); window.__bvhWait = performance.now() - w0; sceneReady = true; // __bvhWait 调试用：后台 BVH 没赶上时多等了多久
     T('prewarm');
     pct.textContent = '100%'; bar.style.width = '100%';
@@ -5201,7 +5201,12 @@ function updateFP(dt) {
   fp.bob = moving ? fp.bob + dt * (run ? 13 : 8.5) : fp.bob * 0.9;
   audioStep(fp.bob, moving, run);
   const lean = fpLean(r, s); // 低头往前探，免得看见自己的衣领、肩膀（动画检查 #12）
-  _fpO.set(r.position.x + Math.sin(fp.yaw) * lean, r.position.y + eyeH + (RM.matches ? 0 : Math.sin(fp.bob * 2) * 0.012), r.position.z + Math.cos(fp.yaw) * lean);
+  let eyeY = r.position.y + eyeH;
+  if (lean > 0.13 * s && fp.near) { // 探出去的地方屋顶更矮（阁楼斜顶每米降 0.8m，探 28cm 就低 22cm）：眼睛跟着压低，不然相机钻进屋顶板，点梯子、点楼下都先打到屋顶、没反应（11-10 用户：手机上了阁楼下不来）。只查眼睛上下 0.3m，探到桌面上方不算
+    fpRay.set(_lnO.set(r.position.x + Math.sin(fp.yaw) * lean, eyeY - 0.3, r.position.z + Math.cos(fp.yaw) * lean), _fpU); fpRay.far = 0.6;
+    const h = fpRay.intersectObjects(fp.near, false)[0]; if (h) eyeY = Math.min(eyeY, h.point.y - 0.14);
+  }
+  _fpO.set(r.position.x + Math.sin(fp.yaw) * lean, eyeY + (RM.matches ? 0 : Math.sin(fp.bob * 2) * 0.012), r.position.z + Math.cos(fp.yaw) * lean);
   const seated = !!p.seat || p.mode === 'sit' || (climbs(p) && (!!fp.climb || p.S != null)); // 坐着、她爬梯子时镜头跟头骨
   fp.headK = (fp.headK || 0) + ((seated ? 1 : 0) - (fp.headK || 0)) * Math.min(1, dt * 6);
   if (fp.headK > 0.001 && p.head) { // 头骨（颅底）往上 7cm、沿视线往前 10cm ≈ 眼睛
@@ -5443,10 +5448,21 @@ function fpTap(e) {
 }
 function fpClear(x0, y0, z0, x1, z1, pad = 0) { // 两点之间脚边（矮茶几）、齐膝、齐胸都没东西挡（pad：终点是物件时停在它前面这么远）
   const d = Math.hypot(x1 - x0, z1 - z0) - pad; if (d < 0.05) return true;
+  if (y0 < 1 && ladderCuts(x0, z0, x1, z1)) return false;
   _slD.set(x1 - x0, 0, z1 - z0).normalize();
   const ms = fp.solid.filter((m) => !people.has(m.parent.name)); // 人会走开，不算挡路
   for (const h of [0.15, 0.45, 1.0]) { fpRay.set(_slO.set(x0, y0 + h, z0), _slD); fpRay.far = d; if (fpRay.intersectObjects(ms, false).length) return false; }
   return true;
+}
+function ladderCuts(x0, z0, x1, z1) { // 楼下这段路穿过梯子脚（x 0.85–1.18、梯子中线 ±0.22）：横档细，上面三条射线会从横档间漏过去，人却过不去、卡在两根扶手中间（11-10）。起点已经在里面不算，得让人走出来
+  const lz = ladderZ(), bx0 = 0.85, bx1 = 1.18, bz0 = lz - 0.22, bz1 = lz + 0.22;
+  if (x0 > bx0 && x0 < bx1 && z0 > bz0 && z0 < bz1) return false;
+  let t0 = 0, t1 = 1;
+  for (const [o, dd, lo, hi] of [[x0, x1 - x0, bx0, bx1], [z0, z1 - z0, bz0, bz1]]) {
+    if (Math.abs(dd) < 1e-9) { if (o < lo || o > hi) return false; continue; }
+    const a = (lo - o) / dd, c = (hi - o) / dd; t0 = Math.max(t0, Math.min(a, c)); t1 = Math.min(t1, Math.max(a, c));
+  }
+  return t0 < t1;
 }
 function fpRoute(x0, y0, z0, x1, z1, pad, nav) { // 看得见就直走；不然（或 nav：直走卡住了）沿 NAV 走（屋外 ↔ 屋里经门口两点）
   const IN = 1.9, loft = y0 > home.floorY + 1.6;
@@ -5478,9 +5494,8 @@ function fpLadTick(r, dt) { // 触屏自动上下梯子：梯子没推到阁楼�
   const L = fp.lad;
   if ((L.t += dt) > 20) { fp.lad = null; return 0; } // 保险：怎么都爬不上去就算了
   if (fp.climb) return L.up ? 1 : -1;
-  if (L.on) { // 爬完了：走去原来点的地方；爬下来落在梯子底下两根扶手中间，先往西迈出来（往南北走会被扶手挡住）
+  if (L.on) { // 爬完了：走去原来点的地方。爬下来落在梯子脚东边 0.3m（fpClimb），从那儿直接找路；原来先往西迈到 x 0.7，要穿过梯子脚，每次都卡在两根扶手中间、到不了点的地方（11-10）
     fp.lad = null; fpGo(...L.dest);
-    if (!L.up && fp.go) { const [x, z] = fp.go.pts[fp.go.pts.length - 1]; fp.go.pts = [[0.7, 1.12], ...fpRoute(0.7, r.position.y, 1.12, x, z, fp.go.act ? 0.7 : 0)]; fp.go.chk = 1.5; }
     return 0;
   }
   if (!ladderReady() || !gateOpen()) return 0; // 等梯子滑到位、拦杆抬起（fpGo 出发时推的）
@@ -5956,7 +5971,7 @@ renderer.setAnimationLoop(() => {
   adaptRes(now, dt);
   if (LOG) { LOG.tick(dt); logPoll(); }
   if (sceneReady) hideOutdoors(now);
-  audioTick(dt, !!VOICE.a && !VOICE.a.paused);
+  audioTick(dt, !!VOICE.a && !VOICE.a.paused, !!(intro || morn || SL.auto) || document.body.classList.contains('endshot'));
   updateBirds(dt);
   updatePeople(dt); gearOrbit(); // 人动完再把提灯挂到手上
   if (WATER.mat) WATER.mat.userData.u.uT.value = now / 1000;
