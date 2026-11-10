@@ -35,7 +35,6 @@ async function load(n) {
 function unlock() {
   if (ctx) { if (ctx.state !== 'running') ctx.resume()?.catch?.(() => {}); return; } // iOS 切后台回来是 interrupted，也要 resume
   const AC = window.AudioContext || window.webkitAudioContext; if (!AC) return;
-  try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch { /* 没有这个接口 */ } // iPhone 侧边静音键开着时 Web Audio 全哑、只剩配音（<audio>）：和配音走同一类，音乐、环境声一起响（iOS 16.4+）
   ctx = new AC();
   master = ctx.createGain(); master.gain.value = muted ? 0 : 1; master.connect(ctx.destination);
   amb = ctx.createGain(); amb.connect(master); // 环境音总线：配音时压低
