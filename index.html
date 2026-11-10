@@ -186,6 +186,8 @@ if (navigator.webdriver || /[?&]nolock\b/.test(location.search)) { let el = null
   #dlg { position: fixed; inset: 0; z-index: 31; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(8,10,8,.55);
     color: #f4efe6; text-shadow: 0 1px 3px rgba(0,0,0,.75), 0 0 8px rgba(0,0,0,.45); }
   #dlg[hidden] { display: none; }
+  #dlg.end { align-items: flex-end; padding-bottom: max(7vh, 28px); background: linear-gradient(to top, rgba(8,10,8,.74), rgba(8,10,8,.28) 36%, rgba(8,10,8,0) 60%); } /* 结局文字：压在结局画面下三分之一，上面留给画面 */
+  body.endshot :is(#title, #sky, #skyL, #quest, #mmap, #prog, #by, #langBtn, #rooms, #roomNote, #viewBtn, #roomBtn) { opacity: 0 !important; pointer-events: none; } body.endshot #app { pointer-events: none; } /* 结局画面：界面全收起；画布不收点击（第一页字出来前点到小屋会开卡片、镜头飞过去） */
   #dlg .box { width: min(440px, 100%); padding: 12px 0 14px; line-height: 1.65; border-top: 1px solid rgba(244,239,230,.45); border-bottom: 1px solid rgba(244,239,230,.45); }
   #dlg h2 { margin: 0; font-weight: normal; font-size: var(--fs-l); line-height: 1.25; letter-spacing: .3px; }
   html[data-lang="zh"] #dlg h2 { letter-spacing: 2px; }
@@ -298,6 +300,7 @@ if (navigator.webdriver || /[?&]nolock\b/.test(location.search)) { let el = null
 <script>try { const rd = (f) => { try { return f(); } catch (e) { return null; } }, K = 'cabin.game.v1', s = rd(() => localStorage.getItem(K)) || rd(() => sessionStorage.getItem(K)) || (window.name.startsWith(K + '=') ? window.name.slice(K.length + 1) : null); // 同 SAVE.get：local 禁了也读得到（r3 #6）
   const g = /[?&]reset/.test(location.search) ? {} : JSON.parse(s || '{}') || {}, t = g.found && g.found.includes('ended') ? null : g.day >= 3 ? ['The Third Day', '第三天', 'The inspector says I was mistaken. I was not mistaken.', '稽查说是看错了。我没有看错。'] : g.day === 2 ? ['The Second Day', '第二天', 'Tomorrow the inspector will go out, east-north-east.', '明天稽查会出门，往东北偏东。'] : null; // 第 2、3 天的加载页是章节卡（11-10，动机评审 #3）：大字第几天 + 昨晚记录的最后一句（悬念接到第二天，原来是一句讲雾的话）+ 小字说进度存了（换天是最容易关网页的地方）
   if (t) { document.getElementById('ldLine').innerHTML = `<div class="ch"><span class="en">${t[0]}</span><span class="zh">${t[1]}</span></div><span class="en">${t[2]}</span><span class="zh">${t[3]}</span>`; document.getElementById('ldSub').innerHTML = '<span class="en">Your place is kept. Close this, and it will wait for you.</span><span class="zh">进度已存，关掉也能接着来。</span>'; }
+  if (g.found && g.found.some((k) => k.startsWith('endshow:'))) { const L = document.getElementById('loader'); L.classList.add('dark'); L.style.transitionDuration = '2.4s'; document.getElementById('ldSub').hidden = true; } // 刚选完结局：黑场不出字，载完慢慢淡入结局画面
   if (sessionStorage.getItem('cabin.nextDay')) document.getElementById('loader').classList.add('dark'); } catch (e) { /* 读不到存档就用第 1 天那句 */ }</script>
 <script>/* 不认 importmap（iOS 16.4 以下）：整页起不来，加载页换成升级提示（r3 #8；不引 shim，shim 要联外网） */ if (!(window.HTMLScriptElement && HTMLScriptElement.supports && HTMLScriptElement.supports('importmap'))) { document.getElementById('ldLine').innerHTML = '<span class="en">This browser is too old to open it. Please update to iOS 16.4 or later, or use a newer browser.</span><span class="zh">这个浏览器太旧，打不开。请升级到 iOS 16.4 以上，或换用新版浏览器。</span>'; for (const id of ['ldSub', 'bar', 'pct']) document.getElementById(id).hidden = true; }</script>
 <div id="title"><h1><span class="en">The Surveyor's Cabin</span><span class="zh">无名测绘员的遗稿</span></h1></div>
@@ -392,7 +395,7 @@ if (navigator.webdriver || /[?&]nolock\b/.test(location.search)) { let el = null
   <div data-end="stay">
   <h4>Inquiry Notes · Night of Day 3</h4>
   <p>The inspector went out early, east-north-east. It is dark now, and he has not come back.</p>
-  <p>At dusk I stood under the porch and looked. Deep in the woods, east-north-east, there is one more light. Not smoke. A lamp.</p>
+  <p>At dusk I stood under the porch and looked. East-north-east there is smoke over the trees, and under it, deep in the woods, one more light.</p>
   <p>He took the greatcoat and the lantern. The tracks at the door go out, and none come in.</p>
   <p>I have banked the fire, left the door a crack, and left the lamp burning. It is how we found this house, the day we came.</p>
   <p>Tomorrow I go out of the woods alone; two days to the post-house. The report will say: <em class="k">The inspector stayed. Someone must watch it.</em></p>
@@ -444,7 +447,7 @@ if (navigator.webdriver || /[?&]nolock\b/.test(location.search)) { let el = null
   <div data-end="stay">
   <h4>调查记录 · 第 3 天夜里</h4>
   <p>稽查一早出门，往东北偏东。天黑了，他没有回来。</p>
-  <p>傍晚我站在门廊下看。东北偏东的林子深处多了一盏灯。不是烟，是灯。</p>
+  <p>傍晚我站在门廊下看。东北偏东的树梢上有一柱烟，烟底下的林子深处多了一盏灯。</p>
   <p>大衣和提灯他带走了。门口的脚印只有出去的。</p>
   <p>我把炉火压好，门留了条缝，灯留着。我们来的那天，这屋子就是这个样子。</p>
   <p>明天我一个人出林子，走两天到驿站。报告上我会写：<em class="k">稽查留下了。总得有人看着它。</em></p>
@@ -2703,7 +2706,7 @@ function papersNote(next) { // 遗稿启封：只弹一次（found 'papers' 进�
 }
 function resumeAsk() { // 刷新时有存档才问；「重新开始」只放在这里（网址加 ?reset 也行）
   try { if (sessionStorage.getItem('cabin.nextDay')) { sessionStorage.removeItem('cabin.nextDay'); dayStartNote(); return; } } catch (e) { /* 读不到就照常问 */ } // 刚从「第一天结束」过来：不问，直接说早上
-  if (game.found.has('ended')) { endHome(); endAsk(); return; } // 通关了：刷新只说终章、后记解锁
+  if (game.found.has('ended')) { endHome(); const es = [...game.found].find((k) => k.startsWith('endshow:')); if (es) endShotStart(es.slice(8)); else endAsk(); return; } // 通关了：刚选完结局先放结局画面，之后刷新只说终章、后记解锁
   if (!game.saved) return;
   if ((game.day === 1 && game.found.has('notes1')) || (game.day === 2 && game.found.has('notes2'))) return; // 读完夜里记录就刷新了：加载时已弹「第 n 天结束」，别用「欢迎回来」盖掉（不然进不了下一天）
   dialog(['Welcome Back', '欢迎回来'], ['Your inquiry was left part-way.', '上次的调查还没做完。'],
@@ -3850,20 +3853,34 @@ function porchAsk() { // ✕ 那间屋的门廊下：回去 / 留下 / 再看看
   dialog(['Under the Other Porch', '另一间屋的门廊下'], [GAME_TEXT.xLook[1] + log[0], GAME_TEXT.xLook[2] + log[1]],
     [['Go Back', '回去', () => ending('back')], ['Stay', '留下', () => ending('stay')], ['Not Yet', '再看看']]);
 }
-function ending(kind) { LOG && LOG.ev('end', `结局 ${kind}`); LOG && LOG.ev('day', '第3天结束'); // 压黑，一张张放结局文字；读完存 ended，重新载入回自己那间屋
-  const hidden = kind === 'back' && X_NEED.every((k) => game.found.has(k)), seq = kind === 'stay' ? ['endStay'] : hidden ? ['endBack', 'endHidden'] : ['endBack'];
+function ending(kind) { LOG && LOG.ev('end', `结局 ${kind}`); LOG && LOG.ev('day', '第3天结束'); // 压黑、存 ended、重新载入回自己那间屋；结局文字在载入后压着画面放（endShotStart）。11-10 前是在这里黑底弹窗一张张放完才刷新
+  const hidden = kind === 'back' && X_NEED.every((k) => game.found.has(k));
   if (fp) stopFP();
-  d2.veil = true; veilEl.style.transition = 'opacity 1.2s'; veilEl.style.zIndex = 30; veilEl.style.opacity = 1;
+  d2.veil = true; veilEl.style.transition = 'opacity 1.6s'; veilEl.style.zIndex = 30; veilEl.style.opacity = 1;
+  setTimeout(() => {
+    game.snap = endFree(); game.found.add('end_' + kind); if (hidden) game.found.add('end_hidden'); game.found.add('ended'); // 快照更新到选结局这一刻（进 ✕ 后又找到的也带上）
+    game.found.add('endshow:' + (hidden ? 'hidden' : kind)); saveGame(); // 还没放的结局：记在存档里（不用 sessionStorage，存不进也读得到；中途关掉下次打开接着放），放完 endShotStart 里删
+    location.reload();
+  }, 1900);
+}
+// —— 结局画面（11-10，动机评审 #5 #6、美术评审「结局只有黑底文字」）：回到自家，天刚黑，从院子西南角的树影里看小屋：门廊灯亮着，东北偏东的树梢上那柱烟还在升；「留下」时书记员站在门廊东头望着它。
+// 镜头用 fly 慢慢推近，结局文字一段一页压在画面下三分之一，点「继续」翻页，放完才出「遗稿齐了」。机位照宣传图 b-night 那个角度（用户认可过），时刻 18.3：树是黑剪影（日落时树发棕，不用），烟还衬得出来（入夜就看不见了）
+const END_SHOT = { hour: 18.3, dur: 30, from: [-7.5, 1.6, 10.5], to: [-6.6, 1.6, 9.3], wide: { fov: 50, tgt: [2, 1.9, -2] }, tall: { fov: 62, tgt: [3.1, 0.4, -1.2] }, woman: [1.5, 2.9] }; // from：右边一棵树挡着半个画面，推到 to 让开，露出门廊东头的人和右上的烟；再往后退或往东挪就钻进树冠里全黑。tall = 竖屏：视野窄，往右偏 5° 才同时装下门和烟；两种都压低视线，把小屋抬到画面中上，下三分之一留给字
+function endShotStart(kind) {
+  const E = { ...END_SHOT, ...(innerHeight > innerWidth ? END_SHOT.tall : END_SHOT.wide) }, V = (a) => new THREE.Vector3(...a), d = $('dlg');
+  intro = null; spin = false; controls.enabled = false; document.body.classList.add('endshot');
+  sky.goal = null; sky.hour = E.hour; sky.play = false;
+  camera.fov = E.fov; camera.updateProjectionMatrix(); camera.position.copy(V(E.from)); controls.target.copy(V(E.tgt));
+  fly = { t: 0, dur: E.dur, fromPos: V(E.from), toPos: V(E.to), fromTgt: V(E.tgt), toTgt: V(E.tgt), ease: (t) => t * (2 - t) }; // 越推越慢，停在 to
+  const stand = () => { const w = people.get('person_woman'); if (!w) { setTimeout(stand, 300); return; } // 人物还没载完
+    placeMan(w, ...E.woman, Math.atan2(D2.lamp[0] - E.woman[0], D2.lamp[2] - E.woman[1])); w.root.position.y = floorAt(...E.woman); w.roam = w.next = 1e9; }; // 脸朝那柱烟
+  if (kind === 'stay') stand();
+  const pages = (kind === 'stay' ? ['endStay'] : kind === 'hidden' ? ['endBack', 'endHidden'] : ['endBack']).flatMap((k) => { const t = GAME_TEXT[k], zh = t[2].split('\n\n'); return t[1].split('\n\n').map((p, i) => [i ? ['', ''] : END_TITLE[k], [p, zh[i] || '']]); });
   const next = (i) => {
-    if (i >= seq.length) {
-      game.snap = endFree(); game.found.add('end_' + kind); if (hidden) game.found.add('end_hidden'); game.found.add('ended'); saveGame(); // 快照更新到选结局这一刻（进 ✕ 后又找到的也带上）
-      try { sessionStorage.setItem('cabin.ended', '1'); } catch (e) { /* 存不了就照常问 */ }
-      location.reload(); return;
-    }
-    const t = GAME_TEXT[seq[i]], e = END_TITLE[seq[i]];
-    dialog([e[0], e[1]], [t[1], t[2]], [[i < seq.length - 1 ? 'Continue' : 'The End', i < seq.length - 1 ? '继续' : '完', () => next(i + 1)]]);
+    if (i >= pages.length) { d.classList.remove('end'); document.body.classList.remove('endshot'); game.found.delete('endshow:' + kind); saveGame(); fly = null; controls.enabled = true; endAsk(); return; } // 镜头停在推到的地方，交还拖动（不停的话 fly 会和拖动抢相机）
+    dialog(pages[i][0], pages[i][1], [[i < pages.length - 1 ? 'Continue' : 'The End', i < pages.length - 1 ? '继续' : '完', () => next(i + 1)]]); d.classList.add('end');
   };
-  setTimeout(() => next(0), 1300);
+  setTimeout(() => next(0), 3800); // 先让画面自己待一会儿
 }
 function endHome() { // 通关后按结局摆自家屋子（叙事评审 11-04 #7）：留下 = 稽查没回来，大衣、提灯也跟他走了（叙事 r2 #2，衣帽架说明 GEAR_RAIL.gone）；回去、隐藏结局照旧挂在钉子上（同结局文字）。「重新开始」清存档就复原
   if (!game.found.has('end_stay')) return;
@@ -5043,8 +5060,8 @@ function floorAt(x, z) { // 门廊地板高（从 1.4m 往下找，别打到门�
 }
 function sliceEye() { const [x, z] = SL.man; return new THREE.Vector3(x, floorAt(x, z) + 1.62 * 0.94, z - 0.12 * 0.94); } // 同 updateFP 的眼睛：眼高 1.62×scale、朝门往前 12cm
 // 开场飞完不让玩家自己找路：跟着书记员走进屋（她一路开灯），停在书桌那页纸前、低头看着它（11-10）。第一件怪事原来估真人 2 分钟、只会点鼠标的新手 8 分钟才碰到（动机评审 #2、新手评审 #1 #3）；
-// 走的是触屏「点哪走到哪」那套 fpGo，按 WASD / 点地面随时接管，跳过开场的不带。站点离她停的书架前 ≥0.9m（再近她会让开走掉），她落在画面右边缘外（人物近景不好看）
-const WALK_IN = [-0.6, -0.3, null, false, [Math.atan2(-0.81, -0.81), -0.6]]; // [x, z, 不点物件, 楼下, [朝向, 俯仰]]：朝向 = 站点指向那页纸（-1.41, -1.11）
+// 走的是触屏「点哪走到哪」那套 fpGo，按 WASD / 点地面随时接管，跳过开场的不带。站点在书桌东南 1.4m：纸在画面正中，上面带到墙上的地图和壁灯（下一条线索）；再贴近（0.9m）就成了低头 48° 只看见桌面。她停在东边柜子前，不进画面
+const WALK_IN = [-0.6, -0.3, null, false, [Math.atan2(-0.81, -0.81), -0.6]]; // [x, z, 不点物件, 楼下, [朝向, 俯仰]]：朝向 = 站点指向那页纸（-1.41, -1.11）；实际停在离站点 0.1m 内，俯仰按停下的位置量过（walkin.py 的 pageCenterNDC）
 function sliceStart() {
   const m = people.get('person_man'), w = people.get('person_woman');
   if (!m) { setTimeout(sliceStart, 200); return; } // 人物还没载完
@@ -5179,18 +5196,17 @@ function sliceTick(dt) {
     SL.room = rn; inside = rn ? ROOMS.find((r) => r.name === rn) : null;
     if (rn) game.entered = true;
     if (STOVE_ROOMS.includes(rn)) game.stoveSeen = true;
-    if (rn === 'Entry' && !SL.seen.has(rn) && !touchFP && !fp.go) { const P = fp.p.root.position; fp.turn = { yaw: Math.atan2(1.2 - P.x, 1.25 - P.z), pitch: -0.05, t: 0, name: null }; } // 电脑第一次进玄关：转向东边通屋里的过道口（帘子在 x 0.64），不脸贴衣钉墙（11-05 评审 #5）
-    if (rn && !SL.seen.has(rn)) { SL.seen.add(rn); saveGame(); if (ROOM_NOTES[rn]) showRoomNote(ROOM_NOTES[rn], rn); } // 每间只说一次（走来走去不重复）
+    if (rn === 'Entry' && !SL.seen.has(rn) && !touchFP && !fp.go && !SL.walked) { const P = fp.p.root.position; fp.turn = { yaw: Math.atan2(1.2 - P.x, 1.25 - P.z), pitch: -0.05, t: 0, name: null }; } // 电脑第一次进玄关：转向东边通屋里的过道口（帘子在 x 0.64），不脸贴衣钉墙（11-05 评审 #5）
+    if (rn && !SL.seen.has(rn) && !(SL.auto && SL.auto.go)) { SL.seen.add(rn); saveGame(); if (ROOM_NOTES[rn]) showRoomNote(ROOM_NOTES[rn], rn); } // 每间只说一次（走来走去不重复）；被带进屋的路上不说也不算看过（不然玄关、厨房两段旁白排着队念，人到了书桌前字幕还在讲厨房的桌板），等玩家自己走到再说
     showQuest();
   }
   const w = people.get('person_woman');
   if (!fp.paused) SL.liveT += 0.3;
-  if (SL.auto && SL.auto.go && fp.go !== SL.auto.go) SL.auto = null; // 走到了，或者玩家按键 / 点地面接管了
-  if (SL.auto && !SL.auto.go && w && SL.w === 'in' && fp.p.root.position.z - w.root.position.z > 2) { fpGo(...WALK_IN); fp.go.follow = w; SL.auto.go = fp.go; } // 让她先走出 2m 再跟上
+  if (SL.auto && SL.auto.go && fp.go !== SL.auto.go) { SL.auto = null; if (rn && !SL.seen.has(rn)) { SL.seen.add(rn); saveGame(); if (ROOM_NOTES[rn]) showRoomNote(ROOM_NOTES[rn], rn); } } // 走到了，或者玩家按键 / 点地面接管了：这时所在的房间算看过（存档靠 seen 认「进过屋」，不记的话刷新后又带一遍），有旁白的现在念
+  if (SL.auto && !SL.auto.go && w && SL.w === 'in' && fp.p.root.position.z - w.root.position.z > 2) { fpGo(...WALK_IN); fp.go.follow = w; SL.auto.go = fp.go; SL.walked = true; } // 让她先走出 2m 再跟上；walked：被带着穿过玄关了，之后自己第一次回玄关不再替他转头找过道口
   if (w && SL.w === 'porch' && (SL.liveT > 1.5 || rn || SL.auto)) { // 玩家一拿到操作她就先进屋领路：进门往右穿过帘子、一路开灯，站到书架前看着书桌（评审④ v2 #2：原来等他进门 6 秒才跟，玄关成了死角；不站路点 sw，挡稽查的路；之后照白天的样子在楼下转）
     const A = SL.auto, lt = (n) => (A ? [['lamp', n]] : lampTasks(n)); // 带玩家进屋（SL.auto）：屋里三盏灯路过就亮，不停下抬手（原来她在过道口停 7 秒，玩家贴着她后背等）；门口那盏照旧抬手开，玩家在门外 2m 看着亮起来
-    const end = A ? [...goTasks(w, ...NAV.ne, 'dish'), ['walk', ...NAV.dish], ['face', NAV.dish[0], -1.9]] : [...goTasks(w, ...NAV.ne, 'books'), ['walk', ...NAV.books], ['face', -1.4, -1.15]]; // 带玩家进屋时她停在东边柜子前：停在书架前会贴着画面右边露出半个身子（人物近景不好看）
-    SL.w = 'in'; w.tasks = [['walk', ...SL.door[0]], ['walk', ...SL.door[1]], ...goTasks(w, ...SL.door[1], 'entry'), ...lampTasks('ceiling_light_entry'), ...goTasks(w, ...NAV.entry, 'hall'), ...lt('hall_pendant_south'), ...lt('hall_pendant_north'), ...goTasks(w, ...NAV.hall, 'ne'), ...lt('ceiling_light_living'), ...end]; w.roam = 25; w.next = 8;
+    SL.w = 'in'; w.tasks = [['walk', ...SL.door[0]], ['walk', ...SL.door[1]], ...goTasks(w, ...SL.door[1], 'entry'), ...lampTasks('ceiling_light_entry'), ...goTasks(w, ...NAV.entry, 'hall'), ...lt('hall_pendant_south'), ...lt('hall_pendant_north'), ...goTasks(w, ...NAV.hall, 'ne'), ...lt('ceiling_light_living'), ...(A ? [...goTasks(w, ...NAV.ne, 'dish'), ['walk', ...NAV.dish], ['face', NAV.dish[0], -1.9]] : [...goTasks(w, ...NAV.ne, 'books'), ['walk', ...NAV.books], ['face', -1.4, -1.15]])]; w.roam = A ? 60 : 25; w.next = 8; // 带玩家进屋时她停在东边柜子前 NAV.dish：停在书架前 NAV.books 会贴着画面右边露半个身子（人物近景不好看）。站满 60 秒再开始转：领路只用 18 秒，按原来的 25 秒她正好在玩家读完纸去生火时晃到炉子前（fpslice.py 生火那步点到水壶）
   }
 }
 // 触屏：单指拖动转头（拖世界：手指往右，视线往左），轻点（<600ms、移动 <10px）= 走过去
