@@ -297,7 +297,7 @@ if (navigator.webdriver || /[?&]nolock\b/.test(location.search)) { let el = null
 <div id="app"></div>
 <div id="loader"><div id="ldLine"></div><div id="ldSub"><span class="en">Three days · about 20 minutes</span><span class="zh">三天 · 约 20 分钟</span></div><div id="bar"><div></div></div><div id="pct">0%</div></div>
 <script>/* 试玩：?day=2 / ?day=3 写一份「前一夜记录读完」的存档（同无头 day2.py / day3.py），直接从那天早上开始；会覆盖真存档，只在本机 / 局域网或带 &debug 时生效（11-05 评审 #6：原来发布版也认） */ try { const d = +(location.search.match(/[?&]day=([23])\b/) || [])[1]; if (d && (/^(localhost|127\.|\[::1\]|10\.|172\.|192\.168\.)/.test(location.hostname) || /[?&]debug\b/.test(location.search))) { const f = ['opening', 'fire', 'letter', 'map', 'drawer', 'coat', 'boots', 'lantern', 'log', 'took', 'journal', 'notes1'].concat(d === 3 ? ['d2block', 'd2stake', 'd2blaze', 'd2cairn', 'd2light', 'log2', 'notes2'] : []); localStorage.setItem('cabin.game.v1', JSON.stringify({ day: d, found: f })); sessionStorage.setItem('cabin.nextDay', '1'); } } catch (e) { /* 存不了就照常从存档开始 */ }</script>
-<script>try { const rd = (f) => { try { return f(); } catch (e) { return null; } }, K = 'cabin.game.v1', s = rd(() => localStorage.getItem(K)) || rd(() => sessionStorage.getItem(K)) || (window.name.startsWith(K + '=') ? window.name.slice(K.length + 1) : null); // 同 SAVE.get：local 禁了也读得到（r3 #6）
+<script>try { const rd = (f) => { try { return f(); } catch (e) { return null; } }, K = 'cabin.game.v1', s = rd(() => localStorage.getItem(K)) || rd(() => sessionStorage.getItem(K)) || rd(() => window.name.split('\n').find((l) => l.startsWith(K + '=')).slice(K.length + 1)); // 同 SAVE.get：local 禁了也读得到（r3 #6）
   const g = /[?&]reset/.test(location.search) ? {} : JSON.parse(s || '{}') || {}, t = g.found && g.found.includes('ended') ? null : g.day >= 3 ? ['The Third Day', '第三天', 'The inspector says I was mistaken. I was not mistaken.', '稽查说是看错了。我没有看错。'] : g.day === 2 ? ['The Second Day', '第二天', 'Tomorrow the inspector will go out, east-north-east.', '明天稽查会出门，往东北偏东。'] : null; // 第 2、3 天的加载页是章节卡（11-10，动机评审 #3）：大字第几天 + 昨晚记录的最后一句（悬念接到第二天，原来是一句讲雾的话）+ 小字说进度存了（换天是最容易关网页的地方）
   if (t) { document.getElementById('ldLine').innerHTML = `<div class="ch"><span class="en">${t[0]}</span><span class="zh">${t[1]}</span></div><span class="en">${t[2]}</span><span class="zh">${t[3]}</span>`; document.getElementById('ldSub').innerHTML = '<span class="en">Your place is kept. Close this, and it will wait for you.</span><span class="zh">进度已存，关掉也能接着来。</span>'; }
   if (g.found && g.found.some((k) => k.startsWith('endshow:'))) { const L = document.getElementById('loader'); L.classList.add('dark'); L.style.transitionDuration = '2.4s'; document.getElementById('ldSub').hidden = true; } // 刚选完结局：黑场不出字，载完慢慢淡入结局画面
@@ -2599,13 +2599,24 @@ function infoOf(name) {
 const GAME_KEY = 'cabin.game.v1';
 // 改版 v2（2026-10-27）：开头先有书桌上那页「还没写的记录」（page），线索砍到 page / fire / letter / map（地图和抽屉合成一条）；书架日志、「他什么都没带」还在，但不算过关条件
 const DAY1_NEED = ['page', 'fire', 'letter', 'map', 'watch', 'basin']; // watch：阁楼床头柜抽屉里停在 3:17 的怀表；basin：卫生间洗脸盆里冻成一块的半盆水（11-03 用户定：最短路线也要上阁楼、进卫生间；第 3 天 ✕ 那间表在走、盆里是水浮着碎冰）
+const WN = { // window.name 当最后一级存储：一行一个「键=值」（JSON 里没有裸换行），存档和看过的结局各占一行，写一个不冲掉另一个
+  get(k) { const l = window.name.split('\n').find((s) => s.startsWith(k + '=')); return l ? l.slice(k.length + 1) : null; },
+  set(k, v) { window.name = window.name.split('\n').filter((s) => s && !s.startsWith(k + '=')).concat(v == null ? [] : [k + '=' + v]).join('\n'); },
+};
 const SAVE = { // 存档放哪：localStorage 不让用（禁 Cookie、隐私模式、写满）就退到 sessionStorage，再不行放 window.name（同一标签页刷新后还在；换天靠 reload，只放内存会永远回到第 1 天）
-  get() { for (const f of [() => localStorage.getItem(GAME_KEY), () => sessionStorage.getItem(GAME_KEY), () => (window.name.startsWith(GAME_KEY + '=') ? window.name.slice(GAME_KEY.length + 1) : null)]) { try { const v = f(); if (v) return v; } catch (e) { /* 这处读不了就看下一处 */ } } return null; },
-  set(v) { try { localStorage.setItem(GAME_KEY, v); SAVE.clear(1); return; } catch (e) { try { localStorage.removeItem(GAME_KEY); } catch (e2) { /* 存不进就退一级，旧档也别留着盖过新的 */ } } try { sessionStorage.setItem(GAME_KEY, v); return; } catch (e) { /* 再退一级 */ } window.name = GAME_KEY + '=' + v; },
-  clear(keepLocal) { if (!keepLocal) try { localStorage.removeItem(GAME_KEY); } catch (e) { /* 清不掉就算了 */ } try { sessionStorage.removeItem(GAME_KEY); } catch (e) { /* 同上 */ } if (window.name.startsWith(GAME_KEY + '=')) window.name = ''; },
+  get() { for (const f of [() => localStorage.getItem(GAME_KEY), () => sessionStorage.getItem(GAME_KEY), () => WN.get(GAME_KEY)]) { try { const v = f(); if (v) return v; } catch (e) { /* 这处读不了就看下一处 */ } } return null; },
+  set(v) { try { localStorage.setItem(GAME_KEY, v); SAVE.clear(1); return; } catch (e) { try { localStorage.removeItem(GAME_KEY); } catch (e2) { /* 存不进就退一级，旧档也别留着盖过新的 */ } } try { sessionStorage.setItem(GAME_KEY, v); return; } catch (e) { /* 再退一级 */ } WN.set(GAME_KEY, v); },
+  clear(keepLocal) { if (!keepLocal) try { localStorage.removeItem(GAME_KEY); } catch (e) { /* 清不掉就算了 */ } try { sessionStorage.removeItem(GAME_KEY); } catch (e) { /* 同上 */ } WN.set(GAME_KEY, null); },
+};
+const PAST_KEY = 'cabin.past.v1'; // 看过哪些结局（end_* 键，最近的放最后）：「重新开始」清不掉，第二遍第 1 天那页纸据此多一行（PAGE_TRACE，动机评审 #9「它照着你画，一遍遍重来」）。退路同 SAVE；网址带 ?reset 连它一起清（无头测试都用 ?reset 开局，不串）
+const PAST = {
+  get() { for (const f of [() => localStorage.getItem(PAST_KEY), () => sessionStorage.getItem(PAST_KEY), () => WN.get(PAST_KEY)]) { try { const v = JSON.parse(f()); if (Array.isArray(v)) return v.filter((k) => typeof k === 'string' && k.startsWith('end_')); } catch (e) { /* 这处读不了就看下一处 */ } } return []; },
+  set(a) { const v = JSON.stringify(a); try { localStorage.setItem(PAST_KEY, v); return; } catch (e) { try { localStorage.removeItem(PAST_KEY); } catch (e2) { /* 旧的别盖过新的 */ } } try { sessionStorage.setItem(PAST_KEY, v); return; } catch (e) { /* 再退一级 */ } WN.set(PAST_KEY, v); },
+  add(ks) { PAST.set(PAST.get().filter((k) => !ks.includes(k)).concat(ks)); }, // 再看一遍的挪到最后
+  clear() { try { localStorage.removeItem(PAST_KEY); } catch (e) { /* 清不掉就算了 */ } try { sessionStorage.removeItem(PAST_KEY); } catch (e) { /* 同上 */ } WN.set(PAST_KEY, null); },
 };
 const game = (() => {
-  if (/[?&]reset\b/.test(location.search)) SAVE.clear();
+  if (/[?&]reset\b/.test(location.search)) { SAVE.clear(); PAST.clear(); }
   let s = null; try { s = JSON.parse(SAVE.get()); } catch (e) { s = null; }
   if (!s || typeof s !== 'object') s = null;
   const str = (a) => (Array.isArray(a) ? a.filter((k) => typeof k === 'string') : []); // 坏存档里混进数字、null、对象：只留字符串（不然 k.startsWith 报错，停在 84%）
@@ -2617,6 +2628,7 @@ const game = (() => {
   if (g.found.has('fire') && !g.found.has('page')) g.found.add('page'); // v2 之前的存档没有这页纸
   g.night = g.day >= 3 ? false : g.day >= 2 ? g.found.has('log2') : DAY1_NEED.every((k) => g.found.has(k)) && !(g.found.has('lback0') && !g.found.has('lback')); // 第 2 天：回屋读到日志中段才天黑；第 1 天信放回炉膛了还没看见也不黑（同 day1Done）
   if (g.night) g.found.add('journal'); // 老存档：第 1 天已找齐但没弹过「解锁遗稿」，直接算解锁
+  const ends = [...g.found].filter((k) => k.startsWith('end_')), past = PAST.get(); if (ends.some((k) => !past.includes(k))) PAST.add(ends.filter((k) => !past.includes(k))); // 这个功能之前通关的存档、别处加的 end_* 变体：补记
   g.saved = g.found.size > 0; // 有存档：刷新时问「继续上次 / 重新开始」（resumeAsk）
   return g;
 })();
@@ -2648,6 +2660,9 @@ const CLERK_SAYS = ['The clerk: "This house is newer than the reports made it."'
 // 换掉的卡片：[标题, 区域, 中文标题, 英, 中, 说明]
 // v2：卡片只留一两句，全文在遗稿（Journal）里
 const PAGE_CARD = ['A Page on the Desk', 'Parlour', '书桌上的一页纸', 'Inquiry Notes, the First Day.\n\nThe inspector lit the stove. In the firebox, a letter not burnt through.', '调查记录，第一天。\n\n稽查生了火。炉膛里有一封没烧完的信。'];
+const PAGE_TRACE = { stay: ['The inspector stayed.', '稽查留下了。'], hidden: ['The inspector went out without the lantern.', '稽查出门没带提灯。'], back: ['No irregularity found.', '未发现异常。'] }; // 上一局的结局在这页纸末尾留一行（照各结局里她写下 / 说出的话），不解释；按 end_ 后面的前缀认，变体结局（end_stay…）也算
+const pageTrace = (() => { for (const k of PAST.get().reverse()) { const t = Object.keys(PAGE_TRACE).find((t) => k.slice(4).startsWith(t)); if (t) return PAGE_TRACE[t]; } return null; })();
+if (pageTrace) { PAGE_CARD[3] += '\n\n' + pageTrace[0]; PAGE_CARD[4] += '\n\n' + pageTrace[1]; } // 原地改：isPaper 按数组本身认
 const PAGE_SAYS = ['The clerk reads it twice. "That is my hand. But I have not written it yet."', '书记员看了两遍：“是我的字。可我还没写呢。”'];
 const LETTER_SAYS = ['The clerk looks from the letter to the page in her hand, and says nothing.', '书记员看看信，又看看手里那页纸，没说话。'];
 const LETTER_CARD = ['Unburnt Letter', 'Kitchen', '没烧完的信', '"…east-north-east, about four miles. Beneath an old spruce the ground has split… Marked ✕. This place is not fit…"\n\nThe rest is burnt away.', '“……东北偏东，约四英里。老云杉根下地面开裂……已标 ✕。此处不宜……”\n\n后面烧没了。'];
@@ -3001,7 +3016,7 @@ function makePage() { // v2：书桌上那页调查记录（折过三折的纸 +
   const m = paperMesh(0.15, 0.2, { seed: 23, tone: '#d9cfb4', curl: 0.004, folds: [['h', 0.333], ['h', 0.667]], wrinkle: 10, draw(x, W, H, R) {
     handwrite(x, ['Inquiry Notes, the First Day.'], { x0: 96, y0: 170, size: 60, pitch: 0, R });
     x.strokeStyle = 'rgba(28,26,50,.7)'; x.lineWidth = 3.4; x.lineCap = 'round'; x.beginPath(); x.moveTo(94, 200); x.bezierCurveTo(300, 190, 560, 208, 860, 194); x.stroke(); // 标题底下一道墨线
-    handwrite(x, ['The inspector lit the stove.', 'In the firebox, a letter not', 'burnt through.', '', 'Stores counted; all in order.', 'Stove drawing well.'], { x0: 96, y0: 330, size: 52, pitch: 78, R });
+    handwrite(x, ['The inspector lit the stove.', 'In the firebox, a letter not', 'burnt through.', '', 'Stores counted; all in order.', 'Stove drawing well.', ...(pageTrace ? ['', ...pageTrace[0].split(/ (?=without)/)] : [])], { x0: 96, y0: 330, size: 52, pitch: 78, R });
     x.fillStyle = 'rgba(28,26,50,.5)'; x.beginPath(); x.arc(760, 1180, 5 + R() * 2, 0, 7); x.fill(); const g = x.createRadialGradient(742, 1170, 0, 742, 1170, 26); g.addColorStop(0, 'rgba(28,26,50,.35)'); g.addColorStop(1, 'rgba(28,26,50,0)'); x.fillStyle = g; x.fillRect(700, 1130, 90, 90); // 墨点
   } });
   m.rotation.set(-Math.PI / 2, 0, 0.25); document.fonts.load('italic 40px "IM Fell English"').then(() => m.userData.repaint());
@@ -3900,7 +3915,7 @@ function ending(kind) { LOG && LOG.ev('end', `结局 ${kind}`); LOG && LOG.ev('d
   if (fp) stopFP();
   d2.veil = true; veilEl.style.transition = 'opacity 1.6s'; veilEl.style.zIndex = 30; veilEl.style.opacity = 1;
   setTimeout(() => {
-    game.snap = endFree(); game.found.add('end_' + kind); if (hidden) game.found.add('end_hidden'); game.found.add('ended'); // 快照更新到选结局这一刻（进 ✕ 后又找到的也带上）
+    game.snap = endFree(); game.found.add('end_' + kind); if (hidden) game.found.add('end_hidden'); game.found.add('ended'); PAST.add(['end_' + kind, ...(hidden ? ['end_hidden'] : [])]); // 快照更新到选结局这一刻（进 ✕ 后又找到的也带上）
     game.found.add('endshow:' + (hidden ? 'hidden' : kind)); saveGame(); // 还没放的结局：记在存档里（不用 sessionStorage，存不进也读得到；中途关掉下次打开接着放），放完 endShotStart 里删
     location.reload();
   }, 1900);
