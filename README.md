@@ -2,28 +2,30 @@
 
 # The Surveyor's Cabin
 
-**A short mystery game in a log cabin in the northern woods, played in your browser.**
-For thirty years the Surveyor sent down a report each spring. This spring, none came. On the desk in his cabin lies a page of inquiry notes in your clerk's hand, describing what you have not done yet.
+**On a desk in a cabin in the northern woods lies a page of inquiry notes. It is in your clerk's hand, and it describes what you have not done yet.**
+Thirty years of spring reports from the Surveyor, then this year none. You are the old inspector sent to find out why. A short first-person mystery that plays in your browser.
 
-Three days · about 20 minutes · two endings and a hidden one · English and Chinese, with voice-over
+Three days · about 20 minutes · four endings · English and Chinese, with voice-over
 
 [**▶ Open it in your browser**](https://fxrcred.github.io/surveyors-cabin/) · [中文说明](README.zh.md) · three.js · no build step · code MIT
 
-<a href="https://fxrcred.github.io/surveyors-cabin/"><img src="docs/hero.jpg" width="820" alt="A log cabin with a shingle roof and smoking chimney, surrounded by pine forest"></a>
+<a href="https://fxrcred.github.io/surveyors-cabin/"><img src="docs/social.jpg" width="820" alt="A log cabin in a snowy pine forest at night, one lit window and a porch lamp, the title The Surveyor's Cabin above"></a>
 
 </div>
 
-## What's inside
+## How it goes
 
-**Three days in the woods.** You are the old inspector who signed the Surveyor's commission thirty years ago; a young clerk who has read every report he sent comes with you.
-- **Day one:** the door ajar, the porch lamp burning, the stove stone cold. Search the six rooms (Entry, Water Closet, Hall, Parlour, Kitchen, Loft) for what he left behind.
-- **Day two:** fog has come down. Follow a trail into the trees and see what is waiting along it.
-- **Day three:** go where the trail leads, and choose.
+**Three days in the woods.** You are the old inspector who signed the Surveyor's commission thirty years ago. A young clerk who has read every report he sent comes with you.
+- **Day one:** the door ajar, the porch lamp burning, the stove stone cold. Search the cabin for what he left behind.
+- **Day two:** fog has come down, and something is out there for you to follow.
+- **Day three:** walk to the end of it, and choose.
 - Everything you find is written into the **Journal**, the *Nameless Surveyor's Last Papers*, in period English with the Chinese original underneath.
 
 **How to play.** First person: WASD to walk, mouse to look, click to examine, E to take or climb. On a phone, tap where you want to go, or use *Rooms*. Progress is saved in the browser; close the page and come back later.
 
-**The world goes on around you.** Sun, dusk and lamplight, weather, snow on the roof, chimney smoke on the wind; doors, lamps, the stove, the kettle and the rocking chair all work.
+## The world around you
+
+The cabin is a small simulated place that goes on whether or not you are looking. Sun, dusk and lamplight, weather, snow on the roof, chimney smoke on the wind; doors, lamps, the stove, the kettle and the rocking chair all work. There is a weather and time-of-day panel if you want to look around the cabin at other hours.
 
 <table>
 <tr>

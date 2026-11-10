@@ -4,10 +4,12 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>The Surveyor's Cabin</title>
-<meta name="description" content="A short mystery in a log cabin in the northern woods. The Surveyor is missing, and on his desk lies a page in your clerk&#39;s hand about things you have not done yet. Three days, about 20 minutes, three endings. 北方林中小屋的悬疑短篇：测绘员失踪了，他书桌上压着一页书记员笔迹的调查记录，写的是你们还没做的事。三天，约 20 分钟，三个结局。">
+<meta name="description" content="A short mystery in a log cabin in the northern woods. The Surveyor is missing, and on his desk lies a page in your clerk&#39;s hand about things you have not done yet. Three days, about 20 minutes, four endings. 北方林中小屋的悬疑短篇：测绘员失踪了，他书桌上压着一页书记员笔迹的调查记录，写的是你们还没做的事。三天，约 20 分钟，四个结局。">
 <meta property="og:title" content="The Surveyor's Cabin">
-<meta property="og:description" content="A short mystery in a log cabin in the northern woods. The Surveyor is missing, and on his desk lies a page in your clerk&#39;s hand about things you have not done yet. Three days, about 20 minutes, three endings. 北方林中小屋的悬疑短篇：测绘员失踪了，他书桌上压着一页书记员笔迹的调查记录，写的是你们还没做的事。三天，约 20 分钟，三个结局。">
+<meta property="og:description" content="A short mystery in a log cabin in the northern woods. The Surveyor is missing, and on his desk lies a page in your clerk&#39;s hand about things you have not done yet. Three days, about 20 minutes, four endings. 北方林中小屋的悬疑短篇：测绘员失踪了，他书桌上压着一页书记员笔迹的调查记录，写的是你们还没做的事。三天，约 20 分钟，四个结局。">
 <meta property="og:image" content="https://fxrcred.github.io/surveyors-cabin/docs/social.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
 <meta property="og:url" content="https://fxrcred.github.io/surveyors-cabin/">
 <meta name="twitter:card" content="summary_large_image">
 <script>/* 语言：记住的选择 > 浏览器语言（zh 开头 → 中文）> 英文；CSS 按 html[data-lang] 只显示一种 */ (() => { let l = null; try { l = localStorage.getItem('cabin.lang'); } catch (e) { /* 读不到就按浏览器 */ } if (l !== 'zh' && l !== 'en') l = /^zh/i.test(navigator.language || '') ? 'zh' : 'en'; document.documentElement.dataset.lang = l; document.documentElement.lang = l === 'zh' ? 'zh-CN' : 'en'; if (l === 'zh') document.title = '无名测绘员的遗稿'; })();</script>
@@ -297,7 +299,7 @@ if (navigator.webdriver || /[?&]nolock\b/.test(location.search)) { let el = null
 <div id="app"></div>
 <div id="loader"><div id="ldLine"></div><div id="ldSub"><span class="en">Three days · about 20 minutes</span><span class="zh">三天 · 约 20 分钟</span></div><div id="bar"><div></div></div><div id="pct">0%</div></div>
 <script>/* 试玩：?day=2 / ?day=3 写一份「前一夜记录读完」的存档（同无头 day2.py / day3.py），直接从那天早上开始；会覆盖真存档，只在本机 / 局域网或带 &debug 时生效（11-05 评审 #6：原来发布版也认） */ try { const d = +(location.search.match(/[?&]day=([23])\b/) || [])[1]; if (d && (/^(localhost|127\.|\[::1\]|10\.|172\.|192\.168\.)/.test(location.hostname) || /[?&]debug\b/.test(location.search))) { const f = ['opening', 'fire', 'letter', 'map', 'drawer', 'coat', 'boots', 'lantern', 'log', 'took', 'journal', 'notes1'].concat(d === 3 ? ['d2block', 'd2stake', 'd2blaze', 'd2cairn', 'd2light', 'log2', 'notes2'] : []); localStorage.setItem('cabin.game.v1', JSON.stringify({ day: d, found: f })); sessionStorage.setItem('cabin.nextDay', '1'); } } catch (e) { /* 存不了就照常从存档开始 */ }</script>
-<script>try { const rd = (f) => { try { return f(); } catch (e) { return null; } }, K = 'cabin.game.v1', s = rd(() => localStorage.getItem(K)) || rd(() => sessionStorage.getItem(K)) || (window.name.startsWith(K + '=') ? window.name.slice(K.length + 1) : null); // 同 SAVE.get：local 禁了也读得到（r3 #6）
+<script>try { const rd = (f) => { try { return f(); } catch (e) { return null; } }, K = 'cabin.game.v1', s = rd(() => localStorage.getItem(K)) || rd(() => sessionStorage.getItem(K)) || rd(() => window.name.split('\n').find((l) => l.startsWith(K + '=')).slice(K.length + 1)); // 同 SAVE.get：local 禁了也读得到（r3 #6）
   const g = /[?&]reset/.test(location.search) ? {} : JSON.parse(s || '{}') || {}, t = g.found && g.found.includes('ended') ? null : g.day >= 3 ? ['The Third Day', '第三天', 'The inspector says I was mistaken. I was not mistaken.', '稽查说是看错了。我没有看错。'] : g.day === 2 ? ['The Second Day', '第二天', 'Tomorrow the inspector will go out, east-north-east.', '明天稽查会出门，往东北偏东。'] : null; // 第 2、3 天的加载页是章节卡（11-10，动机评审 #3）：大字第几天 + 昨晚记录的最后一句（悬念接到第二天，原来是一句讲雾的话）+ 小字说进度存了（换天是最容易关网页的地方）
   if (t) { document.getElementById('ldLine').innerHTML = `<div class="ch"><span class="en">${t[0]}</span><span class="zh">${t[1]}</span></div><span class="en">${t[2]}</span><span class="zh">${t[3]}</span>`; document.getElementById('ldSub').innerHTML = '<span class="en">Your place is kept. Close this, and it will wait for you.</span><span class="zh">进度已存，关掉也能接着来。</span>'; }
   if (g.found && g.found.some((k) => k.startsWith('endshow:'))) { const L = document.getElementById('loader'); L.classList.add('dark'); L.style.transitionDuration = '2.4s'; document.getElementById('ldSub').hidden = true; } // 刚选完结局：黑场不出字，载完慢慢淡入结局画面
@@ -400,6 +402,7 @@ if (navigator.webdriver || /[?&]nolock\b/.test(location.search)) { let el = null
   <p>I have banked the fire, left the door a crack, and left the lamp burning. It is how we found this house, the day we came.</p>
   <p>Tomorrow I go out of the woods alone; two days to the post-house. The report will say: <em class="k">The inspector stayed. Someone must watch it.</em></p>
   <p>The Office will send someone. One must leave them a light.</p>
+  <p data-end="page">Morning. On my desk, one page more, in his hand, dated yesterday. I did not write it. The ink is not yet dry. I have put it in with the report.</p>
   </div>
 
   <h3>Afterword</h3>
@@ -452,6 +455,7 @@ if (navigator.webdriver || /[?&]nolock\b/.test(location.search)) { let el = null
   <p>我把炉火压好，门留了条缝，灯留着。我们来的那天，这屋子就是这个样子。</p>
   <p>明天我一个人出林子，走两天到驿站。报告上我会写：<em class="k">稽查留下了。总得有人看着它。</em></p>
   <p>局里会再派人来。总得给他们留个亮处。</p>
+  <p data-end="page">早上。我桌上多了一页纸，是他的笔迹，日期是前一天。不是我写的。墨还没干。我把它夹进了报告里。</p>
   </div>
 
   <h3>后记</h3>
@@ -931,7 +935,7 @@ async function loadTree0(url, all) { // → [{ geometry, material }]，底部中
     parts.push({ geometry, material: trunk ? barkMaterial() : crownMaterial({}, all), trunk });
   });
   const c = b.getCenter(new THREE.Vector3()), k = 1 / (b.max.y - b.min.y);
-  parts.forEach((p) => p.geometry.translate(-c.x, -b.min.y, -c.z).scale(k, k, k));
+  parts.forEach((p) => { p.geometry.translate(-c.x, -b.min.y, -c.z).scale(k, k, k); if (!p.trunk && !all) { p.geometry.computeBoundingBox(); p.material.userData.crB.value = p.geometry.boundingBox.min.y; } }); // 树冠最低点（抬冠底用，见 crownMaterial）
   parts.radius = Math.max(b.max.x - b.min.x, b.max.z - b.min.z) / 2 * k; // 树冠半径 / 树高，避开小屋时用
   return parts;
 }
@@ -941,14 +945,17 @@ async function loadTree0(url, all) { // → [{ geometry, material }]，底部中
 const BUSH_B = { value: new THREE.Color() }; // 灌木底面的补光（见 crownMaterial），渲染循环里 = 半球光颜色 × 强度 × 0.45
 function crownMaterial(opts = {}, bush = false) { // bush：灌木、草（loadPlant）
   // 色差在顶点里算好再插值（逐像素算的话远处一棵树只占几个像素、里面挤好几块颜色，相机一动就闪）
-  const m = new THREE.MeshLambertMaterial({ color: 0xffffff, ...opts });
+  const m = new THREE.MeshLambertMaterial({ color: 0xffffff, ...opts }), crB = m.userData.crB = { value: 0.08 }; // crB：树冠最低点 / 树高（loadTree0 按模型量）
   m.onBeforeCompile = (sh) => {
-    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vTreeK;')
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vTreeK;' + (bush ? '' : '\nuniform float uCrB;'))
       .replace('#include <begin_vertex>', `#include <begin_vertex>
         float seed = fract(dot(instanceMatrix[3].xz, vec2(0.137, 0.071))) * 10.0;
         float h = fract(sin(dot(floor(position * vec3(7.0, 6.0, 7.0)), vec3(12.9898, 78.233, 37.719)) + seed) * 43758.5453);
         vTreeK = vec3(0.72 + 0.5 * clamp(position.y, 0.0, 1.0), smoothstep(0.62, 1.0, h) * 0.55, smoothstep(0.38, 0.0, h) * 0.5);
-        vSnowK = 0.65 * smoothstep(-0.1, 0.7, normalize(objectNormal).y) + 0.35 * h;`); // 朝上的面先白，块之间有先后
+        vSnowK = 0.65 * smoothstep(-0.1, 0.7, normalize(objectNormal).y) + 0.35 * h;` + (bush ? '' : `
+        { float th = length(instanceMatrix[1].xyz), b1 = max(uCrB, 3.0 * smoothstep(5.0, 11.0, th) / max(th, 1.0)); // 11-10 art #7：密林里的大云杉下枝见不到光早枯落，活冠底在 3m 上下；原来 10–14m 的树最低一层冠在 1.2–1.7m，第一人称眼高处一顶顶「蘑菇伞」挡在脸前
+          transformed.y = 1.0 - (1.0 - transformed.y) * (1.0 - b1) / (1.0 - uCrB); }`)); // 以树顶为锚把树冠往上压（不动树顶和树干）；5m 以下的幼树枝条照旧到地
+    if (!bush) sh.uniforms.uCrB = crB;
     sh.uniforms.uSnow = cover.uSnow;
     sh.vertexShader = sh.vertexShader.replace('varying vec3 vTreeK;', 'varying vec3 vTreeK; varying float vSnowK;');
     sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 vTreeK; varying float vSnowK; uniform float uSnow;')
@@ -1406,8 +1413,9 @@ function makeBrook() {
     const i0 = P.findIndex((p) => p[4] > 0), i1 = P.findLastIndex((p) => p[4] > 0), rows = [[], [], []], eRow = [];
     for (let i = Math.max(0, i0 - 1); i <= Math.min(n - 1, i1 + 1); i++) {
       const [x, z, s, w, , tx, tz] = P[i], E = w + BROOK_BANK + groundSpan(Math.hypot(x, z)) + 1.2;
-      const oo = [-1, 1].map((e) => { const lip = w + 0.38 + 0.42 * (0.5 + 0.3 * Math.sin(s * 0.31 + e * 2.3) + 0.2 * Math.sin(s * 0.83 + e * 5.1)); // 土和雪地的分界：两岸各自随沿线忽宽忽窄（11-04 复测 ENV2：原来两岸一样宽，晴天像水渠）
-        return [0, w - 0.45, w - 0.2, w, w + 0.12, w + 0.27, lip, w + 0.85, ...[0, 1, 2, 3, 4, 5].map((j) => w + BROOK_BANK + (E - w - BROOK_BANK) * j / 5)].map((d, j) => Math.max(d, j * 0.02)); }); // 外圈 5 列：下游 E 到 20m 宽，两列直线插值会低到起伏的地面下面
+      const oo = [-1, 1].map((e) => { const lip = w + 0.12 + 0.38 * (0.5 + 0.3 * Math.sin(s * 0.31 + e * 2.3) + 0.2 * Math.sin(s * 0.83 + e * 5.1)); // 土和地面的分界：两岸各自随沿线忽宽忽窄（11-04 复测 ENV2：原来两岸一样宽，晴天像水渠）
+        // 11-10 ENV2 第二轮：裸土只留在水线上方的陡坡（0.12–0.5m），外面直接是地面材质（落叶、苔、雪，按世界坐标取样接缝看不出）——真实林间小溪的落叶层盖到坡口，原来 0.4–0.8m 宽的褐土带两岸平行，还像水渠
+        return [0, w - 0.45, w - 0.2, w, w + 0.04, w + 0.08, lip, lip + (w + 0.6 - lip) / 2, w + 0.6, w + 0.85, ...[0, 1, 2, 3, 4, 5].map((j) => w + BROOK_BANK + (E - w - BROOK_BANK) * j / 5)].map((d, j) => Math.max(d, j * 0.02)); }); // 外圈 5 列：下游 E 到 20m 宽，两列直线插值会低到起伏的地面下面；lip 外两列跟着岸坡变平
       // +4mm：盖在压低的地面上面、卵石路（+9mm）下面——下游岸带宽到卵石路边了（11-04 复测 ENV4，原来 +12mm 把路盖住）
       const at = (d) => { const px = x + tz * d, pz = z - tx * d; return [px, gy + terrainH(px, pz) + 0.004, pz]; }, [oL, oR] = oo, mid = [...oL.slice(1, 7).reverse().map((d) => -d), ...oR.slice(0, 7)];
       rows[0].push(oL.slice(6).reverse().map((d) => at(-d))); // 行按不带小弯的切向横切：截面略斜（≤ 25°），但外圈几米宽的一段在内弯处不会折叠
@@ -1417,7 +1425,7 @@ function makeBrook() {
     const sm = propMat(rockTexture(), { tri: 1.3, color: 0x5e4a3a, snow: 1.3 }), ob = sm.onBeforeCompile; // snow > 1：雪盖满、不留斑驳的小孔（11-04 r3 #7：湿土带外沿的小黑点，黄昏成了黑碎片） // 土岸：同林下土的写法，积雪量另给（BROOK.snow：地面积雪是阈值式的，岸上照 cover.uSnow 线性盖会比旁边地面先白）
     sm.onBeforeCompile = (sh) => { ob(sh); sh.uniforms.uSnow = BROOK.snow; // 11-04 复测 ENV2：雪按离水线多远盖，不按坡度（原来陡的三角面没盖上雪，雪地上剩几片悬空似的黑碎片）——只在水边露一条连续的湿土，宽窄随沿线噪声
       sh.vertexShader = 'attribute float aE; varying float vE;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\nvE = aE;');
-      sh.fragmentShader = 'varying float vE;\n' + sh.fragmentShader.replace('smoothstep(0.42, 0.7, n.y + 0.18 * (sn - 0.5))', 'smoothstep(-0.04, 0.04, vE - 0.06 - 0.2 * (0.5 + 0.5 * sin(vPW.x * 0.9 + vPW.z * 0.6) * sin(vPW.z * 1.7 - vPW.x * 0.4)))'); };
+      sh.fragmentShader = 'varying float vE;\n' + sh.fragmentShader.replace('smoothstep(0.42, 0.7, n.y + 0.18 * (sn - 0.5))', 'smoothstep(-0.04, 0.04, vE + 0.1 - 0.3 * (0.5 + 0.5 * sin(vPW.x * 0.9 + vPW.z * 0.6) * sin(vPW.z * 1.7 - vPW.x * 0.4)) - 0.1 * (sn - 0.5))'); }; // 11-10 ENV2 第二轮：雪线在水线上下 −0.1…+0.2m 进出，约三成地方雪直接压到水边，露土的湿边断成一段段（原来全程一道黑线，像铲过雪的路沿）
     const out = new THREE.Mesh(uvOf(mergeGeometries([strip(rows[0]), strip(rows[2])])), ground.material), soil = new THREE.Mesh(uvOf(strip(rows[1])), sm);
     soil.geometry.setAttribute('aE', new THREE.Float32BufferAttribute(eRow, 1));
     out.name = 'brook_bank'; soil.name = 'brook_soil'; out.receiveShadow = soil.receiveShadow = true; G.add(out, soil); BROOK.bed = [out, soil];
@@ -1475,7 +1483,7 @@ float bF(vec2 p) { return 0.6 * bN(p) + 0.4 * bN(p * 2.7 + 5.2); }
     rocks.push(...dn);
     const im = new THREE.InstancedMesh(rockGeo(5), W.rock, rocks.length), o = new THREE.Object3D(), tint = new THREE.Color();
     rocks.forEach(([x, z, y, s, fl], i) => { o.position.set(x, y, z); o.rotation.set((R() - 0.5) * 0.4, R() * 6.28, (R() - 0.5) * 0.4); o.scale.set(s * (0.9 + 0.5 * R()), s * fl, s * (0.9 + 0.5 * R())); o.updateMatrix(); im.setMatrixAt(i, o.matrix);
-      im.setColorAt(i, tint.setRGB(0.5, 0.56, 0.47).multiplyScalar(0.85 + 0.3 * wHash01(i * 7.1))); }); // 溪里的石头湿、长苔：压暗偏绿（11-04 复测 ENV2：晴天比地面亮一大截）；雪照样盖在顶上
+      im.setColorAt(i, tint.setRGB(0.5, 0.56, 0.47, THREE.SRGBColorSpace).multiplyScalar(0.85 + 0.3 * wHash01(i * 7.1))); }); // 溪里的石头湿、长苔：压暗偏绿（11-04 复测 ENV2：晴天比地面亮一大截）；雪照样盖在顶上。11-10：按 sRGB 给（原来按线性值 0.5，显示成 0.73，晴天一块块发白）
     im.computeBoundingSphere(); im.receiveShadow = true; im.castShadow = true; im.name = 'brook_rocks'; G.add(im);
   }
   { // ④ 水轮：踏石下游 12m，下射式小水轮（直径 1.4m，吃水 0.18m）顶着两根桩；小屋那边岸上一个装发电机的小木棚，电线从棚顶出去
@@ -2594,6 +2602,7 @@ const GAME_TEXT = {
   endBack: ['Ending · Going Back', 'You back out of the door and go the way you came. Slowly the compass settles, and points north again. At the end of the fog the porch lamp is burning, the fire is lit, and the clerk is waiting in the rocking chair.\n\nShe hears you out, thinks a long while, and writes in the report: "No irregularity found. The Surveyor\'s whereabouts unknown." Then she puts his field log back on the shelf.', '你退出门，沿着来路走。罗盘慢慢停下来，指回北方。雾的尽头，门廊灯亮着，炉火在烧，书记员在摇椅上等你。\n\n她听你说完，想了很久，在报告上写：“未发现异常。测绘员下落不明。”然后把他的工作日志放回书架。'],
   endStay: ['Ending · Staying', 'You sit down under the porch of that house.\n\nBack in your own cabin, the clerk looks up from the Surveyor\'s papers, goes out under the porch, and looks to the east-north-east. Deep in the woods there is one more light.\n\nShe does not go out to look for you. She finishes that day\'s notes, and the last line reads: "The inspector stayed. Someone must watch it."', '你在那间屋的门廊下坐下。\n\n画面回到你们的小屋。书记员从遗稿上抬起头，走到门廊下，看向东北偏东。林子深处多了一盏灯。\n\n她没有出门找你。她把那天的调查记录写完，最后一行是：“稽查留下了。总得有人看着它。”'],
   endHidden: ['Hidden Ending · only when all four differences are found', 'You come back to the cabin and stamp the snow from your boots. The clerk looks at you, and says:\n\n"You didn\'t take the lantern when you went out."\n\nYou look down. Your hand is empty. The lantern hangs on its peg of the coat rail, just as it did before you left.\n\nYet you remember carrying it into the fog.', '你回到小屋，跺掉靴子上的雪。书记员看着你，说：\n\n“你出门的时候没带提灯。”\n\n你低头看。手上是空的。提灯挂在衣帽架的钉子上，和你出门前一样。\n\n可你记得，你是提着它走进雾里的。'],
+  endPage: ['Hidden Ending · only when all four differences are found', 'Next morning there is one page more on the clerk\'s desk. She did not write it. It is in the inspector\'s hand, dated the day before:\n\n"Day three. Came to the ✕ by the marks. The coat rail bare, the watch going, the fire lit, a page in her hand upon the desk. I have stayed. I have left the lamp burning."\n\nThe ink is not yet dry.', '第二天早上，书记员的桌上多了一页纸，不是她写的。是稽查的笔迹，日期是前一天：\n\n“第三天。照着记号走到 ✕。衣帽架空着，怀表在走，炉火烧着，书桌上有一页她的字。我留下了。灯我留着。”\n\n墨还没干。'], // 「留下」+ 四处齐（设计评审 #7）：和隐藏结局对等；✕ 那间桌上有她写的今天，这边桌上多一页他写的那边
 };
 const LIGHT_ROOMS = { living: 'Parlour', entry: 'Entry', toilet: 'Water Closet', loft_bed: 'Loft', loft_rocker: 'Loft' };
 function infoOf(name) {
@@ -2618,13 +2627,24 @@ function infoOf(name) {
 const GAME_KEY = 'cabin.game.v1';
 // 改版 v2（2026-10-27）：开头先有书桌上那页「还没写的记录」（page），线索砍到 page / fire / letter / map（地图和抽屉合成一条）；书架日志、「他什么都没带」还在，但不算过关条件
 const DAY1_NEED = ['page', 'fire', 'letter', 'map', 'watch', 'basin']; // watch：阁楼床头柜抽屉里停在 3:17 的怀表；basin：卫生间洗脸盆里冻成一块的半盆水（11-03 用户定：最短路线也要上阁楼、进卫生间；第 3 天 ✕ 那间表在走、盆里是水浮着碎冰）
+const WN = { // window.name 当最后一级存储：一行一个「键=值」（JSON 里没有裸换行），存档和看过的结局各占一行，写一个不冲掉另一个
+  get(k) { const l = window.name.split('\n').find((s) => s.startsWith(k + '=')); return l ? l.slice(k.length + 1) : null; },
+  set(k, v) { window.name = window.name.split('\n').filter((s) => s && !s.startsWith(k + '=')).concat(v == null ? [] : [k + '=' + v]).join('\n'); },
+};
 const SAVE = { // 存档放哪：localStorage 不让用（禁 Cookie、隐私模式、写满）就退到 sessionStorage，再不行放 window.name（同一标签页刷新后还在；换天靠 reload，只放内存会永远回到第 1 天）
-  get() { for (const f of [() => localStorage.getItem(GAME_KEY), () => sessionStorage.getItem(GAME_KEY), () => (window.name.startsWith(GAME_KEY + '=') ? window.name.slice(GAME_KEY.length + 1) : null)]) { try { const v = f(); if (v) return v; } catch (e) { /* 这处读不了就看下一处 */ } } return null; },
-  set(v) { try { localStorage.setItem(GAME_KEY, v); SAVE.clear(1); return; } catch (e) { try { localStorage.removeItem(GAME_KEY); } catch (e2) { /* 存不进就退一级，旧档也别留着盖过新的 */ } } try { sessionStorage.setItem(GAME_KEY, v); return; } catch (e) { /* 再退一级 */ } window.name = GAME_KEY + '=' + v; },
-  clear(keepLocal) { if (!keepLocal) try { localStorage.removeItem(GAME_KEY); } catch (e) { /* 清不掉就算了 */ } try { sessionStorage.removeItem(GAME_KEY); } catch (e) { /* 同上 */ } if (window.name.startsWith(GAME_KEY + '=')) window.name = ''; },
+  get() { for (const f of [() => localStorage.getItem(GAME_KEY), () => sessionStorage.getItem(GAME_KEY), () => WN.get(GAME_KEY)]) { try { const v = f(); if (v) return v; } catch (e) { /* 这处读不了就看下一处 */ } } return null; },
+  set(v) { try { localStorage.setItem(GAME_KEY, v); SAVE.clear(1); return; } catch (e) { try { localStorage.removeItem(GAME_KEY); } catch (e2) { /* 存不进就退一级，旧档也别留着盖过新的 */ } } try { sessionStorage.setItem(GAME_KEY, v); return; } catch (e) { /* 再退一级 */ } WN.set(GAME_KEY, v); },
+  clear(keepLocal) { if (!keepLocal) try { localStorage.removeItem(GAME_KEY); } catch (e) { /* 清不掉就算了 */ } try { sessionStorage.removeItem(GAME_KEY); } catch (e) { /* 同上 */ } WN.set(GAME_KEY, null); },
+};
+const PAST_KEY = 'cabin.past.v1'; // 看过哪些结局（end_* 键，最近的放最后）：「重新开始」清不掉，第二遍第 1 天那页纸据此多一行（PAGE_TRACE，动机评审 #9「它照着你画，一遍遍重来」）。退路同 SAVE；网址带 ?reset 连它一起清（无头测试都用 ?reset 开局，不串）
+const PAST = {
+  get() { for (const f of [() => localStorage.getItem(PAST_KEY), () => sessionStorage.getItem(PAST_KEY), () => WN.get(PAST_KEY)]) { try { const v = JSON.parse(f()); if (Array.isArray(v)) return v.filter((k) => typeof k === 'string' && k.startsWith('end_')); } catch (e) { /* 这处读不了就看下一处 */ } } return []; },
+  set(a) { const v = JSON.stringify(a); try { localStorage.setItem(PAST_KEY, v); return; } catch (e) { try { localStorage.removeItem(PAST_KEY); } catch (e2) { /* 旧的别盖过新的 */ } } try { sessionStorage.setItem(PAST_KEY, v); return; } catch (e) { /* 再退一级 */ } WN.set(PAST_KEY, v); },
+  add(ks) { PAST.set(PAST.get().filter((k) => !ks.includes(k)).concat(ks)); }, // 再看一遍的挪到最后
+  clear() { try { localStorage.removeItem(PAST_KEY); } catch (e) { /* 清不掉就算了 */ } try { sessionStorage.removeItem(PAST_KEY); } catch (e) { /* 同上 */ } WN.set(PAST_KEY, null); },
 };
 const game = (() => {
-  if (/[?&]reset\b/.test(location.search)) SAVE.clear();
+  if (/[?&]reset\b/.test(location.search)) { SAVE.clear(); PAST.clear(); }
   let s = null; try { s = JSON.parse(SAVE.get()); } catch (e) { s = null; }
   if (!s || typeof s !== 'object') s = null;
   const str = (a) => (Array.isArray(a) ? a.filter((k) => typeof k === 'string') : []); // 坏存档里混进数字、null、对象：只留字符串（不然 k.startsWith 报错，停在 84%）
@@ -2636,6 +2656,7 @@ const game = (() => {
   if (g.found.has('fire') && !g.found.has('page')) g.found.add('page'); // v2 之前的存档没有这页纸
   g.night = g.day >= 3 ? false : g.day >= 2 ? g.found.has('log2') : DAY1_NEED.every((k) => g.found.has(k)) && !(g.found.has('lback0') && !g.found.has('lback')); // 第 2 天：回屋读到日志中段才天黑；第 1 天信放回炉膛了还没看见也不黑（同 day1Done）
   if (g.night) g.found.add('journal'); // 老存档：第 1 天已找齐但没弹过「解锁遗稿」，直接算解锁
+  const ends = [...g.found].filter((k) => k.startsWith('end_')), past = PAST.get(); if (ends.some((k) => !past.includes(k))) PAST.add(ends.filter((k) => !past.includes(k))); // 这个功能之前通关的存档、别处加的 end_* 变体：补记
   g.saved = g.found.size > 0; // 有存档：刷新时问「继续上次 / 重新开始」（resumeAsk）
   return g;
 })();
@@ -2667,6 +2688,9 @@ const CLERK_SAYS = ['The clerk: "This house is newer than the reports made it."'
 // 换掉的卡片：[标题, 区域, 中文标题, 英, 中, 说明]
 // v2：卡片只留一两句，全文在遗稿（Journal）里
 const PAGE_CARD = ['A Page on the Desk', 'Parlour', '书桌上的一页纸', 'Inquiry Notes, the First Day.\n\nThe inspector lit the stove. In the firebox, a letter not burnt through.', '调查记录，第一天。\n\n稽查生了火。炉膛里有一封没烧完的信。'];
+const PAGE_TRACE = { stay: ['The inspector stayed.', '稽查留下了。'], hidden: ['The inspector went out without the lantern.', '稽查出门没带提灯。'], back: ['No irregularity found.', '未发现异常。'], page: ['The inspector stayed.', '稽查留下了。'] }; // page：「留下」四处齐的变体（合并时补，同 stay 那句） // 上一局的结局在这页纸末尾留一行（照各结局里她写下 / 说出的话），不解释；按 end_ 后面的前缀认，变体结局（end_stay…）也算
+const pageTrace = (() => { for (const k of PAST.get().reverse()) { const t = Object.keys(PAGE_TRACE).find((t) => k.slice(4).startsWith(t)); if (t) return PAGE_TRACE[t]; } return null; })();
+if (pageTrace) { PAGE_CARD[3] += '\n\n' + pageTrace[0]; PAGE_CARD[4] += '\n\n' + pageTrace[1]; } // 原地改：isPaper 按数组本身认
 const PAGE_SAYS = ['The clerk reads it twice. "That is my hand. But I have not written it yet."', '书记员看了两遍：“是我的字。可我还没写呢。”'];
 const LETTER_SAYS = ['The clerk looks from the letter to the page in her hand, and says nothing.', '书记员看看信，又看看手里那页纸，没说话。'];
 const LETTER_CARD = ['Unburnt Letter', 'Kitchen', '没烧完的信', '"…east-north-east, about four miles. Beneath an old spruce the ground has split… Marked ✕. This place is not fit…"\n\nThe rest is burnt away.', '“……东北偏东，约四英里。老云杉根下地面开裂……已标 ✕。此处不宜……”\n\n后面烧没了。'];
@@ -3022,7 +3046,7 @@ function makePage() { // v2：书桌上那页调查记录（折过三折的纸 +
   const m = paperMesh(0.15, 0.2, { seed: 23, tone: '#d9cfb4', curl: 0.004, folds: [['h', 0.333], ['h', 0.667]], wrinkle: 10, draw(x, W, H, R) {
     handwrite(x, ['Inquiry Notes, the First Day.'], { x0: 96, y0: 170, size: 60, pitch: 0, R });
     x.strokeStyle = 'rgba(28,26,50,.7)'; x.lineWidth = 3.4; x.lineCap = 'round'; x.beginPath(); x.moveTo(94, 200); x.bezierCurveTo(300, 190, 560, 208, 860, 194); x.stroke(); // 标题底下一道墨线
-    handwrite(x, ['The inspector lit the stove.', 'In the firebox, a letter not', 'burnt through.', '', 'Stores counted; all in order.', 'Stove drawing well.'], { x0: 96, y0: 330, size: 52, pitch: 78, R });
+    handwrite(x, ['The inspector lit the stove.', 'In the firebox, a letter not', 'burnt through.', '', 'Stores counted; all in order.', 'Stove drawing well.', ...(pageTrace ? ['', ...pageTrace[0].split(/ (?=without)/)] : [])], { x0: 96, y0: 330, size: 52, pitch: 78, R });
     x.fillStyle = 'rgba(28,26,50,.5)'; x.beginPath(); x.arc(760, 1180, 5 + R() * 2, 0, 7); x.fill(); const g = x.createRadialGradient(742, 1170, 0, 742, 1170, 26); g.addColorStop(0, 'rgba(28,26,50,.35)'); g.addColorStop(1, 'rgba(28,26,50,0)'); x.fillStyle = g; x.fillRect(700, 1130, 90, 90); // 墨点
   } });
   m.rotation.set(-Math.PI / 2, 0, 0.25); document.fonts.load('italic 40px "IM Fell English"').then(() => m.userData.repaint());
@@ -3047,6 +3071,7 @@ function setupJournal() { // 把 Journal 按 h3 分节（中英各一份）好�
 }
 function renderJournal() { // 开场一直在；找到工作日志才有序章和「测绘员」；终章、后记等通关（第 3 天）
   const f = game.found, open = { open: true, prologue: f.has('log'), surveyor: f.has('log'), epilogue: f.has('ended'), after: f.has('ended') };
+  const xw = [...f].find((k) => k.startsWith('xw:')); if (xw) xWatchSay(+xw.slice(3)); // ✕ 那间怀表：遗稿写第一次看到时的钟点
   for (const d of journal.querySelectorAll('[data-sec]')) d.hidden = !open[d.dataset.sec];
   for (const d of journal.querySelectorAll('[data-end]')) d.hidden = !(f.has('end_' + d.dataset.end) || (d.dataset.end === 'back' && !f.has('end_stay'))); // 终章按看过的结局分块（11-10）；旧存档没有 end_* 的当「回去」
   for (const box of journal.querySelectorAll('.jday')) {
@@ -3065,8 +3090,8 @@ function renderJournal() { // 开场一直在；找到工作日志才有序章�
       if (k3.length) add('h3', zh ? '第三天' : 'The Third Day');
       for (const k of k3) { const t = DAY3_TEXT[k]; add('h4', zh ? t[1] : t[0]); for (const para of (zh ? t[3] : t[2]).split('\n\n')) add('p', para); }
     }
-    const ends = [['end_back', 'endBack'], ['end_stay', 'endStay'], ['end_hidden', 'endHidden']], nEnd = ends.filter(([k]) => f.has(k)).length;
-    if (nEnd) { add('h3', zh ? `结局 ${nEnd}/3` : `Endings ${nEnd}/3`); for (const [k, t] of ends) add('p', f.has(k) ? END_TITLE[t][zh ? 1 : 0] : zh ? '？？' : '??', 'coda'); } // 通关后才有：没看过的写「？？」，让人知道还有别的结局（r3 #15）
+    const ends = [['end_back', 'endBack'], ['end_stay', 'endStay'], ['end_hidden', 'endHidden'], ['end_page', 'endPage']], nEnd = ends.filter(([k]) => f.has(k)).length;
+    if (nEnd) { add('h3', zh ? `结局 ${nEnd}/${ends.length}` : `Endings ${nEnd}/${ends.length}`); for (const [k, t] of ends) add('p', f.has(k) ? END_TITLE[t][zh ? 1 : 0] : zh ? '？？' : '??', 'coda'); } // 通关后才有：没看过的写「？？」，让人知道还有别的结局（r3 #15）
     if (!f.has('ended')) add('p', zh ? '还有一些纸页没找到。' : 'Some pages are still to be found.', 'coda');
   }
 }
@@ -3080,7 +3105,7 @@ function ladderPad() { // 梯子只有两根细立柱和横档能点中，点中
   const m = pickPad(new THREE.BoxGeometry(0.1, 2.24, 0.4)); m.name = 'ladder_pad'; m.position.set(0.73, 1.28, 0.52); g.add(m); meshes.push(m); // 梯子图层本地坐标 = 收着（k=0）时的世界坐标：x 0.69–0.77、y 0.16–2.40、z 0.32–0.72
 }
 // 阁楼床头柜抽屉里的怀表（design v2-playable）：第 1 天停在 3:17；第 3 天 ✕ 那间（x3.on）在走，指针不在 3:17。挂在抽屉图层下，跟着抽屉拉出来；不进 meshes，点到的还是抽屉
-const WATCH = { at: [0.3, 2.647, -1.45], r: 0.024 }, watch = { hands: null, t: 0 };
+const WATCH = { at: [0.3, 2.647, -1.45], r: 0.024 }, watch = { hands: null, t: 0 }; window.cabinWatch = watch; // 调试：表针
 function makeWatch() {
   const g = layers.get('bedside_drawer'); if (!g || watch.hands) return;
   const c = document.createElement('canvas'); c.width = c.height = 128; const x = c.getContext('2d');
@@ -3099,10 +3124,19 @@ function makeWatch() {
   w.position.set(...WATCH.at); scene.add(w); w.updateMatrixWorld(true); g.attach(w);
   watchSet();
 }
-function watchSet() { // 停着：3:17:42；在走：照本地时间，碰巧是 3:17 就拨开一刻钟
+function xClock() { const t = (((sky.hour % 24) + 24) % 24) * 60; return Math.floor(t / 60) % 12 === 3 && Math.floor(t % 60) === 17 ? t + 15 : t; } // ✕ 那间怀表此刻几点（分钟）：游戏钟点，碰巧 3:17 拨开一刻钟
+function xWatchSay(t) { // 卡片上的钟点：取整到五分钟，英文老式说法（twenty minutes past two），中文「两点二十分」；整句改了要同步 X_CARDS.xwatch 的开头。卡片不念（cardOpen 不走 say），所以句子随时间变也不缺配音
+  const r = Math.round(t / 5) * 5 % 1440, h = Math.floor(r / 60), m = r % 60, E = ['twelve', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven'], Z = ['十二', '一', '两', '三', '四', '五', '六', '七', '八', '九', '十', '十一'];
+  const N = { 5: 'five', 10: 'ten', 20: 'twenty', 25: 'five-and-twenty' }, en = m === 0 ? `${E[h % 12]} o'clock` : m === 15 ? `a quarter past ${E[h % 12]}` : m === 30 ? `half past ${E[h % 12]}` : m === 45 ? `a quarter to ${E[(h + 1) % 12]}` : m < 30 ? `${N[m]} minutes past ${E[h % 12]}` : `${N[60 - m]} minutes to ${E[(h + 1) % 12]}`;
+  const zh = Z[h % 12] + '点' + (m === 0 ? '整' : m === 30 ? '半' : (m === 5 ? '零五' : ['', '', '十', '十五', '二十', '二十五', '', '三十五', '四十', '四十五', '五十', '五十五'][m / 5]) + '分');
+  X_CARDS.xwatch[3] = DAY3_TEXT.xwatch[2] = `In the drawer, the pocket-watch, the old compass, a few pine needles. The watch is going. Its hands stand at ${en}.`;
+  X_CARDS.xwatch[4] = DAY3_TEXT.xwatch[3] = `抽屉里有怀表、旧罗盘、几根松针。怀表还在走，指着${zh}。`;
+  return r;
+}
+function watchSet() { // 停着：3:17:42；在走：照游戏钟点（xClock）
   if (!watch.hands) return;
   let h = 3, m = 17, s = 42;
-  if (x3.on) { const d = new Date(); h = d.getHours(); m = d.getMinutes(); s = d.getSeconds(); if (h % 12 === 3 && m === 17) m = 32; }
+  if (x3.on) { const t = xClock(); h = Math.floor(t / 60); m = Math.floor(t % 60); s = (t * 60) % 60; } // 11-10：跟着游戏里的钟点（sky.hour），和卡片上写的一致（设计评审 #11）；原来照本地时间
   const A = [((h % 12) + m / 60) / 12, (m + s / 60) / 60, s / 60];
   watch.hands.forEach((p, i) => { p.rotation.y = -A[i] * Math.PI * 2; });
 }
@@ -3632,8 +3666,14 @@ const X_HIDE = ['entry_coat', 'entry_boots', 'entry_lantern']; // ✕ 那间：�
 const X_PLAIN = { // ✕ 那间旁边没有小溪、水轮（叙事 r2 #7）：门廊灯、水桶不出讲小溪的故事，换成这一句（英文；中文在 LEAD_ZH）
   'Porch Lamp': 'The porch lamp is lit. Yet here there is no sound of water.',
   'Water Bucket & Slop Pail': 'The bucket is full of clean water.',
+  'Kettle & Reservoir': 'The kettle stands upon the stovetop, and a thread of steam escapes about the lid.', // 回声（动机评审 #12）：第 1 天卡片写他在时「壶盖缝里总冒一丝白气」，那天炉子是冷的；这边真在冒（updateDay3 一直烧着）
+  'Ladder & Railing': 'The ladder stands beneath the opening, and the bar is up. No one has slid it back.', // 回声：第 1 天「他最后一次从阁楼下来，把梯子滑回了原位，把横杆放了下来」（applyX 摆好）
 };
-Object.assign(LEAD_ZH, { [X_PLAIN['Porch Lamp']]: '门廊灯亮着。可这里听不见水声。', [X_PLAIN['Water Bucket & Slop Pail']]: '桶里的干净水是满的。' });
+Object.assign(LEAD_ZH, { [X_PLAIN['Porch Lamp']]: '门廊灯亮着。可这里听不见水声。', [X_PLAIN['Water Bucket & Slop Pail']]: '桶里的干净水是满的。', [X_PLAIN['Kettle & Reservoir']]: '水壶放在炉面上，壶盖缝里冒着一丝白气。', [X_PLAIN['Ladder & Railing']]: '梯子架在阁楼口下面，横杆竖着，没有人把它滑回去。' });
+const PORCH_ECHO = { // 门廊下选之前（设计评审 #7）：头顶那盏灯就是「留下」的分量；读过日志后段的回响他那一句，没读的对照你们来的那天
+  read: ['Above you the porch lamp is burning. "…One must leave them a light."', '头顶的门廊灯亮着。“……总得给他们留个亮处。”'],
+  unread: ['Above you the porch lamp is burning, as yours was the day you came. Inside, on the bookcase, the field log is there as well.', '头顶的门廊灯亮着，和你们来的那天一样。屋里书架上，那本日志也在。'],
+};
 const x3 = { on: false, wasIn: false, spruce: null, light: null };
 window.cabinX = x3; // 调试
 const D3_CARDS = { // 图层 → [标题, 区域, 中文标题, 英, 中, 说明]
@@ -3646,11 +3686,11 @@ const X_MAP = ['Map', 'Parlour', '地图', 'The same map, the same note: Do Not 
 const X_ARRIVE = ['The Other Cabin', 'Exterior', '另一间小屋', 'You stop beneath the porch lamp. Your hand has found the latch before you looked for it.', '你在门廊灯下站住。手比眼睛先找到了门闩。', 'At the ✕.']; // v3：一句感受，不写结论；长文留在 Journal
 const X_CARDS = { // 四处不同：卡片只写看到的，不写「它说明什么」（设计原则 1）
   xcoat: ['Coat Rail', 'Entry', '衣帽架', 'The coat rail is bare, as yours was when you set out this morning. And by the tray, not so much as a boot.', '衣帽架上空着，和你今早出门时一样。托盘边连靴子也没有。', 'Nothing hangs here.'], // 叙事 r2 #1：大衣提灯是你自己拿走的，真正不同的只剩靴子
-  xwatch: ['Night Table', 'Loft', '床头柜', 'In the drawer, the pocket-watch, the old compass, a few pine needles. The watch is going. Its hands do not stand at seventeen minutes past three.', '抽屉里有怀表、旧罗盘、几根松针。怀表还在走，指针不在三点十七分。', 'The watch is ticking.'],
+  xwatch: ['Night Table', 'Loft', '床头柜', 'In the drawer, the pocket-watch, the old compass, a few pine needles. The watch is going.', '抽屉里有怀表、旧罗盘、几根松针。怀表还在走。', 'The watch is ticking.'], // 正文后半句「指着几点」按此刻钟点现拼（xWatchSay，设计评审 #11）
   xnotes: ['Inquiry Notes', 'Parlour', '调查记录', 'A page of inquiry notes lies open on the desk, in the clerk\'s hand. It is dated today.\n\n' + GAME_TEXT.xNote[1], '书桌上摊着一页调查记录，是书记员的笔迹，写的是今天：\n\n' + GAME_TEXT.xNote[2], 'In the clerk\'s hand.'],
   xfire: ['The Fire', 'Kitchen', '炉火', 'The fire is burning in the stove. Up in the loft the rocking chair is rocking. There is no one in the house.', '炉火烧着，楼上的摇椅在摇，屋里没有人。', 'Someone keeps this fire.'],
 };
-const END_TITLE = { endBack: ['Going Back', '结局 · 回去'], endStay: ['Staying', '结局 · 留下'], endHidden: ['The Lantern', '隐藏结局'] };
+const END_TITLE = { endBack: ['Going Back', '结局 · 回去'], endStay: ['Staying', '结局 · 留下'], endHidden: ['The Lantern', '隐藏结局 · 提灯'], endPage: ['The Page', '隐藏结局 · 那页纸'] };
 const DAY3_TEXT = { // Journal「第三天」：键 → [英标题, 中标题, 英, 中]
   xarrive: ['At the ✕', '✕ 那里', GAME_TEXT.xArrive[1], GAME_TEXT.xArrive[2]],
   xcoat: ['A Bare Coat Rail', '空的衣帽架', X_CARDS.xcoat[3], X_CARDS.xcoat[4]],
@@ -3662,6 +3702,7 @@ const DAY3_TEXT = { // Journal「第三天」：键 → [英标题, 中标题, �
   end_back: [END_TITLE.endBack[0], END_TITLE.endBack[1], GAME_TEXT.endBack[1], GAME_TEXT.endBack[2]],
   end_stay: [END_TITLE.endStay[0], END_TITLE.endStay[1], GAME_TEXT.endStay[1], GAME_TEXT.endStay[2]],
   end_hidden: [END_TITLE.endHidden[0], END_TITLE.endHidden[1], GAME_TEXT.endHidden[1], GAME_TEXT.endHidden[2]],
+  end_page: [END_TITLE.endPage[0], END_TITLE.endPage[1], GAME_TEXT.endPage[1], GAME_TEXT.endPage[2]],
 };
 Object.assign(QUEST, {
   go3: ['Follow the marks through the fog, to the ✕.', '照着记号穿过雾，走到 ✕ 去。'],
@@ -3691,12 +3732,12 @@ function gameSeen3(name, title, add, got) {
   let over = null;
   if (x3.on) {
     if (['Coat Rail & Greatcoat', 'Coat Rail', 'Boots & Bench', 'Lantern'].includes(title)) { add('xcoat'); over = X_CARDS.xcoat; } // 'Coat Rail'：大衣穿在身上时的名字（GEAR_RAIL）
-    else if (title === 'Night Table') { add('xwatch'); over = X_CARDS.xwatch; }
+    else if (title === 'Night Table') { const r = xWatchSay(xClock()); if (!game.found.has('xwatch')) game.found.add('xw:' + r); add('xwatch'); over = X_CARDS.xwatch; } // 卡片写此刻钟点；遗稿记第一次看到的那个（xw:分钟）
     else if (title === 'Washstand & Hand Towel') { add('xfire'); over = X_BASIN; } // 叙事评审 11-04 #5：和炉火、摇椅同一处（有人在这儿过日子），第 1 天那盆冰在这里回收
     else if (title === 'Writing Desk, Chair & Wall Lamp') { add('xnotes'); over = X_CARDS.xnotes; }
     else if (title === 'Map') { add('xnotes'); over = X_MAP; }
     else if (title === 'Bookcase') { add('log3'); over = LOG3_CARD; } // 日志后段：选读，不算四处之一
-    else if (/^stove_/.test(name) || title === 'Rocking Chair' || title === 'The Fire' || title === 'Cast-Iron Stove') { add('xfire'); over = X_CARDS.xfire; }
+    else if ((/^stove_/.test(name) && title !== 'Kettle & Reservoir') || title === 'Rocking Chair' || title === 'The Fire' || title === 'Cast-Iron Stove') { add('xfire'); over = X_CARDS.xfire; }
     else if (name === 'x_light') add('xlook');
     else if (name === 'entry_porch_lamp') setTimeout(porchAsk, 300); // 鸟瞰时也能从这里选
   } else if (name === 'person_woman') { const z = STORY_ZH['The Clerk|Loft']; over = ['The Clerk', 'Parlour', z[0], STORY['The Clerk|Loft'], z[1].replace(/^[^。]*。/, ''), INFO.person_woman[2]]; }
@@ -3891,7 +3932,14 @@ function shiftWorld() { // 第 3 天离家够远（家已被雾盖住）：屋�
   if (fp) mv(fp.p.root);
   xLook(); mmDirty = true;
 }
-function applyX() { x3.on = true; x3.ground?.forEach((m) => { m.visible = true; }); shiftWorld(); xLook(); mapWall(); }
+function applyX() { x3.on = true; x3.ground?.forEach((m) => { m.visible = true; }); shiftWorld(); xLook(); mapWall(); xEcho(); }
+function xEcho() { // 回声（动机评审 #12）：第 1 天看过的人才会注意到的不同，只换同一模型的状态。梯子架在阁楼口、横杆竖着（第 1 天他滑回去、放下了）；第 1 天被「变回去」的那件（chg:），这边是玩家当时弄成的样子。水壶在 updateDay3 里一直烧
+  const snap = (n, on) => { const d = toggles.get(n); if (d) { d.on = on; d.k = on ? 1 : 0; for (const p of d.parts) p(d.k); } };
+  snap('loft_ladder', true); snap('loft_gate', false);
+  const c = [...game.found].find((k) => k.startsWith('chg:')), [, key, v] = c ? c.split(':') : [];
+  if (CHG_KEYS[key]) snap(key, v !== '1'); // 灯不算：白天看不出，灯的开关还归 LIGHT_ROOMS 管
+  shadowDirty = true;
+}
 function enterX() { // 走到那间屋的门廊下：不压黑，记一笔、一句感受
   game.found.add('xarrive'); game.snap = endFree(); saveGame(); renderJournal(); applyX(); mmDirty = true; select(null); showQuest();
   const show = () => { // 卡片晚 2.5 秒：先让门洞、门廊灯干净地停在画面里（r3 #13）；那时别的卡片、弹窗开着就等它关
@@ -3912,23 +3960,23 @@ function backToPorch() { // 通关后：回到 ✕ 门廊下那一刻（同刷�
 function porchAsk() { // ✕ 那间屋的门廊下：回去 / 留下 / 再看看
   if (!x3.on || game.found.has('ended') || !$('dlg').hidden) return;
   if (!game.found.has('xlook')) { game.found.add('xlook'); saveGame(); renderJournal(); }
-  const log = game.found.has('log3') ? ['', ''] : [' Inside, on the bookcase, the field log is there as well.', '屋里书架上，那本日志也在。']; // 叙事 r2 #3：还没读日志后段，引去书架（点「再看看」回屋就能读）
-  dialog(['Under the Other Porch', '另一间屋的门廊下'], [GAME_TEXT.xLook[1] + log[0], GAME_TEXT.xLook[2] + log[1]],
+  const log = game.found.has('log3') ? PORCH_ECHO.read : PORCH_ECHO.unread; // 叙事 r2 #3：还没读日志后段，引去书架（点「再看看」回屋就能读）
+  dialog(['Under the Other Porch', '另一间屋的门廊下'], [GAME_TEXT.xLook[1] + '\n\n' + log[0], GAME_TEXT.xLook[2] + '\n\n' + log[1]],
     [['Go Back', '回去', () => ending('back')], ['Stay', '留下', () => ending('stay')], ['Not Yet', '再看看']]);
 }
 function ending(kind) { LOG && LOG.ev('end', `结局 ${kind}`); LOG && LOG.ev('day', '第3天结束'); // 压黑、存 ended、重新载入回自己那间屋；结局文字在载入后压着画面放（endShotStart）。11-10 前是在这里黑底弹窗一张张放完才刷新
-  const hidden = kind === 'back' && X_NEED.every((k) => game.found.has(k));
+  const all = X_NEED.every((k) => game.found.has(k)), hidden = kind === 'back' && all, page = kind === 'stay' && all; // 四处齐：回去 = 提灯，留下 = 那页纸
   if (fp) stopFP();
   d2.veil = true; veilEl.style.transition = 'opacity 1.6s'; veilEl.style.zIndex = 30; veilEl.style.opacity = 1;
   setTimeout(() => {
-    game.snap = endFree(); game.found.add('end_' + kind); if (hidden) game.found.add('end_hidden'); game.found.add('ended'); // 快照更新到选结局这一刻（进 ✕ 后又找到的也带上）
-    game.found.add('endshow:' + (hidden ? 'hidden' : kind)); saveGame(); // 还没放的结局：记在存档里（不用 sessionStorage，存不进也读得到；中途关掉下次打开接着放），放完 endShotStart 里删
+    game.snap = endFree(); game.found.add('end_' + kind); if (hidden) game.found.add('end_hidden'); if (page) game.found.add('end_page'); game.found.add('ended'); PAST.add(['end_' + kind, ...(hidden ? ['end_hidden'] : []), ...(page ? ['end_page'] : [])]); // 快照更新到选结局这一刻（进 ✕ 后又找到的也带上）；PAST：二周目记得看过的结局
+    game.found.add('endshow:' + (hidden ? 'hidden' : page ? 'page' : kind)); saveGame(); // 还没放的结局：记在存档里（不用 sessionStorage，存不进也读得到；中途关掉下次打开接着放），放完 endShotStart 里删
     location.reload();
   }, 1900);
 }
 // —— 结局画面（11-10，动机评审 #5 #6、美术评审「结局只有黑底文字」）：回到自家，天刚黑，从院子西南角的树影里看小屋：门廊灯亮着，东北偏东的树梢上那柱烟还在升；「留下」时书记员站在门廊东头望着它。
 // 镜头用 fly 慢慢推近，结局文字一段一页压在画面下三分之一，点「继续」翻页，放完才出「遗稿齐了」。机位照宣传图 b-night 那个角度（用户认可过），时刻 18.3：树是黑剪影（日落时树发棕，不用），烟还衬得出来（入夜就看不见了）
-const END_SHOT = { hour: 18.3, dur: 30, from: [-7.5, 1.6, 10.5], to: [-6.6, 1.6, 9.3], wide: { fov: 50, tgt: [2, 1.9, -2] }, tall: { fov: 62, tgt: [3.1, 0.4, -1.2] }, woman: [1.5, 2.9] }; // from：右边一棵树挡着半个画面，推到 to 让开，露出门廊东头的人和右上的烟；再往后退或往东挪就钻进树冠里全黑。tall = 竖屏：视野窄，往右偏 5° 才同时装下门和烟；两种都压低视线，把小屋抬到画面中上，下三分之一留给字
+const END_SHOT = { smoke: [3.2, 0.8], hour: 18.3, dur: 30, from: [-7.5, 1.6, 10.5], to: [-6.6, 1.6, 9.3], wide: { fov: 50, tgt: [2, 1.9, -2] }, tall: { fov: 62, tgt: [3.1, 0.4, -1.2] }, woman: [1.5, 2.9] }; // from：右边一棵树挡着半个画面，推到 to 让开，露出门廊东头的人和右上的烟；再往后退或往东挪就钻进树冠里全黑。tall = 竖屏：视野窄，往右偏 5° 才同时装下门和烟；两种都压低视线，把小屋抬到画面中上，下三分之一留给字
 function endShotStart(kind) {
   const E = { ...END_SHOT, ...(innerHeight > innerWidth ? END_SHOT.tall : END_SHOT.wide) }, V = (a) => new THREE.Vector3(...a), d = $('dlg');
   intro = null; spin = false; controls.enabled = false; document.body.classList.add('endshot');
@@ -3937,13 +3985,37 @@ function endShotStart(kind) {
   fly = { t: 0, dur: E.dur, fromPos: V(E.from), toPos: V(E.to), fromTgt: V(E.tgt), toTgt: V(E.tgt), ease: (t) => t * (2 - t) }; // 越推越慢，停在 to
   const stand = () => { const w = people.get('person_woman'); if (!w) { setTimeout(stand, 300); return; } // 人物还没载完
     placeMan(w, ...E.woman, Math.atan2(D2.lamp[0] - E.woman[0], D2.lamp[2] - E.woman[1])); w.root.position.y = floorAt(...E.woman); w.roam = w.next = 1e9; }; // 脸朝那柱烟
-  if (kind === 'stay') stand();
-  const pages = (kind === 'stay' ? ['endStay'] : kind === 'hidden' ? ['endBack', 'endHidden'] : ['endBack']).flatMap((k) => { const t = GAME_TEXT[k], zh = t[2].split('\n\n'); return t[1].split('\n\n').map((p, i) => [i ? ['', ''] : END_TITLE[k], [p, zh[i] || '']]); });
+  if (kind === 'stay' || kind === 'page') stand();
+  const smoke = () => { const u = d2.lamp?.userData.plume; if (!u) { setTimeout(smoke, 300); return; } u.uK.value.set(...END_SHOT.smoke); }; smoke(); // 那柱烟加浓压暗、不放大：远看的那柱平时 uK (1.5, 1)，黄昏天上偏淡；颜色还是去了饱和的灰，不会变褐、变红
+  const pages = ({ stay: ['endStay'], page: ['endStay', 'endPage'], hidden: ['endBack', 'endHidden'] }[kind] || ['endBack']).flatMap((k) => { const t = GAME_TEXT[k], zh = t[2].split('\n\n'); return t[1].split('\n\n').map((p, i) => [i ? ['', ''] : END_TITLE[k], [p, zh[i] || ''], k]); });
   const next = (i) => {
-    if (i >= pages.length) { d.classList.remove('end'); document.body.classList.remove('endshot'); game.found.delete('endshow:' + kind); saveGame(); fly = null; controls.enabled = true; endAsk(); return; } // 镜头停在推到的地方，交还拖动（不停的话 fly 会和拖动抢相机）
+    if (i >= pages.length) { d.classList.remove('end'); document.body.classList.remove('endshot'); game.found.delete('endshow:' + kind); saveGame(); if (END_IN.on) endInHold(E); else { fly = null; controls.enabled = true; } endAsk(kind); return; } // 镜头停在推到的地方，交还拖动（不停的话 fly 会和拖动抢相机）；屋里那个镜头等「遗稿齐了」关了再切回院子
+    if (pages[i][2] === 'endHidden' && !END_IN.on) { endInside(() => next(i)); return; } // 念到提灯：切进屋
     dialog(pages[i][0], pages[i][1], [[i < pages.length - 1 ? 'Continue' : 'The End', i < pages.length - 1 ? '继续' : '完', () => next(i + 1)]]); d.classList.add('end');
   };
   setTimeout(() => next(0), 3800); // 先让画面自己待一会儿
+}
+// 隐藏结局念到提灯（11-10 第二轮）：黑场切进屋，从门廊下隔着门洞看衣帽架钉子上的提灯，屋里只留它一盏，别的灯关、曝光压低（updateDay3 每帧按住，书记员路过开灯也压回去）；人藏起（人物近景不好看）。
+// 相机离提灯约 2m（近裁面：屋外按离地高度算会到 1m，把屋里切掉；借 fly.out「贴着小屋」那条走 0.05），fly 给很长的 dur，到不了头就不会被清掉。「遗稿齐了」关了再切回院子那个机位
+const END_IN = { on: false, from: [0.3, 1.6, 2.9], to: [0.24, 1.58, 2.6], tgt: [-0.05, 1.4, 0.9], fov: 40, tallFov: 58, exp: 0.6, keep: null };
+function endInside(cb) {
+  END_IN.keep = { lamps: [...toggles].filter(([n]) => LAMPS[n]).map(([n, t]) => [n, t.on]), ppl: [...people.values()].map((q) => [q, q.root.visible]) }; // 先记下再置 on：on 了 updateDay3 当帧就关灯
+  END_IN.on = true; d2.veil = true; veilEl.style.transition = 'opacity .7s'; veilEl.style.zIndex = 30; veilEl.style.opacity = 1;
+  setTimeout(() => {
+    const V = (a) => new THREE.Vector3(...a);
+    for (const q of people.values()) q.root.visible = false;
+    camera.fov = innerHeight > innerWidth ? END_IN.tallFov : END_IN.fov; camera.updateProjectionMatrix(); camera.position.copy(V(END_IN.from)); controls.target.copy(V(END_IN.tgt));
+    fly = { t: 0, dur: 1e4, out: true, fromPos: V(END_IN.from), toPos: V(END_IN.to), fromTgt: V(END_IN.tgt), toTgt: V(END_IN.tgt), ease: (t) => { const x = Math.min(1, t * 250); return x * (2 - x); } }; // 40 秒推完，之后停着
+    shadowDirty = true; d2.veil = false; cb(); // 放开黑幕：渲染循环把 #veil 淡回 0
+  }, 800);
+}
+function endInHold(E) { // 「遗稿齐了」关掉（翻开遗稿也算）：灯、人复原，切回院子那个机位
+  const V = (a) => new THREE.Vector3(...a), t = setInterval(() => {
+    if (!$('dlg').hidden) return; clearInterval(t); END_IN.on = false;
+    for (const [n, on] of END_IN.keep.lamps) toggles.get(n).on = on;
+    for (const [q, v] of END_IN.keep.ppl) q.root.visible = v;
+    camera.fov = E.fov; camera.updateProjectionMatrix(); camera.position.copy(V(E.to)); controls.target.copy(V(E.tgt)); fly = null; controls.enabled = true; shadowDirty = true;
+  }, 300);
 }
 function endHome() { // 通关后按结局摆自家屋子（叙事评审 11-04 #7）：留下 = 稽查没回来，大衣、提灯也跟他走了（叙事 r2 #2，衣帽架说明 GEAR_RAIL.gone）；回去、隐藏结局照旧挂在钉子上（同结局文字）。「重新开始」清存档就复原
   if (!game.found.has('end_stay')) return;
@@ -3952,9 +4024,12 @@ function endHome() { // 通关后按结局摆自家屋子（叙事评审 11-04 #
   for (const n of ['entry_coat', 'entry_lantern']) { const g = layers.get(n); if (g) g.visible = false; } // 提灯图层带点光源：藏起由 trackLight 补替身灯，同 X_HIDE
   shadowDirty = true;
 }
-function endAsk() { // 通关后刷新：不问「继续上次」，告诉玩家终章、后记解锁了
+function endAsk(now) { // 通关后刷新：不问「继续上次」，告诉玩家终章、后记解锁了。now = 刚放完的那个结局
   dialog(['The Papers Complete', '遗稿齐了'], ['', ''],
     [['Read the Papers', '翻开遗稿', () => $('jBtn').click()], ...(game.snap.length ? [['Back to the Other Porch', '回到另一间屋的门廊下', backToPorch]] : []), ...(LOG ? [['Copy Log', '复制记录', () => { const t = window.__logText(); (navigator.clipboard?.writeText(t) || Promise.reject()).catch(() => { const a = document.createElement('textarea'); a.value = t; document.body.append(a); a.select(); document.execCommand('copy'); a.remove(); }); }]] : []), ['Begin Again', '重新开始', () => { SAVE.clear(); location.reload(); }]]);
+  const p = document.createElement('p'), f = game.found; // 四个结局排一行（同遗稿里的顺序）：看过的写名字，刚放完的加粗，没看过的「？？」淡一点；不加说明，让人想点「回到另一间屋的门廊下」
+  p.innerHTML = [['back', 'endBack'], ['stay', 'endStay'], ['hidden', 'endHidden'], ['page', 'endPage']].map(([k, t]) => f.has('end_' + k) ? (k === now ? '<b>' : '') + lbl(END_TITLE[t][0], END_TITLE[t][1].replace(/^.*· /, '')) + (k === now ? '</b>' : '') : `<span style="opacity:.45">${lbl('??', '？？')}</span>`).join('　·　');
+  $('dlg').querySelector('.row').before(p);
 }
 function xPorch(k) { // ✕ 那间（挪世界后）：门廊灯大白天也亮得显眼；走近了太阳压暗（雾在 updateDay2 里跟着 x3.near 加浓），屋子从灰里浮出来（r3 #12）
   const g = layers.get('entry_porch_lamp'), t = toggles.get('entry_porch_lamp'); if (!g || !t) return;
@@ -3964,6 +4039,7 @@ function xPorch(k) { // ✕ 那间（挪世界后）：门廊灯大白天也亮�
   sun.intensity *= 1 - 0.5 * k; hemi.intensity *= 1 - 0.2 * k;
 }
 function updateDay3(dt) {
+  if (END_IN.on) { renderer.toneMappingExposure *= END_IN.exp; for (const [n, t] of toggles) if (LAMPS[n]) t.on = n === 'entry_lantern'; } // 隐藏结局屋里那个镜头：只留提灯
   if (!x3.spruce) return;
   const f = game.found;
   x3.near = x3.shifted && !f.has('ended') ? 1 - THREE.MathUtils.smoothstep(Math.hypot(camera.position.x, camera.position.z), 8, 30) : 0; // 离 ✕ 那间（挪世界后在原点）多近
@@ -3984,6 +4060,7 @@ function updateDay3(dt) {
   if (x3.glow) x3.glow.visible = false;
   const w = people.get('person_woman'); if (w && w.root.visible) { w.root.visible = false; w.hit.visible = false; } // 这边屋里没有人
   const rk = toggles.get('loft_rocking_chair'); if (rk && rocker.g && rocker.t > 3) rk.click(); // 摇椅一直在摇
+  const kt = window.cabinWater?.kettle; if (kt && !kt.on) { kt.on = true; kt.t = 0; } // 水壶一直冒白气（xEcho）
   x3.light.visible = outdoors(camera.position);
   if (x3.light.visible) updatePlume(x3.light, dt, 1);
   if (!fp || d2.veil) return;
@@ -4002,9 +4079,36 @@ function deskCheck() { // 第 1 天：人在屋里、书桌那页纸进了画面
   const c = deskCheck.c || (deskCheck.c = new THREE.Box3().setFromObject(g).getCenter(new THREE.Vector3())), v = c.clone().project(camera);
   if (v.z < 1 && Math.abs(v.x) < 0.85 && Math.abs(v.y) < 0.85 && camera.position.distanceTo(c) < 7) { game.deskSeen = true; saveGame(); showQuest(); }
 }
+// 小地图罗盘的指针（动机评审 #4，11-10）：第 1、2 天稳稳指北；第 3 天离 ✕ 越近越转不住、越转越快，到了 ✕ 那间乱指不停。不写字，画面先发生（日志里「罗盘越转越快，最后不再指任何方向」）。
+// 单独一个 DOM 元素压在底图那朵罗盘上（底图只在 mmDirty 时重画），每帧只改 transform；位置 0.3 秒对一次小地图的框（宽度随鸟瞰 / 第一人称 / 手机变）
+const MMN = { cx: 940 / 1024, cy: 86 / 1024, r: 46 / 1024, a: 0, v: 0, w: 0, d: 0, tgt: 0, jt: 0, rt: 0, el: null }; // cx、cy、r：罗盘在底图上的位置和外圈半径（占宽的比例，同 mapPaint 里 W - 84, 86, 46）
+window.cabinCompass = MMN; // 调试：d = 离 ✕ 多远，w = 角速度（弧度/秒，平滑过）
+function mmNeedle(c, dt) {
+  let e = MMN.el;
+  if (!e) { e = MMN.el = document.createElement('div'); e.id = 'mmNeedle'; e.style.cssText = 'position:fixed;z-index:7;pointer-events:none;opacity:.9;left:0;top:0';
+    e.innerHTML = '<svg viewBox="-10 -10 20 20" width="100%" height="100%"><path d="M0 -9.5 L1.6 0 L-1.6 0Z" fill="#9b2d1c"/><path d="M0 9.5 L1.6 0 L-1.6 0Z" fill="rgba(58,38,18,.85)"/><circle r="1.4" fill="#d8c69c" stroke="rgba(58,38,18,.85)" stroke-width=".6"/></svg>'; document.body.append(e); }
+  if ((MMN.rt -= dt) <= 0) { MMN.rt = 0.3; const b = c.hidden || document.body.classList.contains('endshot') ? null : c.getBoundingClientRect(); // 手机鸟瞰时小地图 display:none，框是 0
+    e.hidden = !b || !b.width; if (b && b.width) { const s = b.width * MMN.r * 2.3; Object.assign(e.style, { width: s + 'px', height: s + 'px', left: b.left + b.width * MMN.cx - s / 2 + 'px', top: b.top + b.width * MMN.cy - s / 2 + 'px' }); } }
+  if (e.hidden || !dt) return;
+  const f = game.found, a0 = MMN.a, r = fp ? fp.p.root.position : camera.position;
+  if (game.day < 3 || f.has('ended')) { MMN.a = 0; MMN.v = 0; MMN.d = 0; } // 稳稳指北
+  else if (x3.on) { // ✕ 那间：乱指不停，每隔一会儿换一个方向猛甩过去、晃一晃
+    MMN.d = Math.hypot(r.x, r.z);
+    if ((MMN.jt -= dt) <= 0) { MMN.jt = 0.12 + Math.random() * 0.35; MMN.tgt = MMN.a + (Math.random() - 0.5) * 2 * Math.PI * 1.4; }
+    MMN.v += (60 * (MMN.tgt - MMN.a) - 7 * MMN.v) * dt; MMN.a += MMN.v * dt;
+  } else { // 路上：转的劲 ω 随离 ✕ 的距离变大，往北拉回的劲变小；ω 压过拉力就整圈转起来
+    MMN.d = x3.shifted ? Math.hypot(r.x, r.z) : Math.hypot(r.x - XSHIFT.x, r.z - XSHIFT.y);
+    const k = 1 - THREE.MathUtils.smoothstep(MMN.d, 6, Math.max(40, XSHIFT.length())), w = 9 * k * k;
+    MMN.a += (w - 5 * (1 - k) * Math.sin(MMN.a) + (Math.random() - 0.5) * 6 * k) * dt;
+  }
+  MMN.a = Math.atan2(Math.sin(MMN.a), Math.cos(MMN.a)); // 留在 ±π，免得数越滚越大
+  MMN.w += ((Math.atan2(Math.sin(MMN.a - a0), Math.cos(MMN.a - a0)) / dt) - MMN.w) * Math.min(1, dt * 2);
+  e.style.transform = `rotate(${MMN.a}rad)`;
+}
 function mmTick(dt) {
   deskCheck(); // 很便宜：找到后第一行就返回
   const c = $('mmap'); c.hidden = !!opening || !game.found.has('page'); // 拿到书桌那页纸（接到调查）才出现
+  mmNeedle(c, dt);
   if (c.hidden || !trailCurve || (mmT += dt) < 0.3) return; mmT = 0; // trailCurve：存档里已拿到那页纸时，加载中小地图就显示了，要等路画好
   if (fp && !x3.on) { // 第一人称走到哪：屋里按位置认房间，屋外记沿路走过的最远处
     const r = fp.p.root.position;
