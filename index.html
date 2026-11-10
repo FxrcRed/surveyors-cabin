@@ -931,7 +931,7 @@ async function loadTree0(url, all) { // → [{ geometry, material }]，底部中
     parts.push({ geometry, material: trunk ? barkMaterial() : crownMaterial({}, all), trunk });
   });
   const c = b.getCenter(new THREE.Vector3()), k = 1 / (b.max.y - b.min.y);
-  parts.forEach((p) => p.geometry.translate(-c.x, -b.min.y, -c.z).scale(k, k, k));
+  parts.forEach((p) => { p.geometry.translate(-c.x, -b.min.y, -c.z).scale(k, k, k); if (!p.trunk && !all) { p.geometry.computeBoundingBox(); p.material.userData.crB.value = p.geometry.boundingBox.min.y; } }); // 树冠最低点（抬冠底用，见 crownMaterial）
   parts.radius = Math.max(b.max.x - b.min.x, b.max.z - b.min.z) / 2 * k; // 树冠半径 / 树高，避开小屋时用
   return parts;
 }
@@ -941,14 +941,17 @@ async function loadTree0(url, all) { // → [{ geometry, material }]，底部中
 const BUSH_B = { value: new THREE.Color() }; // 灌木底面的补光（见 crownMaterial），渲染循环里 = 半球光颜色 × 强度 × 0.45
 function crownMaterial(opts = {}, bush = false) { // bush：灌木、草（loadPlant）
   // 色差在顶点里算好再插值（逐像素算的话远处一棵树只占几个像素、里面挤好几块颜色，相机一动就闪）
-  const m = new THREE.MeshLambertMaterial({ color: 0xffffff, ...opts });
+  const m = new THREE.MeshLambertMaterial({ color: 0xffffff, ...opts }), crB = m.userData.crB = { value: 0.08 }; // crB：树冠最低点 / 树高（loadTree0 按模型量）
   m.onBeforeCompile = (sh) => {
-    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vTreeK;')
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vTreeK;' + (bush ? '' : '\nuniform float uCrB;'))
       .replace('#include <begin_vertex>', `#include <begin_vertex>
         float seed = fract(dot(instanceMatrix[3].xz, vec2(0.137, 0.071))) * 10.0;
         float h = fract(sin(dot(floor(position * vec3(7.0, 6.0, 7.0)), vec3(12.9898, 78.233, 37.719)) + seed) * 43758.5453);
         vTreeK = vec3(0.72 + 0.5 * clamp(position.y, 0.0, 1.0), smoothstep(0.62, 1.0, h) * 0.55, smoothstep(0.38, 0.0, h) * 0.5);
-        vSnowK = 0.65 * smoothstep(-0.1, 0.7, normalize(objectNormal).y) + 0.35 * h;`); // 朝上的面先白，块之间有先后
+        vSnowK = 0.65 * smoothstep(-0.1, 0.7, normalize(objectNormal).y) + 0.35 * h;` + (bush ? '' : `
+        { float th = length(instanceMatrix[1].xyz), b1 = max(uCrB, 3.0 * smoothstep(5.0, 11.0, th) / max(th, 1.0)); // 11-10 art #7：密林里的大云杉下枝见不到光早枯落，活冠底在 3m 上下；原来 10–14m 的树最低一层冠在 1.2–1.7m，第一人称眼高处一顶顶「蘑菇伞」挡在脸前
+          transformed.y = 1.0 - (1.0 - transformed.y) * (1.0 - b1) / (1.0 - uCrB); }`)); // 以树顶为锚把树冠往上压（不动树顶和树干）；5m 以下的幼树枝条照旧到地
+    if (!bush) sh.uniforms.uCrB = crB;
     sh.uniforms.uSnow = cover.uSnow;
     sh.vertexShader = sh.vertexShader.replace('varying vec3 vTreeK;', 'varying vec3 vTreeK; varying float vSnowK;');
     sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 vTreeK; varying float vSnowK; uniform float uSnow;')
@@ -1406,8 +1409,9 @@ function makeBrook() {
     const i0 = P.findIndex((p) => p[4] > 0), i1 = P.findLastIndex((p) => p[4] > 0), rows = [[], [], []], eRow = [];
     for (let i = Math.max(0, i0 - 1); i <= Math.min(n - 1, i1 + 1); i++) {
       const [x, z, s, w, , tx, tz] = P[i], E = w + BROOK_BANK + groundSpan(Math.hypot(x, z)) + 1.2;
-      const oo = [-1, 1].map((e) => { const lip = w + 0.38 + 0.42 * (0.5 + 0.3 * Math.sin(s * 0.31 + e * 2.3) + 0.2 * Math.sin(s * 0.83 + e * 5.1)); // 土和雪地的分界：两岸各自随沿线忽宽忽窄（11-04 复测 ENV2：原来两岸一样宽，晴天像水渠）
-        return [0, w - 0.45, w - 0.2, w, w + 0.12, w + 0.27, lip, w + 0.85, ...[0, 1, 2, 3, 4, 5].map((j) => w + BROOK_BANK + (E - w - BROOK_BANK) * j / 5)].map((d, j) => Math.max(d, j * 0.02)); }); // 外圈 5 列：下游 E 到 20m 宽，两列直线插值会低到起伏的地面下面
+      const oo = [-1, 1].map((e) => { const lip = w + 0.12 + 0.38 * (0.5 + 0.3 * Math.sin(s * 0.31 + e * 2.3) + 0.2 * Math.sin(s * 0.83 + e * 5.1)); // 土和地面的分界：两岸各自随沿线忽宽忽窄（11-04 复测 ENV2：原来两岸一样宽，晴天像水渠）
+        // 11-10 ENV2 第二轮：裸土只留在水线上方的陡坡（0.12–0.5m），外面直接是地面材质（落叶、苔、雪，按世界坐标取样接缝看不出）——真实林间小溪的落叶层盖到坡口，原来 0.4–0.8m 宽的褐土带两岸平行，还像水渠
+        return [0, w - 0.45, w - 0.2, w, w + 0.04, w + 0.08, lip, lip + (w + 0.6 - lip) / 2, w + 0.6, w + 0.85, ...[0, 1, 2, 3, 4, 5].map((j) => w + BROOK_BANK + (E - w - BROOK_BANK) * j / 5)].map((d, j) => Math.max(d, j * 0.02)); }); // 外圈 5 列：下游 E 到 20m 宽，两列直线插值会低到起伏的地面下面；lip 外两列跟着岸坡变平
       // +4mm：盖在压低的地面上面、卵石路（+9mm）下面——下游岸带宽到卵石路边了（11-04 复测 ENV4，原来 +12mm 把路盖住）
       const at = (d) => { const px = x + tz * d, pz = z - tx * d; return [px, gy + terrainH(px, pz) + 0.004, pz]; }, [oL, oR] = oo, mid = [...oL.slice(1, 7).reverse().map((d) => -d), ...oR.slice(0, 7)];
       rows[0].push(oL.slice(6).reverse().map((d) => at(-d))); // 行按不带小弯的切向横切：截面略斜（≤ 25°），但外圈几米宽的一段在内弯处不会折叠
@@ -1417,7 +1421,7 @@ function makeBrook() {
     const sm = propMat(rockTexture(), { tri: 1.3, color: 0x5e4a3a, snow: 1.3 }), ob = sm.onBeforeCompile; // snow > 1：雪盖满、不留斑驳的小孔（11-04 r3 #7：湿土带外沿的小黑点，黄昏成了黑碎片） // 土岸：同林下土的写法，积雪量另给（BROOK.snow：地面积雪是阈值式的，岸上照 cover.uSnow 线性盖会比旁边地面先白）
     sm.onBeforeCompile = (sh) => { ob(sh); sh.uniforms.uSnow = BROOK.snow; // 11-04 复测 ENV2：雪按离水线多远盖，不按坡度（原来陡的三角面没盖上雪，雪地上剩几片悬空似的黑碎片）——只在水边露一条连续的湿土，宽窄随沿线噪声
       sh.vertexShader = 'attribute float aE; varying float vE;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\nvE = aE;');
-      sh.fragmentShader = 'varying float vE;\n' + sh.fragmentShader.replace('smoothstep(0.42, 0.7, n.y + 0.18 * (sn - 0.5))', 'smoothstep(-0.04, 0.04, vE - 0.06 - 0.2 * (0.5 + 0.5 * sin(vPW.x * 0.9 + vPW.z * 0.6) * sin(vPW.z * 1.7 - vPW.x * 0.4)))'); };
+      sh.fragmentShader = 'varying float vE;\n' + sh.fragmentShader.replace('smoothstep(0.42, 0.7, n.y + 0.18 * (sn - 0.5))', 'smoothstep(-0.04, 0.04, vE + 0.1 - 0.3 * (0.5 + 0.5 * sin(vPW.x * 0.9 + vPW.z * 0.6) * sin(vPW.z * 1.7 - vPW.x * 0.4)) - 0.1 * (sn - 0.5))'); }; // 11-10 ENV2 第二轮：雪线在水线上下 −0.1…+0.2m 进出，约三成地方雪直接压到水边，露土的湿边断成一段段（原来全程一道黑线，像铲过雪的路沿）
     const out = new THREE.Mesh(uvOf(mergeGeometries([strip(rows[0]), strip(rows[2])])), ground.material), soil = new THREE.Mesh(uvOf(strip(rows[1])), sm);
     soil.geometry.setAttribute('aE', new THREE.Float32BufferAttribute(eRow, 1));
     out.name = 'brook_bank'; soil.name = 'brook_soil'; out.receiveShadow = soil.receiveShadow = true; G.add(out, soil); BROOK.bed = [out, soil];
@@ -1475,7 +1479,7 @@ float bF(vec2 p) { return 0.6 * bN(p) + 0.4 * bN(p * 2.7 + 5.2); }
     rocks.push(...dn);
     const im = new THREE.InstancedMesh(rockGeo(5), W.rock, rocks.length), o = new THREE.Object3D(), tint = new THREE.Color();
     rocks.forEach(([x, z, y, s, fl], i) => { o.position.set(x, y, z); o.rotation.set((R() - 0.5) * 0.4, R() * 6.28, (R() - 0.5) * 0.4); o.scale.set(s * (0.9 + 0.5 * R()), s * fl, s * (0.9 + 0.5 * R())); o.updateMatrix(); im.setMatrixAt(i, o.matrix);
-      im.setColorAt(i, tint.setRGB(0.5, 0.56, 0.47).multiplyScalar(0.85 + 0.3 * wHash01(i * 7.1))); }); // 溪里的石头湿、长苔：压暗偏绿（11-04 复测 ENV2：晴天比地面亮一大截）；雪照样盖在顶上
+      im.setColorAt(i, tint.setRGB(0.5, 0.56, 0.47, THREE.SRGBColorSpace).multiplyScalar(0.85 + 0.3 * wHash01(i * 7.1))); }); // 溪里的石头湿、长苔：压暗偏绿（11-04 复测 ENV2：晴天比地面亮一大截）；雪照样盖在顶上。11-10：按 sRGB 给（原来按线性值 0.5，显示成 0.73，晴天一块块发白）
     im.computeBoundingSphere(); im.receiveShadow = true; im.castShadow = true; im.name = 'brook_rocks'; G.add(im);
   }
   { // ④ 水轮：踏石下游 12m，下射式小水轮（直径 1.4m，吃水 0.18m）顶着两根桩；小屋那边岸上一个装发电机的小木棚，电线从棚顶出去
