@@ -3029,6 +3029,7 @@ function setupJournal() { // 把 Journal 按 h3 分节（中英各一份）好�
 }
 function renderJournal() { // 开场一直在；找到工作日志才有序章和「测绘员」；终章、后记等通关（第 3 天）
   const f = game.found, open = { open: true, prologue: f.has('log'), surveyor: f.has('log'), epilogue: f.has('ended'), after: f.has('ended') };
+  const xw = [...f].find((k) => k.startsWith('xw:')); if (xw) xWatchSay(+xw.slice(3)); // ✕ 那间怀表：遗稿写第一次看到时的钟点
   for (const d of journal.querySelectorAll('[data-sec]')) d.hidden = !open[d.dataset.sec];
   for (const d of journal.querySelectorAll('[data-end]')) d.hidden = !(f.has('end_' + d.dataset.end) || (d.dataset.end === 'back' && !f.has('end_stay'))); // 终章按看过的结局分块（11-10）；旧存档没有 end_* 的当「回去」
   for (const box of journal.querySelectorAll('.jday')) {
@@ -3062,7 +3063,7 @@ function ladderPad() { // 梯子只有两根细立柱和横档能点中，点中
   const m = pickPad(new THREE.BoxGeometry(0.1, 2.24, 0.4)); m.name = 'ladder_pad'; m.position.set(0.73, 1.28, 0.52); g.add(m); meshes.push(m); // 梯子图层本地坐标 = 收着（k=0）时的世界坐标：x 0.69–0.77、y 0.16–2.40、z 0.32–0.72
 }
 // 阁楼床头柜抽屉里的怀表（design v2-playable）：第 1 天停在 3:17；第 3 天 ✕ 那间（x3.on）在走，指针不在 3:17。挂在抽屉图层下，跟着抽屉拉出来；不进 meshes，点到的还是抽屉
-const WATCH = { at: [0.3, 2.647, -1.45], r: 0.024 }, watch = { hands: null, t: 0 };
+const WATCH = { at: [0.3, 2.647, -1.45], r: 0.024 }, watch = { hands: null, t: 0 }; window.cabinWatch = watch; // 调试：表针
 function makeWatch() {
   const g = layers.get('bedside_drawer'); if (!g || watch.hands) return;
   const c = document.createElement('canvas'); c.width = c.height = 128; const x = c.getContext('2d');
@@ -3081,10 +3082,19 @@ function makeWatch() {
   w.position.set(...WATCH.at); scene.add(w); w.updateMatrixWorld(true); g.attach(w);
   watchSet();
 }
-function watchSet() { // 停着：3:17:42；在走：照本地时间，碰巧是 3:17 就拨开一刻钟
+function xClock() { const t = (((sky.hour % 24) + 24) % 24) * 60; return Math.floor(t / 60) % 12 === 3 && Math.floor(t % 60) === 17 ? t + 15 : t; } // ✕ 那间怀表此刻几点（分钟）：游戏钟点，碰巧 3:17 拨开一刻钟
+function xWatchSay(t) { // 卡片上的钟点：取整到五分钟，英文老式说法（twenty minutes past two），中文「两点二十分」；整句改了要同步 X_CARDS.xwatch 的开头。卡片不念（cardOpen 不走 say），所以句子随时间变也不缺配音
+  const r = Math.round(t / 5) * 5 % 1440, h = Math.floor(r / 60), m = r % 60, E = ['twelve', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', 'eleven'], Z = ['十二', '一', '两', '三', '四', '五', '六', '七', '八', '九', '十', '十一'];
+  const N = { 5: 'five', 10: 'ten', 20: 'twenty', 25: 'five-and-twenty' }, en = m === 0 ? `${E[h % 12]} o'clock` : m === 15 ? `a quarter past ${E[h % 12]}` : m === 30 ? `half past ${E[h % 12]}` : m === 45 ? `a quarter to ${E[(h + 1) % 12]}` : m < 30 ? `${N[m]} minutes past ${E[h % 12]}` : `${N[60 - m]} minutes to ${E[(h + 1) % 12]}`;
+  const zh = Z[h % 12] + '点' + (m === 0 ? '整' : m === 30 ? '半' : (m === 5 ? '零五' : ['', '', '十', '十五', '二十', '二十五', '', '三十五', '四十', '四十五', '五十', '五十五'][m / 5]) + '分');
+  X_CARDS.xwatch[3] = DAY3_TEXT.xwatch[2] = `In the drawer, the pocket-watch, the old compass, a few pine needles. The watch is going. Its hands stand at ${en}.`;
+  X_CARDS.xwatch[4] = DAY3_TEXT.xwatch[3] = `抽屉里有怀表、旧罗盘、几根松针。怀表还在走，指着${zh}。`;
+  return r;
+}
+function watchSet() { // 停着：3:17:42；在走：照游戏钟点（xClock）
   if (!watch.hands) return;
   let h = 3, m = 17, s = 42;
-  if (x3.on) { const d = new Date(); h = d.getHours(); m = d.getMinutes(); s = d.getSeconds(); if (h % 12 === 3 && m === 17) m = 32; }
+  if (x3.on) { const t = xClock(); h = Math.floor(t / 60); m = Math.floor(t % 60); s = (t * 60) % 60; } // 11-10：跟着游戏里的钟点（sky.hour），和卡片上写的一致（设计评审 #11）；原来照本地时间
   const A = [((h % 12) + m / 60) / 12, (m + s / 60) / 60, s / 60];
   watch.hands.forEach((p, i) => { p.rotation.y = -A[i] * Math.PI * 2; });
 }
@@ -3634,7 +3644,7 @@ const X_MAP = ['Map', 'Parlour', '地图', 'The same map, the same note: Do Not 
 const X_ARRIVE = ['The Other Cabin', 'Exterior', '另一间小屋', 'You stop beneath the porch lamp. Your hand has found the latch before you looked for it.', '你在门廊灯下站住。手比眼睛先找到了门闩。', 'At the ✕.']; // v3：一句感受，不写结论；长文留在 Journal
 const X_CARDS = { // 四处不同：卡片只写看到的，不写「它说明什么」（设计原则 1）
   xcoat: ['Coat Rail', 'Entry', '衣帽架', 'The coat rail is bare, as yours was when you set out this morning. And by the tray, not so much as a boot.', '衣帽架上空着，和你今早出门时一样。托盘边连靴子也没有。', 'Nothing hangs here.'], // 叙事 r2 #1：大衣提灯是你自己拿走的，真正不同的只剩靴子
-  xwatch: ['Night Table', 'Loft', '床头柜', 'In the drawer, the pocket-watch, the old compass, a few pine needles. The watch is going. Its hands do not stand at seventeen minutes past three.', '抽屉里有怀表、旧罗盘、几根松针。怀表还在走，指针不在三点十七分。', 'The watch is ticking.'],
+  xwatch: ['Night Table', 'Loft', '床头柜', 'In the drawer, the pocket-watch, the old compass, a few pine needles. The watch is going.', '抽屉里有怀表、旧罗盘、几根松针。怀表还在走。', 'The watch is ticking.'], // 正文后半句「指着几点」按此刻钟点现拼（xWatchSay，设计评审 #11）
   xnotes: ['Inquiry Notes', 'Parlour', '调查记录', 'A page of inquiry notes lies open on the desk, in the clerk\'s hand. It is dated today.\n\n' + GAME_TEXT.xNote[1], '书桌上摊着一页调查记录，是书记员的笔迹，写的是今天：\n\n' + GAME_TEXT.xNote[2], 'In the clerk\'s hand.'],
   xfire: ['The Fire', 'Kitchen', '炉火', 'The fire is burning in the stove. Up in the loft the rocking chair is rocking. There is no one in the house.', '炉火烧着，楼上的摇椅在摇，屋里没有人。', 'Someone keeps this fire.'],
 };
@@ -3680,7 +3690,7 @@ function gameSeen3(name, title, add, got) {
   let over = null;
   if (x3.on) {
     if (['Coat Rail & Greatcoat', 'Coat Rail', 'Boots & Bench', 'Lantern'].includes(title)) { add('xcoat'); over = X_CARDS.xcoat; } // 'Coat Rail'：大衣穿在身上时的名字（GEAR_RAIL）
-    else if (title === 'Night Table') { add('xwatch'); over = X_CARDS.xwatch; }
+    else if (title === 'Night Table') { const r = xWatchSay(xClock()); if (!game.found.has('xwatch')) game.found.add('xw:' + r); add('xwatch'); over = X_CARDS.xwatch; } // 卡片写此刻钟点；遗稿记第一次看到的那个（xw:分钟）
     else if (title === 'Washstand & Hand Towel') { add('xfire'); over = X_BASIN; } // 叙事评审 11-04 #5：和炉火、摇椅同一处（有人在这儿过日子），第 1 天那盆冰在这里回收
     else if (title === 'Writing Desk, Chair & Wall Lamp') { add('xnotes'); over = X_CARDS.xnotes; }
     else if (title === 'Map') { add('xnotes'); over = X_MAP; }
@@ -3999,9 +4009,36 @@ function deskCheck() { // 第 1 天：人在屋里、书桌那页纸进了画面
   const c = deskCheck.c || (deskCheck.c = new THREE.Box3().setFromObject(g).getCenter(new THREE.Vector3())), v = c.clone().project(camera);
   if (v.z < 1 && Math.abs(v.x) < 0.85 && Math.abs(v.y) < 0.85 && camera.position.distanceTo(c) < 7) { game.deskSeen = true; saveGame(); showQuest(); }
 }
+// 小地图罗盘的指针（动机评审 #4，11-10）：第 1、2 天稳稳指北；第 3 天离 ✕ 越近越转不住、越转越快，到了 ✕ 那间乱指不停。不写字，画面先发生（日志里「罗盘越转越快，最后不再指任何方向」）。
+// 单独一个 DOM 元素压在底图那朵罗盘上（底图只在 mmDirty 时重画），每帧只改 transform；位置 0.3 秒对一次小地图的框（宽度随鸟瞰 / 第一人称 / 手机变）
+const MMN = { cx: 940 / 1024, cy: 86 / 1024, r: 46 / 1024, a: 0, v: 0, w: 0, d: 0, tgt: 0, jt: 0, rt: 0, el: null }; // cx、cy、r：罗盘在底图上的位置和外圈半径（占宽的比例，同 mapPaint 里 W - 84, 86, 46）
+window.cabinCompass = MMN; // 调试：d = 离 ✕ 多远，w = 角速度（弧度/秒，平滑过）
+function mmNeedle(c, dt) {
+  let e = MMN.el;
+  if (!e) { e = MMN.el = document.createElement('div'); e.id = 'mmNeedle'; e.style.cssText = 'position:fixed;z-index:7;pointer-events:none;opacity:.9;left:0;top:0';
+    e.innerHTML = '<svg viewBox="-10 -10 20 20" width="100%" height="100%"><path d="M0 -9.5 L1.6 0 L-1.6 0Z" fill="#9b2d1c"/><path d="M0 9.5 L1.6 0 L-1.6 0Z" fill="rgba(58,38,18,.85)"/><circle r="1.4" fill="#d8c69c" stroke="rgba(58,38,18,.85)" stroke-width=".6"/></svg>'; document.body.append(e); }
+  if ((MMN.rt -= dt) <= 0) { MMN.rt = 0.3; const b = c.hidden || document.body.classList.contains('endshot') ? null : c.getBoundingClientRect(); // 手机鸟瞰时小地图 display:none，框是 0
+    e.hidden = !b || !b.width; if (b && b.width) { const s = b.width * MMN.r * 2.3; Object.assign(e.style, { width: s + 'px', height: s + 'px', left: b.left + b.width * MMN.cx - s / 2 + 'px', top: b.top + b.width * MMN.cy - s / 2 + 'px' }); } }
+  if (e.hidden || !dt) return;
+  const f = game.found, a0 = MMN.a, r = fp ? fp.p.root.position : camera.position;
+  if (game.day < 3 || f.has('ended')) { MMN.a = 0; MMN.v = 0; MMN.d = 0; } // 稳稳指北
+  else if (x3.on) { // ✕ 那间：乱指不停，每隔一会儿换一个方向猛甩过去、晃一晃
+    MMN.d = Math.hypot(r.x, r.z);
+    if ((MMN.jt -= dt) <= 0) { MMN.jt = 0.12 + Math.random() * 0.35; MMN.tgt = MMN.a + (Math.random() - 0.5) * 2 * Math.PI * 1.4; }
+    MMN.v += (60 * (MMN.tgt - MMN.a) - 7 * MMN.v) * dt; MMN.a += MMN.v * dt;
+  } else { // 路上：转的劲 ω 随离 ✕ 的距离变大，往北拉回的劲变小；ω 压过拉力就整圈转起来
+    MMN.d = x3.shifted ? Math.hypot(r.x, r.z) : Math.hypot(r.x - XSHIFT.x, r.z - XSHIFT.y);
+    const k = 1 - THREE.MathUtils.smoothstep(MMN.d, 6, Math.max(40, XSHIFT.length())), w = 9 * k * k;
+    MMN.a += (w - 5 * (1 - k) * Math.sin(MMN.a) + (Math.random() - 0.5) * 6 * k) * dt;
+  }
+  MMN.a = Math.atan2(Math.sin(MMN.a), Math.cos(MMN.a)); // 留在 ±π，免得数越滚越大
+  MMN.w += ((Math.atan2(Math.sin(MMN.a - a0), Math.cos(MMN.a - a0)) / dt) - MMN.w) * Math.min(1, dt * 2);
+  e.style.transform = `rotate(${MMN.a}rad)`;
+}
 function mmTick(dt) {
   deskCheck(); // 很便宜：找到后第一行就返回
   const c = $('mmap'); c.hidden = !!opening || !game.found.has('page'); // 拿到书桌那页纸（接到调查）才出现
+  mmNeedle(c, dt);
   if (c.hidden || !trailCurve || (mmT += dt) < 0.3) return; mmT = 0; // trailCurve：存档里已拿到那页纸时，加载中小地图就显示了，要等路画好
   if (fp && !x3.on) { // 第一人称走到哪：屋里按位置认房间，屋外记沿路走过的最远处
     const r = fp.p.root.position;
