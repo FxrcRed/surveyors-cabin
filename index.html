@@ -144,6 +144,11 @@ if (navigator.webdriver || /[?&]nolock\b/.test(location.search)) { let el = null
   /* 房间导览（触屏第一人称）：按钮在「看模型」下面（它藏着时顶上去），列表从按钮处展开；按钮和列表项点击区至少 44px 高（字号不变） */
   #roomBtn { position: fixed; right: 7px; top: 46px; z-index: 8; font: inherit; font-size: var(--fs-xs); letter-spacing: .5px; color: #fff; text-shadow: 0 1px 3px rgba(0,0,0,.7); background: none; border: 0; padding: 0 5px; min-width: 44px; min-height: 44px; text-align: right; cursor: pointer; opacity: .75; }
   #viewBtn[hidden] + #roomBtn { top: 3px; }
+  #skipHint { position: fixed; right: 12px; top: 12px; z-index: 8; width: 44px; height: 44px; padding: 0; border-radius: 50%; display: grid; place-items: center; color: #fff; background: rgba(43,38,32,.42); border: 1px solid rgba(255,255,255,.55); box-shadow: none; opacity: 0; pointer-events: none; transition: opacity .8s; cursor: pointer; } /* 开场飞行的「快进」图标：不写字、不常驻，等了一阵才淡入（A5，11-10） */
+  #skipHint.on { opacity: .85; pointer-events: auto; } #skipHint:hover { opacity: 1; }
+  #journal:focus, #dlg .box:focus { outline: none; }
+  @media (prefers-reduced-motion: reduce) { #skyL #jBtn.pulse { animation: none; background: rgba(255,255,255,.2); } #roomList.shut, #rooms button:hover { transform: none; } } /* 减少动态效果：遗稿按钮不呼吸、房间列表不缩放；淡入淡出照旧 */
+  #skipHint svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
   #roomList { position: fixed; right: 10px; top: 91px; z-index: 8; display: flex; flex-direction: column; align-items: flex-end; color: #f4efe6; text-shadow: 0 1px 3px rgba(0,0,0,.75), 0 0 8px rgba(0,0,0,.45);
     transform-origin: top right; transition: opacity .2s, transform .2s ease; }
   #viewBtn[hidden] ~ #roomList { top: 48px; }
@@ -353,6 +358,7 @@ if (navigator.webdriver || /[?&]nolock\b/.test(location.search)) { let el = null
 <div id="roomNote"></div>
 <div id="quest"></div>
 <canvas id="mmap" hidden></canvas>
+<button id="skipHint" aria-label="Skip" title="Skip"><svg viewBox="0 0 24 24"><path d="M5 5l7 7-7 7M13 5l7 7-7 7"/></svg></button>
 <div id="subs"></div>
 <div id="note"></div>
 <div id="prog"></div><!-- 线索进度：提示区下面一行小字（原来在 #sky 里，位置随按钮多少浮动） -->
@@ -480,7 +486,7 @@ import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
 import { mergeGeometries, mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
 import { MeshBVH } from 'three-mesh-bvh';
 import { SimplifyModifier } from 'three/addons/modifiers/SimplifyModifier.js';
-import { scene, sun, hemi, renderer, camera, controls, $, lang, esc, lbl, PR_MAX } from './js/core.js';
+import { scene, sun, hemi, renderer, camera, controls, $, lang, esc, lbl, PR_MAX, RM } from './js/core.js';
 import { shared, share } from './js/state.js';
 import { terrain, terrainH, terrainSlope, sstep, makeGroundGeometry, applyTerrain, setBrook, brookAt, brookCutD, groundSpan, BROOK_WL, BROOK_BANK } from './js/terrain.js';
 import { paperMesh, agedPaper, handwrite, makeBook, inspectTick, inspecting, inspectBusy, inspectKind, inspectStart, inspectRelease } from './js/props3d.js';
@@ -1953,7 +1959,7 @@ loader.load('cabin.glb', async (gltf) => {
     pct.textContent = '100%'; bar.style.width = '100%';
     const go = () => { document.getElementById('loader').classList.add('done'); startIntro(); startOpening(); resumeAsk(); if (!opening) { if (!intro) enterBtn.classList.remove('wait'); $('jBtn').classList.remove('wait'); } }; // 有开场字幕就等播完再出「进屋」「遗稿」
     if (navigator.webdriver) go(); // 无头测试直接进
-    else { const b = document.createElement('button'); b.id = 'startBtn'; b.innerHTML = $('loader').classList.contains('dark') ? lbl('Continue', '继续') : lbl('Enter', '进入'); b.onclick = () => { if (mornOn() && !touchFP) canvas.requestPointerLock?.()?.catch?.(() => {}); go(); }; pct.replaceWith(b); } // 加载完先点「进入」再放开场：浏览器要先有一次点击才让配音出声 // 换天的「继续」这一下顺便锁上鼠标（早上那段约 6 秒，过完已经没有用户手势了）
+    else { const b = document.createElement('button'); b.id = 'startBtn'; b.innerHTML = $('loader').classList.contains('dark') ? lbl('Continue', '继续') : lbl('Enter', '进入'); b.onclick = () => { if (mornOn() && !touchFP) canvas.requestPointerLock?.()?.catch?.(() => {}); go(); }; pct.replaceWith(b); b.focus(); } // 加载完先点「进入」（聚焦它：只用键盘按 Enter 就进，原来焦点在 body 上没反应）再放开场：浏览器要先有一次点击才让配音出声 // 换天的「继续」这一下顺便锁上鼠标（早上那段约 6 秒，过完已经没有用户手势了）
   });
 }, (e) => {
   // GitHub Pages 用 gzip 传，e.total 是压缩后大小（约 16.9MB）而 e.loaded 是解压后字节 → 会超 100%；按解压后约 19.6MB 算（2026-11-03 摆设减面后；换模型要改这里），并封顶 99%
@@ -2252,7 +2258,7 @@ $('roomNote').onclick = (e) => { e.stopPropagation(); endRoomNote(); pumpNote();
 $('note').onclick = (e) => { e.stopPropagation(); showNote(null); };
 // Journal：整页阅读序章、测绘员、各房间、终章
 const journal = $('journal');
-$('jBtn').onclick = () => { $('jBtn').classList.remove('pulse'); for (const [q] of PANELS) q.hidden = true; journal.hidden = false; journal.scrollTop = 0; };
+$('jBtn').onclick = () => { $('jBtn').classList.remove('pulse'); for (const [q] of PANELS) q.hidden = true; journal.hidden = false; journal.scrollTop = 0; journal.tabIndex = -1; journal.focus(); };
 journal.querySelector('.x').onclick = () => { journal.hidden = true; };
 addEventListener('keydown', (e) => { if (e.key === 'Escape' && !journal.hidden) { journal.hidden = true; e.cabinClosed = true; } }); // 标记：这次 Esc 已用来关遗稿，第一人称别再退出
 // 屋里原地环顾：相机站定不动，目标点放在视线前方 LOOK_R 处，OrbitControls 绕它转 = 只转头，
@@ -2725,6 +2731,7 @@ function dialog(title, text, btns) {
   for (const [en, zh, fn] of btns) { const b = document.createElement('button'); b.innerHTML = lbl(en, zh); b.onclick = () => { d.hidden = true; if (fn) fn(); if (d.hidden && fp && !touchFP && !document.pointerLockElement) canvas.requestPointerLock?.()?.catch?.(() => {}); }; box.lastChild.append(b); } // 第一人称点完按钮接着锁回鼠标，不用再点一下画面（UX7）；按钮里又开了下一个弹窗就不锁
   if (document.pointerLockElement) document.exitPointerLock(); // 第一人称：放出鼠标才点得到按钮
   d.hidden = false;
+  const bs = box.querySelectorAll('button'); if (bs.length === 1) bs[0].focus(); else { box.tabIndex = -1; box.focus(); } // 只用键盘：一个按钮直接聚焦，Enter 就点；多个（结局三选一）聚焦弹窗本身，Tab 才到按钮，不替玩家选
 }
 function glLost() { if (glLost.on) return; glLost.on = true; dialog(['The picture was lost', '画面丢了'], ['Your progress is saved.', '进度已保存。'], [['Reload', '重新载入', () => location.reload()]]); } // iOS 内存紧张、切后台回来时 WebGL 画布被清掉，整屏白/黑：给一个重新载入（进度在存档里；r3 兼容 #2）
 renderer.domElement.addEventListener('webglcontextlost', (e) => { e.preventDefault(); clearTimeout(glLost.t); glLost.t = setTimeout(() => { if (renderer.getContext().isContextLost()) glLost(); }, 3000); }); // 浏览器常常自己马上恢复（three.js 接着重建）：3 秒还没回来才提示
@@ -2787,9 +2794,10 @@ function openingCard() { // 开场飞行被跳过：字幕没播完的话整段�
   clearTimeout(opening.timer); opening.card = performance.now(); stopVoice('sub'); $('subs').classList.remove('on'); // 第一句旁白别再念给看不见的字幕（11-07 评审⑪ 声1）
   const o = $('opening'), box = o.querySelector('.box');
   box.innerHTML = OPENING.map((l) => `<p>${lbl(...l)}</p>`).join('') + `<button>${lbl('Go In', '进去看看')}</button>`;
-  o.hidden = false; requestAnimationFrame(() => o.classList.add('on'));
+  o.hidden = false; requestAnimationFrame(() => o.classList.add('on')); box.querySelector('button').focus(); // 只用键盘：焦点放在「进去看看」上（原来留在已隐藏的「进入」按钮上，Tab 先走到后面的房间按钮）
 }
 $('opening').addEventListener('click', () => { if (opening && performance.now() - opening.card > 400) endOpening(); }); // 跳过的那一下点击不算
+addEventListener('keydown', (e) => { if (e.key === 'Escape' && opening && opening.card && performance.now() - opening.card > 400) { endOpening(); e.cabinClosed = true; } });
 function isClue(name) { // 第 1 天的线索物件（找到后再点也算）、夜里的书桌：卡片居中、要手动关
   const t = infoOf(name)?.[0];
   if (game.day >= 3) return x3.on ? ['xcoat', 'xwatch', 'xnotes', 'xfire'].some((k) => X_CARDS[k][0] === t) || ['Coat Rail & Greatcoat', 'Boots & Bench', 'Lantern', 'Night Table', 'Washstand & Hand Towel', 'Writing Desk, Chair & Wall Lamp', 'Map', 'Bookcase', 'Rocking Chair', 'The Fire', 'Cast-Iron Stove'].includes(t) || name === 'x_light' : name === 'd3_spruce';
@@ -3380,16 +3388,17 @@ function notchMesh(len, R, zf, yc) {
   const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); g.setAttribute('normal', new THREE.Float32BufferAttribute(nrm, 3)); g.setAttribute('color', new THREE.Float32BufferAttribute(col, 3)); g.setIndex(idx);
   return new THREE.Mesh(g, new THREE.MeshStandardMaterial({ color: '#e6d3a6', vertexColors: true, roughness: 0.9 }));
 }
-// 红布条（标桩、刻记号的云杉）：雾只吃一半（20m 内的雾里还能先看到一点红）；布尾挂下来按风摆（RAG.t / RAG.w 在 updateDay2 里更新）
+// 红布条（标桩、刻记号的云杉；红底加浅色斜条纹，红绿色盲看不出红色时靠条纹的亮度和形状认，A*）：雾只吃一半（20m 内的雾里还能先看到一点红）；布尾挂下来按风摆（RAG.t / RAG.w 在 updateDay2 里更新）
 const RAG = { t: { value: 0 }, w: { value: 0 } };
 function ragMat(sway) {
   const m = new THREE.MeshStandardMaterial({ color: '#8a3a2a', roughness: 1, side: THREE.DoubleSide });
   m.onBeforeCompile = (sh) => {
     Object.assign(sh.uniforms, { uRagT: RAG.t, uRagW: RAG.w });
+    sh.vertexShader = 'varying vec3 vRagW;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n vRagW = (modelMatrix * vec4(position, 1.0)).xyz;');
     if (sway) sh.vertexShader = 'uniform float uRagT, uRagW;\n' + sh.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>
       { float k = clamp(-position.y / 0.3, 0.0, 1.0); k *= k; float ph = modelMatrix[3].x * 3.1 + modelMatrix[3].z;
         transformed.z += k * (0.03 + 0.012 * uRagW) * sin(uRagT * (2.2 + 0.25 * uRagW) + position.y * 10.0 + ph); transformed.x += k * 0.012 * sin(uRagT * 1.7 + ph * 1.3); }`);
-    sh.fragmentShader = sh.fragmentShader.replace('#include <fog_fragment>', `#ifdef USE_FOG
+    sh.fragmentShader = 'varying vec3 vRagW;\n' + sh.fragmentShader.replace('#include <color_fragment>', '#include <color_fragment>\n diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.74, 0.66, 0.5), step(0.62, fract((vRagW.y + (vRagW.x + vRagW.z) * 0.7) * 30.0)));').replace('#include <fog_fragment>', `#ifdef USE_FOG
       gl_FragColor.rgb = mix(gl_FragColor.rgb, fogColor, smoothstep(fogNear, fogFar, vFogDepth) * 0.5);
     #endif`);
   };
@@ -4005,7 +4014,7 @@ function endInside(cb) {
     const V = (a) => new THREE.Vector3(...a);
     for (const q of people.values()) q.root.visible = false;
     camera.fov = innerHeight > innerWidth ? END_IN.tallFov : END_IN.fov; camera.updateProjectionMatrix(); camera.position.copy(V(END_IN.from)); controls.target.copy(V(END_IN.tgt));
-    fly = { t: 0, dur: 1e4, out: true, fromPos: V(END_IN.from), toPos: V(END_IN.to), fromTgt: V(END_IN.tgt), toTgt: V(END_IN.tgt), ease: (t) => { const x = Math.min(1, t * 250); return x * (2 - x); } }; // 40 秒推完，之后停着
+    fly = { t: 0, dur: 1e4, out: true, fromPos: V(RM.matches ? END_IN.to : END_IN.from), toPos: V(END_IN.to), fromTgt: V(END_IN.tgt), toTgt: V(END_IN.tgt), ease: (t) => { const x = Math.min(1, t * 250); return x * (2 - x); } }; // 40 秒推完，之后停着
     shadowDirty = true; d2.veil = false; cb(); // 放开黑幕：渲染循环把 #veil 淡回 0
   }, 800);
 }
@@ -4409,7 +4418,7 @@ function clueFly() { // 新线索卡关上：§ 从标题飞进遗稿按钮（�
   if (!to) return;
   const r = (to.querySelector('.sec') || to).getBoundingClientRect(), s = document.createElement('span');
   s.className = 'clueFly'; s.textContent = '§'; s.style.left = h.left + 'px'; s.style.top = h.top + 'px'; document.body.append(s);
-  s.animate([{ transform: 'none', opacity: 1 }, { transform: `translate(${r.left - h.left}px, ${r.top - h.top}px) scale(.7)`, opacity: .2 }], { duration: 650, easing: 'cubic-bezier(.5,0,.3,1)' }).onfinish = () => s.remove();
+  s.animate(RM.matches ? [{ opacity: 1 }, { opacity: 0 }] : [{ transform: 'none', opacity: 1 }, { transform: `translate(${r.left - h.left}px, ${r.top - h.top}px) scale(.7)`, opacity: .2 }], { duration: RM.matches ? 400 : 650, easing: 'cubic-bezier(.5,0,.3,1)' }).onfinish = () => s.remove();
 }
 function cardMore() { card.classList.toggle('more', card.scrollTop + card.clientHeight < card.scrollHeight - 4); } // 卡片没滚到底：底部渐隐
 let cardAt = 0, cardAuto = false, userPickAt = 0; // 卡片打开的时刻：刚开就点 / 按方向键别马上关掉；cardAuto：不是玩家刚点开 / 按 E 开的（剧情自动弹出），方向键要开满 2 秒才关（11-05 评审 #2）；userPickAt：玩家点击 / 按 E 的时刻
@@ -4877,7 +4886,7 @@ function gearHang() { // 挂回原处
 function gearPose() { // 画面右下角露出上半截；只跟着转身、不跟着抬头低头（挂着的提灯总是竖的）；k < 1 沉出画面（手里拿着别的东西时让开）
   const tall = camera.aspect < 0.7, d = tall ? 0.875 : 0.7, hh = d * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)), hw = hh * camera.aspect; // 手机竖屏（UX7）：远一点 = 缩到 0.8 倍，往左让开右下角的语言按钮，再沉一点
   const X = new THREE.Vector3(hw * (tall ? 0.49 : 0.62), -hh * ((tall ? 0.92 : 0.8) + 0.7 * (1 - gear.k)), -d).applyQuaternion(camera.quaternion).add(camera.position);
-  const Q = new THREE.Quaternion().setFromAxisAngle(_hY, fp.yaw + GEAR_YAW).multiply(_hq.setFromAxisAngle(_hX, Math.sin((fp.bob || 0) * 2) * 0.05)); // 走路时轻轻晃
+  const Q = new THREE.Quaternion().setFromAxisAngle(_hY, fp.yaw + GEAR_YAW).multiply(_hq.setFromAxisAngle(_hX, (RM.matches ? 0 : Math.sin((fp.bob || 0) * 2) * 0.05))); // 走路时轻轻晃（减少动态效果时不晃）
   return { X, Q };
 }
 const GEAR_YAW = 0;
@@ -4968,25 +4977,30 @@ canvas.addEventListener('mousedown', (e) => {
   if (fp && !fp.paused && !card.hidden && e.button !== 1 && performance.now() - fpT.at >= 800) { if (performance.now() - cardAt > 300) select(null); return; } // 卡片开着（鼠标锁着）：左键、右键都是关；刚开 0.3 秒内不算（连点两下别一开就关）
   if (fp && e.button === 2 && !fp.paused) { fp.inspect = true; return; }
   if (!fp || e.button !== 0 || performance.now() - fpT.at < 800) return; // 触屏点完浏览器还会补一个 mousedown：不当准星点击
+  fpClick();
+});
+function fpClick() { // 左键、Enter、空格：点准星（放开锁时 = 点画面继续）
   if (fp.paused) { canvas.requestPointerLock?.(); return; }
   userPickAt = performance.now(); const name = pick(fpCenter());
   if (name === 'roof_snow') { slideSnow(pick.side); return; }
   if (name && toggleOf(name)) { toggle(name); select(name); return; }
   select(name === selected ? null : name);
-});
+}
+const keyFree = () => { const a = document.activeElement; return (!a || a === document.body || a === canvas) && $('dlg').hidden && journal.hidden && !intro; }; // 焦点不在按钮上、没有弹层：Enter / 空格才当「点准星」，不抢按钮自己的 Enter
 addEventListener('keydown', (e) => {
   if (!fp) return;
   if (e.key === 'Escape' && card.hidden) return; // Esc 不退出第一人称（UX1：关卡片时浏览器顺手放锁，再按一下就被踢回鸟瞰）；放锁后准星处出「点画面继续」，退出走右上「看模型」
   if (e.cabinClosed) return; // 这一下已经用来关弹窗 / 遗稿
   if (!card.hidden && !touchFP) { fpCardKey(e); return; }
   if (e.code === 'KeyE' && !e.repeat) { fpUse(); return; }
+  if ((e.code === 'Enter' || e.code === 'Space') && !e.repeat && keyFree()) { e.preventDefault(); fpClick(); return; } // 只用键盘：Enter / 空格 = 左键（原来只有鼠标能点线索、开门）
   if (!fp.paused && fp.liveAt && !fpHud.classList.contains('seen') && /^(Key[WASD]|Arrow)/.test(e.code)) setTimeout(helpDone, Math.max(1500, 6000 - (performance.now() - fp.liveAt))); // 操作说明：真走起来、且锁住满 6 秒才收起（评审④ v2 #1：原来一锁指针就收，「WASD 走动」从来没显示过）
   fp.keys.add(e.code);
 });
 addEventListener('keyup', (e) => { if (fp) fp.keys.delete(e.code); });
 function fpCardKey(e) { // 第一人称卡片开着：E、空格、Esc 关（E 只关不拿）；开满 0.5 秒（剧情自动弹出的 2 秒）后新按下的方向键关卡片并直接走（按住不放的不算）
   if (e.repeat) return;
-  if (e.code === 'KeyE' || e.code === 'Space' || e.key === 'Escape') { e.preventDefault(); select(null); return; }
+  if (e.code === 'KeyE' || e.code === 'Space' || e.code === 'Enter' || e.key === 'Escape') { e.preventDefault(); select(null); return; }
   if (/^(Key[WASD]|Arrow)/.test(e.code) && !fp.keys.has(e.code) && performance.now() - cardAt > (cardAuto ? 2000 : 500)) { select(null); fp.keys.add(e.code); } // 开卡片时还按着、没松开过的键不算；自动弹出的开满 2 秒
 }
 addEventListener('wheel', (e) => { if (fp && !touchFP && !card.hidden && !card.contains(e.target)) card.scrollTop += e.deltaY; }, { passive: true }); // 鼠标锁着时滚轮落在画布上：转给卡片
@@ -5144,7 +5158,8 @@ function updateFP(dt) {
   if ((fp.solidT -= dt) < 0) { fp.solid = fpSolid(); fp.floors = fp.solid.concat(ground, ...(BROOK.bed || [])); fp.solidT = 0.5; fpNearMesh(r); }
   else if (r.position.distanceToSquared(fp.nearAt) > 1) fpNearMesh(r); // 走出 1m（屋外跑步约 0.2 秒）就重筛身边的网格 // 门开关、积雪会变，半秒刷新一次
   const f = (k.has('KeyW') || k.has('ArrowUp') ? 1 : 0) - (k.has('KeyS') || k.has('ArrowDown') ? 1 : 0) || (fp.lad && !p.tasks.length ? fpLadTick(r, dt) : 0);
-  const st = (k.has('KeyD') || k.has('ArrowRight') ? 1 : 0) - (k.has('KeyA') || k.has('ArrowLeft') ? 1 : 0);
+  const st = (k.has('KeyD') ? 1 : 0) - (k.has('KeyA') ? 1 : 0);
+  if (!p.tasks.length) { fp.yaw += ((k.has('ArrowLeft') ? 1 : 0) - (k.has('ArrowRight') ? 1 : 0)) * 1.9 * dt; fp.pitch = THREE.MathUtils.clamp(fp.pitch + ((k.has('PageUp') ? 1 : 0) - (k.has('PageDown') ? 1 : 0)) * 1.2 * dt, -1.35, 1.25); } // 只用键盘：← → 转头（fp.yaw 变大 = 往左）、PageUp / PageDown 抬头低头；方向键不再平移（A D 平移）
   const run = (k.has('ShiftLeft') || k.has('ShiftRight')) && f > 0;
   let moving = false, still = false; // still：站着、周围也没东西在动，跳过碰撞射线
   if (!p.tasks.length && p.mode === 'sit') { // 坐着：W 起身；转头有限度
@@ -5186,7 +5201,7 @@ function updateFP(dt) {
   fp.bob = moving ? fp.bob + dt * (run ? 13 : 8.5) : fp.bob * 0.9;
   audioStep(fp.bob, moving, run);
   const lean = fpLean(r, s); // 低头往前探，免得看见自己的衣领、肩膀（动画检查 #12）
-  _fpO.set(r.position.x + Math.sin(fp.yaw) * lean, r.position.y + eyeH + Math.sin(fp.bob * 2) * 0.012, r.position.z + Math.cos(fp.yaw) * lean);
+  _fpO.set(r.position.x + Math.sin(fp.yaw) * lean, r.position.y + eyeH + (RM.matches ? 0 : Math.sin(fp.bob * 2) * 0.012), r.position.z + Math.cos(fp.yaw) * lean);
   const seated = !!p.seat || p.mode === 'sit' || (climbs(p) && (!!fp.climb || p.S != null)); // 坐着、她爬梯子时镜头跟头骨
   fp.headK = (fp.headK || 0) + ((seated ? 1 : 0) - (fp.headK || 0)) * Math.min(1, dt * 6);
   if (fp.headK > 0.001 && p.head) { // 头骨（颅底）往上 7cm、沿视线往前 10cm ≈ 眼睛
@@ -5271,6 +5286,7 @@ function mornStart() {
   const sit = new THREE.Vector3(sx, f0 + 1.01, sz + 0.47), lean = new THREE.Vector3(sx, f0 + 0.94, sz + 0.25);
   morn = { t: 0, m, w, D, walk, L: walk.getLength(), sit, lean, eh, ey: null, yaw: Math.PI - 0.17, pitch: -0.12, P: new THREE.Vector3() };
   mornTick(0); // 第一帧就到沙发上（原来要等下一帧，第一帧还是鸟瞰机位，评审 #11）
+  if (RM.matches) { mornTick(MORN.T); return; } // 减少动态效果：不演起身走路，直接站在炉子边交给玩家（mornEnd 里 startFP + showQuest）
   showQuest();
 }
 const MORN_WALK = { at: 1.2, v: WALK_SPEED * 0.94, acc: 0.35, step: 18.1 }; // 走路：1.2s 起步（和站起的尾巴重叠，不停顿）、0.35s 加速到玩家的步速、0.35s 减速；step = 每米头部起伏的相位（同 updateFP：fp.bob 每秒 8.5 × 2 ÷ 0.94 m/s）
@@ -5707,6 +5723,7 @@ function startIntro() {
   if (!pathCurve) { if (sliceOn()) sliceStart(); return; } // 没有开场路线（无头测试）：切片直接站到门廊
   // resetView 刚摆好的就是最终画面
   if (sliceOn()) { const dw = toggles.get('door_wood'); if (dw) { dw.on = true; dw.ajar = dw.k = 0.75; const e = 0.75 * 0.75 * (3 - 2 * 0.75); for (const f of dw.parts) f(e); } } // 第 1 天开场飞行时门就虚掩着（留 15° 的缝，同台词「大门虚掩」），不等落地后才关
+  if (RM.matches && sliceOn()) { if (!opening) enterBtn.classList.remove('wait'); sliceStart(); return; } // 减少动态效果：不飞 39 秒、也不被带进屋（SL.auto）：直接站在门廊，旁白照放，自己走进去；书记员照旧先进屋领路
   if (sliceOn() && WATER.dock && people.get('person_man') && people.get('person_woman')) { startDockIntro(); return; }
   const slice = sliceOn(), homePos = slice ? sliceEye() : camera.position.clone(), homeTgt = slice ? homePos.clone().add(new THREE.Vector3(0, -0.1, -1)) : controls.target.clone(); // 切片：落在门廊稽查的眼睛，朝门
   // v3：沿河（湖东边那段，自东往西）→ 湖 → 黄线卵石路进来；离院子的路程 m 在卵石路上和原来一样
@@ -5792,6 +5809,12 @@ function updateIntro(now) {
 // 动画中点击、滚轮、按键：跳过，平滑飞到首页视角
 for (const ev of ['pointerdown', 'wheel']) canvas.addEventListener(ev, () => { if (!justUnlocked()) endIntro(true); }); // 头一下是放出配音（unlockVoice），再点才跳过
 addEventListener('keydown', () => { if (!justUnlocked()) { endIntro(true); mornEnd(); } }); // 早上那段只认按键跳过（点画面是要锁鼠标）
+const skipHint = $('skipHint'); let introSeen = 0; skipHint.onclick = () => endIntro(true);
+setInterval(() => { // 开场飞行：等了 10 秒、或已经点过 / 按过一下（头一下只放出配音、不算跳过）才淡入一个快进图标，不写字、不常驻（A5）
+  if (!intro) { introSeen = 0; skipHint.classList.remove('on'); return; }
+  if (!introSeen) introSeen = performance.now();
+  skipHint.classList.toggle('on', performance.now() - introSeen > 10000 || VOICE.unlockAt != null);
+}, 500);
 
 // 自适应分辨率：帧间隔平均持续 >24ms（不到 ~42 帧）就把像素比降 0.25（最低 1，大屏/高分屏上像素着色是大头）；持续 <12ms 再慢慢升回去
 const RES_MAX = PR_MAX, res = { ema: 0.016, at: 0 };
@@ -5952,7 +5975,7 @@ renderer.setAnimationLoop(() => {
   if (intro) updateIntro(now);
   else if (fly) {
     // 按真实时间飞（原来每帧固定 +0.025，高刷屏 0.3 秒就到）；smooth = 慢起慢停，否则先快后慢
-    fly.t = Math.min(1, fly.t + dt / (fly.dur || 1.2));
+    fly.t = RM.matches && (fly.dur || 1.2) < 100 ? 1 : Math.min(1, fly.t + dt / (fly.dur || 1.2)); // 减少动态效果：换房间、进屋、结局慢推直接到终点（dur 1e4 的是隐藏结局屋里那个镜头，起点已放在终点，endInside）
     const t = fly.t, e = fly.ease ? fly.ease(t) : fly.smooth ? t * t * t * (t * (t * 6 - 15) + 10) : 1 - Math.pow(1 - t, 3);
     if (fly.curve) camera.position.copy(fly.curve.getPointAt(e)); else camera.position.lerpVectors(fly.fromPos, fly.toPos, e);
     if (fly.v0) { const g = t * fly.dur * (1 - t) ** 3; camera.position.addScaledVector(fly.v0, g); fly.look.yx = fly.w0 * g; } // 进屋：接住自动旋转的初速度
@@ -5971,7 +5994,7 @@ renderer.setAnimationLoop(() => {
   updateLantern(dt);
   updateRocker(dt);
   updateWaterFx(dt);
-  spinK += ((spin && !fly ? 1 : 0) - spinK) * Math.min(1, dt * 1.5);
+  spinK += ((spin && !fly && !RM.matches ? 1 : 0) - spinK) * Math.min(1, dt * 1.5);
   const lookable = !inside && !intro && !fly;
   if (lookUp.on && lookable && camera.position.equals(lookUp.set)) camera.position.copy(lookUp.virt); // 还原贴地前的「虚拟位置」，OrbitControls 接着按它算（别处改过相机位置就不还原）
   lookUp.on = false;
