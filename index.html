@@ -3934,7 +3934,7 @@ function ending(kind) { LOG && LOG.ev('end', `结局 ${kind}`); LOG && LOG.ev('d
 }
 // —— 结局画面（11-10，动机评审 #5 #6、美术评审「结局只有黑底文字」）：回到自家，天刚黑，从院子西南角的树影里看小屋：门廊灯亮着，东北偏东的树梢上那柱烟还在升；「留下」时书记员站在门廊东头望着它。
 // 镜头用 fly 慢慢推近，结局文字一段一页压在画面下三分之一，点「继续」翻页，放完才出「遗稿齐了」。机位照宣传图 b-night 那个角度（用户认可过），时刻 18.3：树是黑剪影（日落时树发棕，不用），烟还衬得出来（入夜就看不见了）
-const END_SHOT = { hour: 18.3, dur: 30, from: [-7.5, 1.6, 10.5], to: [-6.6, 1.6, 9.3], wide: { fov: 50, tgt: [2, 1.9, -2] }, tall: { fov: 62, tgt: [3.1, 0.4, -1.2] }, woman: [1.5, 2.9] }; // from：右边一棵树挡着半个画面，推到 to 让开，露出门廊东头的人和右上的烟；再往后退或往东挪就钻进树冠里全黑。tall = 竖屏：视野窄，往右偏 5° 才同时装下门和烟；两种都压低视线，把小屋抬到画面中上，下三分之一留给字
+const END_SHOT = { smoke: [3.2, 0.8], hour: 18.3, dur: 30, from: [-7.5, 1.6, 10.5], to: [-6.6, 1.6, 9.3], wide: { fov: 50, tgt: [2, 1.9, -2] }, tall: { fov: 62, tgt: [3.1, 0.4, -1.2] }, woman: [1.5, 2.9] }; // from：右边一棵树挡着半个画面，推到 to 让开，露出门廊东头的人和右上的烟；再往后退或往东挪就钻进树冠里全黑。tall = 竖屏：视野窄，往右偏 5° 才同时装下门和烟；两种都压低视线，把小屋抬到画面中上，下三分之一留给字
 function endShotStart(kind) {
   const E = { ...END_SHOT, ...(innerHeight > innerWidth ? END_SHOT.tall : END_SHOT.wide) }, V = (a) => new THREE.Vector3(...a), d = $('dlg');
   intro = null; spin = false; controls.enabled = false; document.body.classList.add('endshot');
@@ -3944,12 +3944,36 @@ function endShotStart(kind) {
   const stand = () => { const w = people.get('person_woman'); if (!w) { setTimeout(stand, 300); return; } // 人物还没载完
     placeMan(w, ...E.woman, Math.atan2(D2.lamp[0] - E.woman[0], D2.lamp[2] - E.woman[1])); w.root.position.y = floorAt(...E.woman); w.roam = w.next = 1e9; }; // 脸朝那柱烟
   if (kind === 'stay' || kind === 'page') stand();
-  const pages = ({ stay: ['endStay'], page: ['endStay', 'endPage'], hidden: ['endBack', 'endHidden'] }[kind] || ['endBack']).flatMap((k) => { const t = GAME_TEXT[k], zh = t[2].split('\n\n'); return t[1].split('\n\n').map((p, i) => [i ? ['', ''] : END_TITLE[k], [p, zh[i] || '']]); });
+  const smoke = () => { const u = d2.lamp?.userData.plume; if (!u) { setTimeout(smoke, 300); return; } u.uK.value.set(...END_SHOT.smoke); }; smoke(); // 那柱烟加浓压暗、不放大：远看的那柱平时 uK (1.5, 1)，黄昏天上偏淡；颜色还是去了饱和的灰，不会变褐、变红
+  const pages = ({ stay: ['endStay'], page: ['endStay', 'endPage'], hidden: ['endBack', 'endHidden'] }[kind] || ['endBack']).flatMap((k) => { const t = GAME_TEXT[k], zh = t[2].split('\n\n'); return t[1].split('\n\n').map((p, i) => [i ? ['', ''] : END_TITLE[k], [p, zh[i] || ''], k]); });
   const next = (i) => {
-    if (i >= pages.length) { d.classList.remove('end'); document.body.classList.remove('endshot'); game.found.delete('endshow:' + kind); saveGame(); fly = null; controls.enabled = true; endAsk(); return; } // 镜头停在推到的地方，交还拖动（不停的话 fly 会和拖动抢相机）
+    if (i >= pages.length) { d.classList.remove('end'); document.body.classList.remove('endshot'); game.found.delete('endshow:' + kind); saveGame(); if (END_IN.on) endInHold(E); else { fly = null; controls.enabled = true; } endAsk(kind); return; } // 镜头停在推到的地方，交还拖动（不停的话 fly 会和拖动抢相机）；屋里那个镜头等「遗稿齐了」关了再切回院子
+    if (pages[i][2] === 'endHidden' && !END_IN.on) { endInside(() => next(i)); return; } // 念到提灯：切进屋
     dialog(pages[i][0], pages[i][1], [[i < pages.length - 1 ? 'Continue' : 'The End', i < pages.length - 1 ? '继续' : '完', () => next(i + 1)]]); d.classList.add('end');
   };
   setTimeout(() => next(0), 3800); // 先让画面自己待一会儿
+}
+// 隐藏结局念到提灯（11-10 第二轮）：黑场切进屋，从门廊下隔着门洞看衣帽架钉子上的提灯，屋里只留它一盏，别的灯关、曝光压低（updateDay3 每帧按住，书记员路过开灯也压回去）；人藏起（人物近景不好看）。
+// 相机离提灯约 2m（近裁面：屋外按离地高度算会到 1m，把屋里切掉；借 fly.out「贴着小屋」那条走 0.05），fly 给很长的 dur，到不了头就不会被清掉。「遗稿齐了」关了再切回院子那个机位
+const END_IN = { on: false, from: [0.3, 1.6, 2.9], to: [0.24, 1.58, 2.6], tgt: [-0.05, 1.4, 0.9], fov: 40, tallFov: 58, exp: 0.6, keep: null };
+function endInside(cb) {
+  END_IN.keep = { lamps: [...toggles].filter(([n]) => LAMPS[n]).map(([n, t]) => [n, t.on]), ppl: [...people.values()].map((q) => [q, q.root.visible]) }; // 先记下再置 on：on 了 updateDay3 当帧就关灯
+  END_IN.on = true; d2.veil = true; veilEl.style.transition = 'opacity .7s'; veilEl.style.zIndex = 30; veilEl.style.opacity = 1;
+  setTimeout(() => {
+    const V = (a) => new THREE.Vector3(...a);
+    for (const q of people.values()) q.root.visible = false;
+    camera.fov = innerHeight > innerWidth ? END_IN.tallFov : END_IN.fov; camera.updateProjectionMatrix(); camera.position.copy(V(END_IN.from)); controls.target.copy(V(END_IN.tgt));
+    fly = { t: 0, dur: 1e4, out: true, fromPos: V(END_IN.from), toPos: V(END_IN.to), fromTgt: V(END_IN.tgt), toTgt: V(END_IN.tgt), ease: (t) => { const x = Math.min(1, t * 250); return x * (2 - x); } }; // 40 秒推完，之后停着
+    shadowDirty = true; d2.veil = false; cb(); // 放开黑幕：渲染循环把 #veil 淡回 0
+  }, 800);
+}
+function endInHold(E) { // 「遗稿齐了」关掉（翻开遗稿也算）：灯、人复原，切回院子那个机位
+  const V = (a) => new THREE.Vector3(...a), t = setInterval(() => {
+    if (!$('dlg').hidden) return; clearInterval(t); END_IN.on = false;
+    for (const [n, on] of END_IN.keep.lamps) toggles.get(n).on = on;
+    for (const [q, v] of END_IN.keep.ppl) q.root.visible = v;
+    camera.fov = E.fov; camera.updateProjectionMatrix(); camera.position.copy(V(E.to)); controls.target.copy(V(E.tgt)); fly = null; controls.enabled = true; shadowDirty = true;
+  }, 300);
 }
 function endHome() { // 通关后按结局摆自家屋子（叙事评审 11-04 #7）：留下 = 稽查没回来，大衣、提灯也跟他走了（叙事 r2 #2，衣帽架说明 GEAR_RAIL.gone）；回去、隐藏结局照旧挂在钉子上（同结局文字）。「重新开始」清存档就复原
   if (!game.found.has('end_stay')) return;
@@ -3958,9 +3982,12 @@ function endHome() { // 通关后按结局摆自家屋子（叙事评审 11-04 #
   for (const n of ['entry_coat', 'entry_lantern']) { const g = layers.get(n); if (g) g.visible = false; } // 提灯图层带点光源：藏起由 trackLight 补替身灯，同 X_HIDE
   shadowDirty = true;
 }
-function endAsk() { // 通关后刷新：不问「继续上次」，告诉玩家终章、后记解锁了
+function endAsk(now) { // 通关后刷新：不问「继续上次」，告诉玩家终章、后记解锁了。now = 刚放完的那个结局
   dialog(['The Papers Complete', '遗稿齐了'], ['', ''],
     [['Read the Papers', '翻开遗稿', () => $('jBtn').click()], ...(game.snap.length ? [['Back to the Other Porch', '回到另一间屋的门廊下', backToPorch]] : []), ...(LOG ? [['Copy Log', '复制记录', () => { const t = window.__logText(); (navigator.clipboard?.writeText(t) || Promise.reject()).catch(() => { const a = document.createElement('textarea'); a.value = t; document.body.append(a); a.select(); document.execCommand('copy'); a.remove(); }); }]] : []), ['Begin Again', '重新开始', () => { SAVE.clear(); location.reload(); }]]);
+  const p = document.createElement('p'), f = game.found; // 四个结局排一行（同遗稿里的顺序）：看过的写名字，刚放完的加粗，没看过的「？？」淡一点；不加说明，让人想点「回到另一间屋的门廊下」
+  p.innerHTML = [['back', 'endBack'], ['stay', 'endStay'], ['hidden', 'endHidden'], ['page', 'endPage']].map(([k, t]) => f.has('end_' + k) ? (k === now ? '<b>' : '') + lbl(END_TITLE[t][0], END_TITLE[t][1].replace(/^.*· /, '')) + (k === now ? '</b>' : '') : `<span style="opacity:.45">${lbl('??', '？？')}</span>`).join('　·　');
+  $('dlg').querySelector('.row').before(p);
 }
 function xPorch(k) { // ✕ 那间（挪世界后）：门廊灯大白天也亮得显眼；走近了太阳压暗（雾在 updateDay2 里跟着 x3.near 加浓），屋子从灰里浮出来（r3 #12）
   const g = layers.get('entry_porch_lamp'), t = toggles.get('entry_porch_lamp'); if (!g || !t) return;
@@ -3970,6 +3997,7 @@ function xPorch(k) { // ✕ 那间（挪世界后）：门廊灯大白天也亮�
   sun.intensity *= 1 - 0.5 * k; hemi.intensity *= 1 - 0.2 * k;
 }
 function updateDay3(dt) {
+  if (END_IN.on) { renderer.toneMappingExposure *= END_IN.exp; for (const [n, t] of toggles) if (LAMPS[n]) t.on = n === 'entry_lantern'; } // 隐藏结局屋里那个镜头：只留提灯
   if (!x3.spruce) return;
   const f = game.found;
   x3.near = x3.shifted && !f.has('ended') ? 1 - THREE.MathUtils.smoothstep(Math.hypot(camera.position.x, camera.position.z), 8, 30) : 0; // 离 ✕ 那间（挪世界后在原点）多近
