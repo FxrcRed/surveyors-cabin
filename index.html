@@ -348,7 +348,7 @@ if (navigator.webdriver || /[?&]nolock\b/.test(location.search)) { let el = null
   <div id="wxPanel" hidden></div>
   <div class="btns"><button id="skyBtn"><span id="skyClock">9:00</span><span id="skyName" hidden> · <span class="en">Forenoon</span><span class="zh">上午</span></span></button>
     <button id="wxBtn"><span id="wxIco" aria-hidden="true"></span><span id="wxName"><span class="en">Fair</span><span class="zh">晴</span></span></button>
-    <button id="jBtn" class="wait"><span class="sec">§</span><span class="en">Journal</span><span class="zh">遗稿</span></button></div>
+    <button id="jBtn" class="wait"><span class="sec">§</span><span class="en">Papers</span><span class="zh">遗稿</span></button></div>
 </div>
 <div id="roomNote"></div>
 <div id="quest"></div>
@@ -378,7 +378,7 @@ if (navigator.webdriver || /[?&]nolock\b/.test(location.search)) { let el = null
   <p>The summer went by, and he did not come back. The Office had a short letter: the map was not yet finished, and he begged leave to stay the winter. The next spring, what came was his first yearly report.</p>
   <p>So it was for thirty years. Every spring, when the thaw came, he walked two days out of the forest to post one at the post-house on its edge, and carried back a year's provisions. The reports were neatly written, all contours and timber and snowfall, and never once said why he did not come home. No one at the Office asked.</p>
 
-  <h3>Epilogue · The Clerk's Record</h3>
+  <h3>Epilogue · The Clerk's Inquiry Notes</h3>
   <div data-end="back">
   <h4>The report, as sent</h4>
   <p><em class="k">To the Office.</em></p>
@@ -431,7 +431,7 @@ if (navigator.webdriver || /[?&]nolock\b/.test(location.search)) { let el = null
   <p>夏天过去，他没有回来。局里收到一封短信：图还没画完，请准许留下过冬。第二年开春，寄来的是第一份年度报告。</p>
   <p>从此三十年，每年开春化冻，他自己走两天出林子，到林边驿站寄一份，再背回一年的补给。报告字迹工整，写的都是等高线、林木和雪量，从来没写过为什么不回来。局里没有人问。</p>
 
-  <h3>终章：书记员的记录</h3>
+  <h3>终章：书记员的调查记录</h3>
   <div data-end="back">
   <h4>交给局里的报告</h4>
   <p><em class="k">寄测绘局。</em></p>
@@ -2418,7 +2418,7 @@ const STORY = {
   'The Clerk|Loft': `A young clerk of the Survey Office. She had read every report he ever sent, though no one had asked her to.`,
   'The Clerk|Parlour': `A young clerk of the Survey Office. She had read every report he ever sent, though no one had asked her to.`,
   'Plank Door|Exterior': `A thick plank door, with iron strap-hinges, a latch and a night-bolt: the stoutest guard the cabin has. On the wildest nights the latch would rattle as though the forest meant to come in. Yet in his later years he never barred it fast, but made a habit of leaving it a crack ajar, that whatever was out there might know a fire burned within. When the two of them came, it stood ajar as ever, and a trail of dead leaves had blown in through the gap.`,
-  'Snow upon the Roof|Exterior': `Come winter, the snow lay half a yard deep upon the shingles. When the storm had passed he would rap the eaves with a long pole and send it all thundering down — "letting the old house wash her face," he called it. In his journal he wrote: "Snow falling makes all things equal; but when it melts, only where a fire is kept does the bare wood show first."`,
+  'Snow upon the Roof|Exterior': `Come winter, the snow lay half a yard deep upon the shingles. When the storm had passed he would rap the eaves with a long pole and send it all thundering down — "letting the old house wash her face," he called it. In his field log he wrote: "Snow falling makes all things equal; but when it melts, only where a fire is kept does the bare wood show first."`,
   'Porch Lamp|Exterior': `The cabin's light comes from the brook beside it: a little way downstream he set a water-wheel to turn an old dynamo, and carried the wire up from the bank to the house upon two peeled posts. So long as the water runs, the lamp burns; only in the dead of winter, when the brook freezes hard, does the current fail, and for those months he lit the lantern.\n\nOne winter he broke his leg in the woods and lay half-frozen in the snow, until the faint glimmer of this lamp, far off, drew him crawling home. After that he changed the wiring, so that it burns whenever the dark comes on. It does not light the way for guests — only for those coming home.`,
   'Boots & Bench|Entry': `Coming in, he stamped his feet on the sailcloth mat, sat on the low bench to pull his boots off, and stood them in the tray to drip. Two boot-prints are worn into the mat, the left deeper than the right — for he always carried logs on his left shoulder, and walked with a slight limp; and the left of the bench is smoother than the right, for he always put on the left boot first. The tread of the snow boots is worn nearly smooth.\n\nThe mud in the tray has long since dried to a crust, and the boots still stand beside it, their tops a little agape.`,
   'Lantern|Entry': `A candle lantern on a peg of the coat rail. He took it out to the woodpile, or into the night to see what stirred; and in the months when the brook froze and the current failed, it was the only light in the house. A crack runs across the glass, where the antlers of a startled deer once swept the frame on a snowy night. He never replaced the pane, only bound it round with wire. "Cracked is well enough," said he. "The light leaks through like a blade, and cuts the fog clean."`,
@@ -2451,7 +2451,7 @@ const STORY = {
   'Settee, Low Table & Rug|Parlour': `The settee faces the cast-iron stove: the warmest seat on a winter's night. The cushion is sat into a plain hollow — his place, and no one else's. Every evening he sat there to read, to drink his tea, and to stare into the fire. That hollow is the deepest footprint he left in all the boundless forest.\n\nOn the low table there was always a book half read and a cup of tea half drunk, and the tea has stained rings into the wood, ring upon ring like the growth of a tree. The woollen rug underfoot is worn somewhat bald; on the coldest nights he drew his feet back and set them on the thickest part of it.`,
   'Bookcase|Parlour': `A few old volumes of a Forest Flora, a book of the Stoics, a hand-copied Euclid, some travels shedding their covers — all grown heavy with the damp. Cut off from the world, these were the ballast by which he still conversed with it.\n\nOn the bottom shelf, at the left, lie a few field books, flat: the books he worked in. Everything to do with his work, he kept downstairs.`,
   'Cupboard|Parlour': `Three doors, each opening on its own. The left hides salt meat and dried fruit; the middle, tools and odds and ends; the right holds only a dozen empty envelopes and a bottle of ink never used. The letters he wrote to far away and never sent all went in at the stove door, fuel for the fire. The empty envelopes are his last courtesy: the wish to write remained, though there was no one left to receive.`,
-  'Writing Desk, Chair & Wall Lamp|Parlour': `The desk once stood in the loft; later he brought it down with its chair, and set it beneath the wall lamp, not far from the stove. On the day he brought them down he wrote in his diary: "Time this business was finished." From then on everything to do with work stayed downstairs, and the loft was for sleeping and for thinking.\n\nThe back of the chair is polished bright by his spine. When he wrote at night he lit only this one wall lamp, its light kept low, enough for a tabletop and a pair of hands.\n\nThe drawer stands half open. In it lies an unfinished draft whose last line is a string of bearings, given to three places of decimals; yet at that spot the draft is blank.`,
+  'Writing Desk, Chair & Wall Lamp|Parlour': `The desk once stood in the loft; later he brought it down with its chair, and set it beneath the wall lamp, not far from the stove. On the day he brought them down he wrote in his field log: "Time this business was finished." From then on everything to do with work stayed downstairs, and the loft was for sleeping and for thinking.\n\nThe back of the chair is polished bright by his spine. When he wrote at night he lit only this one wall lamp, its light kept low, enough for a tabletop and a pair of hands.\n\nThe drawer stands half open. In it lies an unfinished draft whose last line is a string of bearings, given to three places of decimals; yet at that spot the draft is blank.`,
   'Map|Parlour': `A survey of the hills and woods hereabouts. Blank once, it is now crowded with routes, landmarks and contour lines. But look closer, and he was charting more than ground: deep in the wood he drew a great ✕, and beside it wrote "Do Not Enter". The place lies off every official route. The contours round the ✕ have been drawn and rubbed out and drawn again, until the paper is worn furry.`,
   'Antlers|Parlour': `He did not shoot this stag. One spring he found bleached bones in the wood, the antlers caught in a thicket, and brought them home to nail up as a memorial. "The empty hills never lack for living things. It is only that they know better than we how to leave quietly."`,
   'Tapestry|Parlour': `Hand-woven, a brook deep in a shadowed wood, the work a little rough. Perhaps some old friend's hand made it; perhaps he taught himself on a day snowed in. The cabin has no window, and this was his window — through it, even indoors, he could watch water run.`,
@@ -2468,7 +2468,7 @@ const STORY = {
 // 中文原稿（story/story-zh.md），卡片里接在英文下面：[中文名, 故事]
 const STORY_ZH = {
   'Plank Door|Exterior': ['木板大门', '厚木板门，铁铰链、门闩、夜闩齐全。本是最坚固的防线，风雪最盛的夜晚门闩震得哗哗响，仿佛森林要闯进来。但测绘员晚年从不彻底锁死，养成了虚掩的习惯——留一条缝，让外面知道这里有炉火。两个人到的时候，门也是虚掩着的，门缝里吹进来一溜落叶。'],
-  'Snow upon the Roof|Exterior': ['屋顶积雪', '每到冬天，屋顶积雪能厚到半米。风雪停后他会拿竹竿敲屋檐，让雪轰然滑落，管这叫“给屋子卸妆”。他在日记里写过：“雪落时万物平等，但雪化时，只有有炉火的地方才会最先露出原木的底色。”'],
+  'Snow upon the Roof|Exterior': ['屋顶积雪', '每到冬天，屋顶积雪能厚到半米。风雪停后他会拿竹竿敲屋檐，让雪轰然滑落，管这叫“给屋子卸妆”。他在工作日志里写过：“雪落时万物平等，但雪化时，只有有炉火的地方才会最先露出原木的底色。”'],
   'Porch Lamp|Exterior': ['门廊灯', '屋里的电是从屋旁的小溪拉过来的：他在下游不远处架了一个小水轮，带一台旧发电机，电线架在两根木杆上，从溪边拉进屋来。溪水不停，灯就不停；只有隆冬溪面冻实了才断电，那几个月他点提灯。\n\n有一年大雪天他在林子里摔断了腿，快冻僵时，是远处这点微弱的光让他爬回了家。从那以后他改了线，只要天黑这盏灯就亮。这盏灯不照客人，只照归人。'],
   'Boots & Bench|Entry': ['换鞋处', '进门先在帆布门垫上跺脚，坐上矮凳脱靴，靴子立进托盘接雪水。门垫上磨出两道深浅不一的靴印——左脚重右脚轻，他总是左肩扛原木，走路微跛；凳面也是左边比右边光滑，他总先穿左脚。那双雪地靴鞋底的纹路快磨平了。\n\n托盘里的泥早干成了一层壳，靴子还立在边上，筒口微张。'],
   'Lantern|Entry': ['提灯', '挂在衣帽架钉子上的蜡烛提灯。去柴堆劈柴、夜里出去查看动静都提它；冬天溪水冻住、屋里断电的那几个月，全屋就靠它。玻璃罩上有一道裂纹——某次雪地遇受惊野鹿，鹿角扫过灯架留下的。他没换玻璃，拿铁丝箍了一圈，说：“裂了也好，光从裂缝里漏出来像把剑，刚好能劈开黑雾。”'],
@@ -2501,9 +2501,9 @@ const STORY_ZH = {
   'Pots & Plates|Kitchen': ['锅碗', '三个粗陶盘子立在盘架上沥水——一深一浅一汤盘，两白一蓝，永远洗得干干净净。墙上挂着一口平锅、一口深锅、一个铁壶，里外都被烟熏黑了，这是他的全部炊具。勺子、锅铲、夹子挂在伸手就拿到的地方，木勺是他自己削的，柄上刻了一朵小小的松果。他说厨房里的东西不该只是工具，“得让它知道它住的地方是松树林。”'],
   'Wall Table & Stools|Dining': ['靠墙折叠桌和两张凳子', '平时桌板竖着用绳子吊在墙上，放下来就是桌面。桌面上有刀痕和墨迹一层叠一层，最深的一道划痕旁边刻着一行字：“四壁之内，俱为我有。”这是他在第十年刻下的——那时他决定不走了。\n\n两张凳子，一张他坐，另一张永远空着。他招待过一个迷路的猎人，在炉火旁听对方讲山外的故事，但从不留客过夜。'],
   'Settee, Low Table & Rug|Parlour': ['长沙发、茶几和地毯', '沙发对着铸铁炉，冬夜里最暖和的座位。垫子被坐出一个明显的凹陷——那是他的固定位置，每晚坐在那里看书、喝茶、盯着炉火发呆。这个凹陷是他在整片浩瀚森林中留下的最深的脚印。\n\n茶几上常放一本翻到一半的书和一杯没喝完的茶，茶渍在木面上洇出一圈一圈深色印记，像年轮。脚下的羊毛地毯磨得有些秃了，最冷的时候他把脚缩回来，踩在最厚的那一块上。'],
-  'Bookcase|Parlour': ['书架', '几卷旧《林木志》、一本斯多葛学派哲学、手抄的《几何原本》、几本封面剥落的游记。它们随潮气变得厚重，是他隔绝世界后依然能与世界对话的压舱石。\n\n左下那格平放着几本野外记录本，是他干活用的。工作的东西他都放在楼下。'],
+  'Bookcase|Parlour': ['书架', '几卷旧《林木志》、一本斯多葛学派哲学、手抄的《几何原本》、几本封面剥落的游记。它们随潮气变得厚重，是他隔绝世界后依然能与世界对话的压舱石。\n\n左下那格平放着几本野外测量本，是他干活用的。工作的东西他都放在楼下。'],
   'Cupboard|Parlour': ['柜子', '三扇柜门各自开关。左柜藏腌肉和干果，中柜放工具和杂物，右柜里只有一打空信封和一瓶没用过的墨水。那些写给远方却没寄出的信，最终都进了炉门，当作家的火粮。空信封是他最后的礼貌——写信的念头还在，只是收件人已经不存在了。'],
-  'Writing Desk, Chair & Wall Lamp|Parlour': ['书桌、椅子和壁灯', '书桌原来放在阁楼，后来和椅子一起搬了下来，摆在壁灯底下、离炉子不远的地方。搬下来那天他在日记里写：“该把这事儿弄完了。”从那以后，干活的东西都留在楼下，楼上只睡觉和想事。\n\n椅背被他的脊背磨得发亮。晚上写字时他只开这一盏壁灯，光线压得很低，只够照亮一张桌面和一双手。\n\n抽屉拉出半截，里面一张没画完的草稿，最后一行是一串坐标，精确到小数点后三位，草稿上那个位置却是空白。'],
+  'Writing Desk, Chair & Wall Lamp|Parlour': ['书桌、椅子和壁灯', '书桌原来放在阁楼，后来和椅子一起搬了下来，摆在壁灯底下、离炉子不远的地方。搬下来那天他在工作日志里写：“该把这事儿弄完了。”从那以后，干活的东西都留在楼下，楼上只睡觉和想事。\n\n椅背被他的脊背磨得发亮。晚上写字时他只开这一盏壁灯，光线压得很低，只够照亮一张桌面和一双手。\n\n抽屉拉出半截，里面一张没画完的草稿，最后一行是一串坐标，精确到小数点后三位，草稿上那个位置却是空白。'],
   'Map|Parlour': ['地图', '附近山林的测绘图。原本是空白图，他在上面密密麻麻画了路线、地标和等高线。但仔细看会发现，他不只是在画地形——他在林子深处某处画了一个巨大的“✕”，旁注“勿入”。那地方不在官方路线里。✕ 周围的等高线画了又擦、擦了又画，纸都起毛了。'],
   'Antlers|Parlour': ['鹿角', '不是他猎杀的。某年春天他在林中发现一具白骨，雄鹿的角挂在灌木丛里。他把角带回来钉在墙上作为纪念碑。“空山从来不会缺少生灵，只是它们比人更懂得安静地离开。”'],
   'Tapestry|Parlour': ['挂毯', '手工织的，图案是幽林深处的溪流。手法有点粗。也许是某位故人的手笔，也许是他在某个被困在屋内的暴雪天自己学的。屋里没有窗，这块挂毯就是他的窗——让他在屋里也能看见流水。'],
@@ -2555,7 +2555,7 @@ const LEAD_ZH = {
   'Plates in the rack, pots on the rail, spoons close at hand.': '盘子在架上，锅挂在横杆上，勺子伸手就拿得到。',
   'A board that folds down from the wall, and two stools.': '一块从墙上放下来的桌板，配两张凳子。',
   'Facing the stove — the warmest seat on a winter\'s night.': '对着炉子，冬夜里最暖和的座位。',
-  'Old books swollen with the damp, and his field books on the bottom shelf.': '受潮发胀的旧书，最下层是他的野外记录本。',
+  'Old books swollen with the damp, and his field books on the bottom shelf.': '受潮发胀的旧书，最下层是他的野外测量本。',
   'Three doors, each opening on its own.': '三扇门，各开各的。',
   'Brought down from the loft, and set beneath the wall lamp.': '从阁楼搬下来，放在壁灯底下。',
   'A survey of the hills and woods hereabouts.': '这一带山林的测绘图。',
@@ -2681,7 +2681,7 @@ const QUEST = { // 屏幕上那一行任务提示：[英, 中]
   fire: ['It is cold in here. Get the fire going first.', '有点冷，先把火升起来吧。'],
   look: ['Where did he go?', '他往哪儿去了？'],
   dusk: ['', ''],
-  night: ['The clerk is writing at the desk. Go and have a look.', '书记员在书桌前写记录，去看看。'],
+  night: ['The clerk is writing at the desk. Go and have a look.', '书记员在书桌前写调查记录，去看看。'],
   end: ['', ''],
 };
 const CLERK_SAYS = ['The clerk: "This house is newer than the reports made it."', '书记员：“这屋子比报告里写的新。”'];
@@ -2746,7 +2746,7 @@ function unlockJournal() { // 第 1 天线索找齐、天黑之后：左下「�
 function papersNote(next) { // 遗稿启封：只弹一次（found 'papers' 进存档），点「好」再接 next
   if (game.found.has('papers')) return false;
   game.found.add('papers'); saveGame();
-  dialog(['The Papers Unsealed', '遗稿启封'], ['All that the first day turned up is now written into his Papers. Open the Journal below to read it.', '第一天找到的东西都记进了遗稿，点下方「遗稿」就能翻看。'], [['Very Well', '好', () => setTimeout(next, 300)]]);
+  dialog(['The Papers Unsealed', '遗稿启封'], ['All that the first day turned up is now written into his Papers. Open the Papers below to read it.', '第一天找到的东西都记进了遗稿，点下方「遗稿」就能翻看。'], [['Very Well', '好', () => setTimeout(next, 300)]]);
   return true;
 }
 function resumeAsk() { // 刷新时有存档才问；「重新开始」只放在这里（网址加 ?reset 也行）
@@ -2879,7 +2879,8 @@ function hintFire() { // 升一级并显示
   const via = hint.lvl === 3 && g0 && layers.get('entry_noren') && hintInEntry() && !HINT_ROOMS0.includes(roomAt(new THREE.Box3().setFromObject(g0).getCenter(new THREE.Vector3()))); // 人还在玄关、东西在屋里：三级先描门帘那道门洞（11-07 新手评审 #3：照「在你右边」转过去是墙）
   const t3 = hint.lvl < 3 ? null : via ? PAGE_WAY : hintThere(key);
   LOG && LOG.ev('hint', `第${hint.lvl}级 ${key}：${(t3 || h[hint.lvl - 1]).join(' / ')}`);
-  if (hint.lvl === 1 && game.day === 2 && DAY2_MARKS.includes(key) && d2.over && d2.over.n === DAY2_MARKS.filter((k) => game.found.has(k)).length) { showRoomNote(D2_SAYS.passed, null, key); return; } // 已经走过那样记号：别再催往前走（评审④ v2 #6）
+  if (hint.lvl === 1 && game.day === 2 && DAY2_MARKS.includes(key) && d2.chgQ && d2.chgQ.length) { hint.lvl = 0; showRoomNote(D2_SAYS['change' + d2.chgQ.shift()], null, key); return; } // 雾里绕回后小屋的变化（门口脚印、烟囱）先不说，卡住后第一次提示才说；不占级数，下一次提示还是第 1 级
+  if (hint.lvl === 1 && game.day === 2 && DAY2_MARKS.includes(key) && d2.over &&d2.over.n === DAY2_MARKS.filter((k) => game.found.has(k)).length) { showRoomNote(D2_SAYS.passed, null, key); return; } // 已经走过那样记号：别再催往前走（评审④ v2 #6）
   if (hint.lvl < 3) { showRoomNote(h[hint.lvl - 1] || PAGE_WAY, null, key); return; } // 还在玄关：第一句先说往哪走（评审④ v2 #2）
   showRoomNote(t3);
   const gn = via ? 'entry_noren' : h[2], g = layers.get(gn);
@@ -2940,9 +2941,8 @@ function chgLine(c) { // 'chg:键:1' → 夜里记录那句 [英, 中]（1 = 变
   return open ? [`The inspector opened the ${n[0]} again after shutting it.`, `稽查把关上的${n[1]}又打开了。`] : [`The inspector shut the ${n[0]} again after opening it.`, `稽查把${n[1]}又关上了。`];
 }
 window.__voiceLines = () => [ // 要配音的句子（英文原句），tools/voice/make_voice.py 用；漏的靠 __said 补。infoOf 里直接 return 的说明在末尾 concat 手列名字，新加这类说明要同步（11-07 评审⑪ 声3）
-  ...OPENING, ...Object.values(ROOM_NOTES), PAGE_SAYS, LETTER_SAYS, LBACK_SAYS, CLERK_SAYS, ...Object.values(D2_SAYS), ...Object.values(D3_SAYS), ...Object.values(GEAR_SAYS), [DAY1_TEXT.took[2]], LOOK_THERE, ...Object.values(WHERE), ...Object.values(HINT_NOUN).flatMap((n) => Object.keys(WHERE_N).map((d) => whereSay(d, n))), PAGE_WAY,
+  ...OPENING, ...Object.values(ROOM_NOTES), PAGE_SAYS, LETTER_SAYS, LBACK_SAYS, CLERK_SAYS, ...Object.values(D2_SAYS), ...Object.values(D3_SAYS), [DAY1_TEXT.took[2]], LOOK_THERE, ...Object.values(WHERE), ...Object.values(HINT_NOUN).flatMap((n) => Object.keys(WHERE_N).map((d) => whereSay(d, n))), PAGE_WAY,
   ...Object.values(HINTS).flatMap((h) => [h[0], h[1]]), ...[...Object.keys(CHG_KEYS), 'wall_lamp'].flatMap((k) => [true, false].map((on) => { try { return chgSay(k, on); } catch (e) { return null; } })),
-  GEAR_HANG,
 ].filter(Boolean).map((l) => l[0]).concat(Object.values(STORY), [BED_USED[0]], Object.values(INFO).map((i) => i[2]), Object.values(GEAR_RAIL).map((i) => i[2]), Object.values(X_PLAIN), Object.values(TAKE_INFO).map((i) => i[2]), ['toilet_door_1', 'stove_door', 'hall_pendant_'].map((n) => infoOf(n)[2])).filter((t) => typeof t === 'string' && /[a-z]/i.test(t));
 function chgSay(key, on) {
   const n = chgNoun(key), open = on === n[2];
@@ -3202,7 +3202,7 @@ window.cabinD2 = d2; // 调试
 const D2_CARDS = { // 图层 → [标题, 区域, 中文标题, 英, 中, 说明]
   d2_block: ['Chopping Block', 'Exterior', '劈柴木桩', 'A round of old spruce by the porch, waist-high, scarred by thirty winters of the axe. Near the top, one slanting cut, pale wood showing, deeper than all the rest: the axe always came down the same way.', '门廊边一截老云杉，齐腰高，三十个冬天的斧痕。靠上有一道斜刀口，露出白木头，比别的都深——斧子总是从同一个方向落下来。', 'Where he split the winter\'s wood.'],
   d2_stake: ['Survey Stake', 'Exterior', '测量标桩', 'A survey stake beside the path, waist-high. Near the top, one slanting cut, pale wood showing.\n\nBelow the cut, a bearing burnt into the wood. The path holds on, past the next bend.', '路边一根测量标桩，齐腰高。靠上有一道斜刀口，露出白木头。\n\n刀口下面烙着一行方位：沿路再走，过下一道弯。', 'A stake by the path, a rag of red cloth at its head.'],
-  d2_blaze: ['Blazed Spruce', 'Exterior', '刻了记号的云杉', 'An old spruce with a blaze cut into the bark at eye height: an arrow, and beneath it the figure 7. The bark has grown back round the edges; it was cut a great many years ago.', '一棵老云杉，齐眼高的树皮上削出一块记号：一个箭头，下面刻着“7”。切口边上的树皮已经长回来了——是很多年前刻的。', 'A mark cut in the bark.'],
+  d2_blaze: ['Blazed Spruce', 'Exterior', '刻了记号的云杉', 'An old spruce with a blaze cut into the bark at eye height: an arrow, and beneath it one slanting cut. The bark has grown back round the edges; it was cut a great many years ago.', '一棵老云杉，齐眼高的树皮上削出一块记号：一个箭头，下面一道斜刀口。削口边上的树皮已经长回来了——是很多年前刻的。', 'A mark cut in the bark.'],
   d2_cairn: ['Cairn', 'Exterior', '石堆', 'Stones heaped knee-high where the path bends. On the topmost, in charcoal: ✕ → 4 mi.\n\nThe hand is your own. You have never stood here.\n\nBeyond it the fog lies so thick the path cannot be seen at all.', '小路拐弯的地方堆着齐膝高的石头。最上面那块用炭笔写着：✕ → 四英里。\n\n是你的笔迹。你没来过这里。\n\n再往前，雾浓得连路都看不见了。', 'Stones heaped where the path bends.'],
   d2_lamp: ['Smoke over the Trees', 'Exterior', '树梢上的烟', 'Smoke rising over the trees, east-north-east, as from a chimney. There is no house that way.', '东北偏东的树梢上升着一柱烟，像是烟囱里冒的。那边没有人家。', 'Smoke, far off over the trees.'],
 };
@@ -3325,7 +3325,7 @@ function blazeTex() {
   const path = (c) => { c.beginPath(); sh.forEach(([px, py], i) => (i ? c.lineTo(px, py) : c.moveTo(px, py))); c.closePath(); };
   const wob = (pts) => { const o = []; for (let i = 0; i < pts.length - 1; i++) { const [a, b] = [pts[i], pts[i + 1]], n = Math.ceil(Math.hypot(b[0] - a[0], b[1] - a[1]) / 14); for (let k = 0; k < n; k++) { const t = k / n; o.push([a[0] + (b[0] - a[0]) * t + (R() - 0.5) * 3, a[1] + (b[1] - a[1]) * t + (R() - 0.5) * 3]); } } o.push(pts[pts.length - 1]); return o; };
   const line = (c, pts) => { c.beginPath(); pts.forEach(([px, py], i) => (i ? c.lineTo(px, py) : c.moveTo(px, py))); c.stroke(); };
-  const CARVES = [[[256, 400], [256, 140]], [[188, 214], [256, 140], [324, 214]], [[176, 440], [336, 440], [246, 572]]].map(wob); // 箭头（杆、头）和「7」
+  const CARVES = [[[256, 400], [256, 140]], [[188, 214], [256, 140], [324, 214]], [[176, 530], [336, 432]]].map(wob); // 箭头（杆、头）和一道斜刀口（斜度同木桩、标桩，tan≈0.61；11-10 原来是没有答案的「7」）
   const edgeAt = (t) => sh[Math.floor(t * sh.length) % sh.length]; // 环上随便一点（树皮纹理用）
   // 高度图（灰度：110 = 削平的木面，> 110 凸，< 110 凹）
   const hc = mkc(), hx = hc.getContext('2d'); hx.lineCap = hx.lineJoin = 'round';
@@ -3617,7 +3617,7 @@ function loopChange() { // 雾里绕回来，小屋有一处变了（只第 2 �
   if (d2.loops === 1 && !d2.inPrints) { const [a] = pathAt(8), [b] = pathAt(3); d2.inPrints = makePrints('d2_in', [a.add(new THREE.Vector3(0.5, 0, 0)), b.add(new THREE.Vector3(0.6, 0, 0)), new THREE.Vector3(0.45, 0, 4.3), new THREE.Vector3(0.3, 0, 3.0)]); }
   else if (d2.loops === 2) { const sf = toggles.get('stove_fire'); if (!sf || !sf.on) return; sf.on = false; } // 炉火灭了（烟囱的烟慢慢停），进屋炉子是冷的；玩家可以再点着
   else return;
-  setTimeout(() => showRoomNote(D2_SAYS['change' + d2.loops]), 4500);
+  (d2.chgQ = d2.chgQ || []).push(d2.loops); // 11-10：画面已经摆出来了，旁白不主动说；玩家卡住、第一次提示时才当提示说（hintFire）
 }
 function lostFog(dev, dt) { // dev = 偏出可走范围多少米
   if (LOG && (dev >= D2.lostAt) !== !!d2.logLost) { d2.logLost = dev >= D2.lostAt; LOG.ev('fog', d2.logLost ? `雾里迷路 偏出${dev.toFixed(1)}m` : '走出迷雾'); }
@@ -3695,7 +3695,7 @@ const DAY3_TEXT = { // Journal「第三天」：键 → [英标题, 中标题, �
   xarrive: ['At the ✕', '✕ 那里', GAME_TEXT.xArrive[1], GAME_TEXT.xArrive[2]],
   xcoat: ['A Bare Coat Rail', '空的衣帽架', X_CARDS.xcoat[3], X_CARDS.xcoat[4]],
   xwatch: ['The Watch Is Going', '怀表在走', X_CARDS.xwatch[3], X_CARDS.xwatch[4]],
-  xnotes: ['A Page Dated Today', '写着今天的记录', X_CARDS.xnotes[3], X_CARDS.xnotes[4]],
+  xnotes: ['A Page Dated Today', '写着今天的调查记录', X_CARDS.xnotes[3], X_CARDS.xnotes[4]],
   xfire: ['A Fire, and No One', '炉火和空屋', X_CARDS.xfire[3], X_CARDS.xfire[4]],
   log3: ['Field Log, Last Part', '工作日志 · 后段', GAME_TEXT.log3[1], GAME_TEXT.log3[2]],
   xlook: ['From the Other Porch', '另一间屋的门廊下', GAME_TEXT.xLook[1], GAME_TEXT.xLook[2]],
@@ -4199,7 +4199,7 @@ function mapBase() { // 不带记号的底图：做旧的纸、等高线、山�
   g.font = '22px "IM Fell English SC", Georgia, serif'; g.textAlign = 'center'; g.fillText('N', cx, cy - 52);
   // 标题牌：左上角，双线框
   const tx = 26, ty = 24, tw = 330, th = 84; g.fillStyle = 'rgba(214,190,140,.55)'; g.fillRect(tx, ty, tw, th); g.strokeStyle = INK + '.75)'; g.lineWidth = 2.5; g.strokeRect(tx, ty, tw, th); g.lineWidth = 1; g.strokeRect(tx + 6, ty + 6, tw - 12, th - 12);
-  g.fillStyle = INK + '.88)'; g.textAlign = 'center'; g.font = '25px "IM Fell English SC", Georgia, serif'; g.fillText('The Northern Woods', tx + tw / 2, ty + 40); g.font = 'italic 17px "IM Fell English", Georgia, serif'; g.fillText('surveyed for the Imperial Map Office', tx + tw / 2, ty + 64);
+  g.fillStyle = INK + '.88)'; g.textAlign = 'center'; g.font = '25px "IM Fell English SC", Georgia, serif'; g.fillText('The Northern Woods', tx + tw / 2, ty + 40); g.font = 'italic 17px "IM Fell English", Georgia, serif'; g.fillText('surveyed for the Imperial Survey Office', tx + tw / 2, ty + 64);
   // 比例尺：左下角，三格黑白相间
   const sx = 36, sy = H - 54, sw = 46; g.font = '14px "IM Fell English", Georgia, serif'; g.textAlign = 'center';
   for (let i = 0; i < 3; i++) { g.fillStyle = i % 2 ? 'rgba(58,38,18,.1)' : INK + '.8)'; g.fillRect(sx + i * sw, sy, sw, 6); } g.strokeStyle = INK + '.8)'; g.lineWidth = 1.2; g.strokeRect(sx, sy, sw * 3, 6);
@@ -4821,12 +4821,7 @@ function heldPutBack() { // 退出第一人称时手里的东西直接回原处
 // 第 2 天傍晚（看到烟以后）回屋挂回原处；第 3 天到 ✕ 那间也提着（X_HIDE 不藏它）。第 1 天不碰：他什么都没带，衣帽架是满的
 const gear = { coat: false, lantern: false, t: 0, k: 0, from: null, c0: null, home: null };
 window.cabinGear = gear; // 调试
-const GEAR_SAYS = {
-  both: ['You take the greatcoat and the lantern down from their pegs.', '你从钉子上取下大衣和提灯。'],
-  coat: ['You take the greatcoat down from its peg.', '你从钉子上取下大衣。'],
-  lantern: ['You take the lantern down from its peg.', '你从钉子上取下提灯。'],
-};
-const GEAR_HANG = ['You hang the greatcoat and the lantern back on their pegs.', '你把大衣和提灯挂回钉子上。'];
+// 11-10：拿、挂大衣和提灯不再旁白复述（原 GEAR_SAYS 三句 + GEAR_HANG：「你从钉子上取下大衣」等），只留音效 sfx('pick') / sfx('place')
 const GEAR_RAIL = { // 衣帽架空了：换名字和说明（交互 r2 UX4、叙事 r2 #5）；名字同 X_CARDS.xcoat，✕ 那间照样算 xcoat
   coat: ['Coat Rail', 'Entry', 'The greatcoat\'s peg is bare: you have it on.', '挂大衣的钉子空了，大衣穿在你身上。'],
   both: ['Coat Rail', 'Entry', 'The pegs are bare: the greatcoat is on your back, the lantern in your hand.', '钉子上空了：大衣穿在你身上，提灯在你手里。'],
@@ -4867,7 +4862,6 @@ function gearRestore() { // 刷新 / 关掉再回来：存档里当天穿着大�
 function gearTake(name, quiet) { // → true = 拿了（不再出卡片 / 说明）
   if (!gearCan(name)) return false;
   const k = gearOf(name); gearOn(k); gearSave(); if (!quiet) sfx('pick');
-  if (!quiet) showRoomNote(GEAR_SAYS[k], null, null, true); // 手动拿也出一行字（UX4）；自动取下的那句由 updateGear 补
   if (hovered) tip.textContent = nameOf(infoOf(hovered)); // 准星还对着衣帽架：名字马上换成空衣帽架
   return true;
 }
@@ -4889,10 +4883,9 @@ function gearPose() { // 画面右下角露出上半截；只跟着转身、不�
 const GEAR_YAW = 0;
 function updateGear(dt) {
   if (fp && !morn && gearDay() && (!gear.coat || !gear.lantern) && outdoors(fp.p.root.position)) { // 没拿就出了门：自动取下，补一句
-    const say = !gear.coat && !gear.lantern ? GEAR_SAYS.both : !gear.coat ? GEAR_SAYS.coat : GEAR_SAYS.lantern;
-    gearTake('entry_coat', true); gearTake('entry_lantern', true); showRoomNote(say, null, null, true);
+    gearTake('entry_coat', true); gearTake('entry_lantern', true); sfx('pick'); // 11-10：不再旁白复述动作，只留音效（衣帽架空了、手里有灯，画面已经说了）
   }
-  if (fp && game.day === 2 && game.found.has('d2light') && (gear.coat || gear.lantern) && !outdoors(fp.p.root.position)) { gearHang(); showRoomNote(GEAR_HANG); } // 傍晚回到屋里
+  if (fp && game.day === 2 && game.found.has('d2light') && (gear.coat || gear.lantern) && !outdoors(fp.p.root.position)) { gearHang(); sfx('place'); } // 傍晚回到屋里
   if (!gear.lantern) return;
   const g = layers.get('entry_lantern'); g.visible = true; gearLayer(g, true);
   gear.k += ((held || !card.hidden ? 0 : 1) - gear.k) * Math.min(1, dt * 7); // 卡片开着也沉出画面：手机上走到地上的线索前低头读卡，提灯会变大压到 EN（交互 r3 #7）
