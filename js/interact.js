@@ -1,6 +1,6 @@
 // 点一下会动的东西：门、灯、提灯火苗、水、门帘、摇椅、炉火（2026-10-30 从 index.html 拆出；主页面的变量写 shared.名字，见 web/CLAUDE.md「模块」）
 import * as THREE from 'three';
-import { wallU, roomU, indoorU } from './time-of-day.js';
+import { wallU, roomU, indoorU, roomOf } from './time-of-day.js';
 import { scene, renderer, camera, hemi } from './core.js';
 import { wx } from './weather.js';
 import { shared, share } from './state.js';
@@ -187,11 +187,13 @@ function trackLight(light) {
   lampLights.push(light);
   const s = new THREE.PointLight(0, 0, 0.01, 2); s.visible = false; s.position.set(0, -500, 0); scene.add(s); spareLights.push(s);
 }
+const _lp = new THREE.Vector3();
 scene.onBeforeRender = () => {
   let n = 0;
   for (const l of lampLights) { let o = l.parent; while (o && o.visible) o = o.parent; if (o) n++; } // 一路往上都 visible 才算数
   for (let i = 0; i < spareLights.length; i++) spareLights[i].visible = i < n;
   roomU.y = lampLights.some((l) => l.intensity > 0) ? 1 : 0;
+  for (const l of lampLights) l.decay = (l.userData.decay0 ??= l.decay) + 16 * roomOf(_lp.setFromMatrixPosition(l.matrixWorld)); // 灯在哪间按 decay + 16×房间号传给着色器（lights_fragment_begin 里拆出来），不用每个片元现算；提灯走动也跟着变
 };
 function setupToggles() {
   const pivots = {};
@@ -373,6 +375,7 @@ function setupWaterFx() {
   }
   // 水壶：壶身、提梁是 click（点一下烧开，烧着时再点就停）；壶盖走 DOORS 掀开 / 盖上
   kettle.rig = fxRig('stove_kettle_lid');
+  if (kettle.rig) for (const { m } of kettle.rig.ms) m.castShadow = false; // 壶盖 7cm、跳 1mm，阴影里看不出；投影的话壶开着每帧重画阴影图
   const boil = () => { if (kettle.on && kettle.t > 0.3) kettle.on = false; else { kettle.on = true; kettle.t = 0; } };
   for (const n of ['stove_kettle', 'stove_kettle_bail']) if (shared.layers.get(n)) toggles.set(n, { on: false, k: 0, parts: [], click: boil });
   // 白气：大部分从壶嘴斜着冲出来再上升散开，四分之一从壶盖缝一圈冒出来（同烟囱烟的写法）
@@ -431,8 +434,8 @@ function updateWaterFx(dt) {
     const jolt = Math.pow(Math.max(0, Math.sin(tt * 27)), 3) * (0.6 + 0.4 * Math.sin(tt * 4.3)) * a;
     const tilt = 0.07 * jolt, lift = 0.0012 * jolt, C = KETTLE.lid, n = _fx.n.set(Math.cos(tt * 1.7), 0, Math.sin(tt * 1.7));
     _fx.M.makeTranslation(C[0], C[1] + lift + KETTLE.lidR * Math.sin(tilt), C[2]).multiply(_fx.R.makeRotationAxis(n, tilt)).multiply(_fx.T.makeTranslation(-C[0], -C[1], -C[2]));
-    fxPose(kettle.rig, _fx.M); kettle.posed = true; shared.shadowDirty = true;
-  } else if (kettle.posed) { fxPose(kettle.rig, _fx.M.identity()); kettle.posed = false; shared.shadowDirty = true; }
+    fxPose(kettle.rig, _fx.M); kettle.posed = true;
+  } else if (kettle.posed) { fxPose(kettle.rig, _fx.M.identity()); kettle.posed = false; }
 }
 
 // —— 门帘收起：像系带窗帘那样，左右两片各自往门洞两侧收拢，在半高略下用绑带束成一束 ——
