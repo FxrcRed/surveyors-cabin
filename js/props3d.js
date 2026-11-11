@@ -290,11 +290,13 @@ function readPose(wd, ht, mQ, slot = 'book') { // 相机前方：纸/书停在�
 }
 function applyView() {
   if (!V) return;
+  if (V.homeOf) V.homeOf(V.home); // 怀表的原位跟着抽屉（飞的时候抽屉还在滑出来）
   const f = V.f, g = V.g; V.read = readPose(...V.spec, V.slot); // 每帧按当前相机重算：看的时候相机还在惯性转动，书 / 纸始终在画面中央
   g.position.lerpVectors(V.home.p, V.read.p, f); g.quaternion.slerpQuaternions(V.home.q, V.read.q, f);
   g.position.y += Math.sin(Math.PI * f) * 0.08; // 飞的时候先抬一下
   if (V.kind === 'paper') g.children[0].material.emissiveIntensity = 0.5 * f; // 举到灯下看
-  V.hs ??= g.scale.x; g.scale.setScalar(V.hs * (1 + (V.read.sc - 1) * f)); // hs：原来的缩放
+  else if (V.dial) V.dial.emissiveIntensity = 0.5 * f;
+  V.hs ??= g.scale.x; g.scale.setScalar(V.hs * (1 + (V.read.sc - 1) * f) * (1 + ((V.big || 1) - 1) * f)); // hs：原来的缩放；big：比纸再大一圈（表只有 5cm）
   if (V.mate) { const r = readPose(...V.mspec, 'mate'), m = V.mate; m.visible = f > 0.02; m.children[0].material.opacity = 0.62 * f; // 淡影：从同一处飞出来，停在左边
     m.position.lerpVectors(V.home.p, r.p, f); m.quaternion.slerpQuaternions(V.home.q, r.q, f); m.children[0].material.emissiveIntensity = 0.5 * f; V.ms ??= m.scale.x; m.scale.setScalar(V.ms * (1 + (r.sc - 1) * f)); m.position.y += Math.sin(Math.PI * f) * 0.08; }
   if (V.kind === 'book') g.position.addScaledVector(_v.set(1, 0, 0).applyQuaternion(V.read.q), (BW / 2) * book.A.open * f);
@@ -333,6 +335,19 @@ export function inspectStart(name, text, done, mate) { // text = { en, zh }（�
   }
   return true;
 }
+// 怀表：平时挂在抽屉图层（anchor）下；飞之前挂到场景里，表盘（本地 +y）转向镜头、12 点朝上，飞完 end() 挂回去
+const _wm = new THREE.Quaternion(), _wp = new THREE.Vector3(), _ws = new THREE.Vector3(), WATCH_Q = new THREE.Quaternion().setFromEuler(new THREE.Euler(-Math.PI / 2, 0, 0));
+export function inspectWatch(w, anchor, dial, done) {
+  if (V || !w || !anchor) return false;
+  const lp = w.position.clone(), lq = w.quaternion.clone(), ls = w.scale.clone();
+  const homeOf = (h) => { anchor.updateWorldMatrix(true, false); anchor.matrixWorld.decompose(_wp, _wm, _ws); h.p.copy(anchor.localToWorld(_wp.copy(lp))); h.q.copy(_wm).multiply(lq); };
+  V = { kind: 'watch', name: 'watch', g: w, home: { p: new THREE.Vector3(), q: new THREE.Quaternion() }, homeOf, spec: [0.06, 0.06, WATCH_Q], slot: 'solo', big: 1.3, dial, f: 0, busy: true,
+    reattach: () => { anchor.add(w); w.position.copy(lp); w.quaternion.copy(lq); w.scale.copy(ls); dial.emissiveIntensity = 0; } };
+  homeOf(V.home); anchor.updateWorldMatrix(true, false); V.hs = ls.x * anchor.matrixWorld.getMaxScaleOnAxis();
+  scene.add(w); w.position.copy(V.home.p); w.quaternion.copy(V.home.q); w.scale.setScalar(V.hs);
+  go(V, 'f', 1, 0.9); after(1.1, () => { V.busy = false; done(); });
+  return true;
+}
 export function inspectRelease(onHome) { // 卡片关了：飞回原位（书先合上）
   if (!V) { onHome?.(); return; }
   if (V.busy) { inspectSkip(); }
@@ -342,4 +357,4 @@ export function inspectRelease(onHome) { // 卡片关了：飞回原位（书先
     go(A, 'cover', 0, 0.35, 0.3); go(A, 'open', 0, 0.5, 0.4); go(v, 'f', 0, 0.85, 0.55); after(1.5, () => end(v));
   } else { go(v, 'f', 0, 0.8); after(0.85, () => end(v)); }
 }
-function end(v) { if (V === v) V = null; v.g.position.copy(v.home.p); v.g.quaternion.copy(v.home.q); if (v.hs) v.g.scale.setScalar(v.hs); if (v.mate && v.ms) v.mate.scale.setScalar(v.ms); if (v.mate) v.mate.visible = false; v.onHome?.(); }
+function end(v) { if (V === v) V = null; v.reattach?.(); v.g.position.copy(v.home.p); v.g.quaternion.copy(v.home.q); if (v.hs) v.g.scale.setScalar(v.hs); if (v.mate && v.ms) v.mate.scale.setScalar(v.ms); if (v.mate) v.mate.visible = false; v.onHome?.(); }

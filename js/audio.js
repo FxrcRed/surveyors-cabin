@@ -70,6 +70,7 @@ function play(n, vol = 1, { at = 0, dur, rate = 1, delay = 0, out } = {}) {
   const b = ctx && buf[n]; if (!b) return;
   const s = ctx.createBufferSource(), g = ctx.createGain(); s.buffer = b; s.playbackRate.value = rate; g.gain.value = vol;
   s.connect(g).connect(out || master); s.start(ctx.currentTime + delay, at, dur);
+  return s;
 }
 const isIn = (p) => Math.abs(p.x) < 2.4 && Math.abs(p.z) < 2.4 && p.y < 7; // 同 index.html 的 outdoors()，多留 0.1m
 
@@ -162,13 +163,17 @@ export function audioCaw(dist, delay = 0) {
   play('crow', v, { delay, rate: 0.82 + Math.random() * 0.3, out: outBus });
 }
 
-// 开关：interact.js 的 toggle() 调（shared.sfxToggle）；on = 切换后的状态
+// 开关：interact.js 的 toggle() 调（shared.sfxToggle）；on = 切换后的 t.on。大门、卫生间门、炉门的 on = 关上（k=1 关），其余 on = 开
+// 关的「咔」落在合上那一刻（延迟 = 动画时长 − 声音里最响处）；快速反向时停掉还没响的上一声
+const CLOSED_ON = /^(door_wood|toilet_door_|stove_door)/, pendClose = new Map();
 export function sfxToggle(name, on) {
   if (!ctx) return;
-  const r = 0.94 + Math.random() * 0.12;
-  if (/^(door_|toilet_door_|loft_gate)/.test(name)) play(on ? 'door-open' : 'door-close', 0.7, { rate: r });
-  else if (/drawer|dining_leaf/.test(name)) play(on ? 'drawer-open' : 'drawer-close', 0.6, { rate: r });
-  else if (name === 'stove_door') play(on ? 'stove-open' : 'stove-close', 0.5, { rate: r });
+  const prev = pendClose.get(name); if (prev && ctx.currentTime < prev.t) { try { prev.s.stop(); } catch { /* 已停 */ } } pendClose.delete(name);
+  const open = CLOSED_ON.test(name) ? !on : on, r = 0.94 + Math.random() * 0.12;
+  const sh = (n, v, d) => { const dl = open ? 0 : d, s = play(n, v, { rate: r, delay: dl }); if (s && dl) pendClose.set(name, { s, t: ctx.currentTime + dl }); };
+  if (/^(door_|toilet_door_|loft_gate)/.test(name)) sh(open ? 'door-open' : 'door-close', 0.7, 0.78);
+  else if (/drawer|dining_leaf/.test(name)) sh(open ? 'drawer-open' : 'drawer-close', 0.6, 0.4);
+  else if (name === 'stove_door') sh(open ? 'stove-open' : 'stove-close', 0.5, 0.5);
   else if (name === 'stove_fire') { if (on) play('fire-light', 0.7); }
   else if (/light|lamp|lantern|pendant/.test(name)) play('click', 0.5, { rate: r });
   else if (/lid|tap|bail|faucet|kettle/.test(name)) play('latch', 0.5, { rate: r });

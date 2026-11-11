@@ -154,6 +154,9 @@ if (navigator.webdriver || /[?&]nolock\b/.test(location.search)) { let el = null
   #skipHint { position: fixed; right: 12px; top: 12px; z-index: 8; width: 44px; height: 44px; padding: 0; border-radius: 50%; display: grid; place-items: center; color: #fff; background: rgba(43,38,32,.42); border: 1px solid rgba(255,255,255,.55); box-shadow: none; opacity: 0; pointer-events: none; transition: opacity .8s; cursor: pointer; } /* 开场飞行的「快进」图标：不写字、不常驻，等了一阵才淡入（A5，11-10） */
   #skipHint.on { opacity: .85; pointer-events: auto; } #skipHint:hover { opacity: 1; }
   #journal:focus, #dlg .box:focus { outline: none; }
+  @keyframes cardIn { from { opacity: 0; scale: .97; } } @keyframes bgIn { from { opacity: 0; } }
+  #card:not([hidden]) { animation: cardIn .2s cubic-bezier(.2,.7,.3,1); } #card.side:not([hidden]) { animation-name: bgIn; } #cardBg:not([hidden]) { animation: bgIn .25s ease-out; } /* 卡片、遮罩淡入（纸下的字幕只淡入不缩放）；scale 是独立属性，不和 transform: translate 打架 */
+  @media (prefers-reduced-motion: reduce) { #card:not([hidden]), #cardBg:not([hidden]) { animation: none; } }
   @media (prefers-reduced-motion: reduce) { #skyL #jBtn.pulse { animation: none; background: rgba(255,255,255,.2); } #roomList.shut, #rooms button:hover { transform: none; } } /* 减少动态效果：遗稿按钮不呼吸、房间列表不缩放；淡入淡出照旧 */
   #skipHint svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
   #roomList { position: fixed; right: 10px; top: 91px; z-index: 8; display: flex; flex-direction: column; align-items: flex-end; color: #f4efe6; text-shadow: 0 1px 3px rgba(0,0,0,.75), 0 0 8px rgba(0,0,0,.45);
@@ -524,7 +527,7 @@ import { SimplifyModifier } from 'three/addons/modifiers/SimplifyModifier.js';
 import { scene, sun, hemi, renderer, camera, controls, $, lang, esc, lbl, PR_MAX, RM } from './js/core.js';
 import { shared, share } from './js/state.js';
 import { terrain, terrainH, terrainSlope, sstep, makeGroundGeometry, applyTerrain, setBrook, brookAt, brookCutD, groundSpan, BROOK_WL, BROOK_BANK } from './js/terrain.js';
-import { paperMesh, agedPaper, handwrite, makeBook, inspectTick, inspecting, inspectBusy, inspectKind, inspectStart, inspectRelease, inspectDuo, sigDraw } from './js/props3d.js';
+import { paperMesh, agedPaper, handwrite, makeBook, inspectTick, inspecting, inspectBusy, inspectKind, inspectStart, inspectRelease, inspectDuo, sigDraw, inspectWatch } from './js/props3d.js';
 import { WX_ZH, sky, skyEl, skyU, indoorU, indoorShade, PANELS, wallU, updateSky } from './js/time-of-day.js';
 import { audioTick, audioPreload, audioStep, audioRung, setIce, sfx, sfxToggle } from './js/audio.js';
 import { updateBirds } from './js/birds.js';
@@ -3340,7 +3343,7 @@ function ladderPad() { // 梯子只有两根细立柱和横档能点中，点中
   const m = pickPad(new THREE.BoxGeometry(0.1, 2.24, 0.4)); m.name = 'ladder_pad'; m.position.set(0.73, 1.28, 0.52); g.add(m); meshes.push(m); // 梯子图层本地坐标 = 收着（k=0）时的世界坐标：x 0.69–0.77、y 0.16–2.40、z 0.32–0.72
 }
 // 阁楼床头柜抽屉里的怀表（design v2-playable）：第 1 天停在 3:17；第 3 天 ✕ 那间（x3.on）在走，指针不在 3:17。挂在抽屉图层下，跟着抽屉拉出来；不进 meshes，点到的还是抽屉
-const WATCH = { at: [0.3, 2.647, -1.45], r: 0.024 }, watch = { hands: null, t: 0 }; window.cabinWatch = watch; // 调试：表针
+const WATCH = { at: [0.3, 2.647, -1.45], r: 0.024 }, watch = { hands: null, w: null, dial: null, t: 0 }; window.cabinWatch = watch; // 调试：表针
 function makeWatch() {
   const g = layers.get('bedside_drawer'); if (!g || watch.hands) return;
   const c = document.createElement('canvas'); c.width = c.height = 128; const x = c.getContext('2d');
@@ -3353,10 +3356,10 @@ function makeWatch() {
   w.add(new THREE.Mesh(new THREE.CylinderGeometry(R * 1.12, R * 1.08, top, 32), brass)).children[0].position.y = top / 2;
   const crown = new THREE.Mesh(new THREE.CylinderGeometry(0.0035, 0.0035, 0.005, 10), brass); crown.rotation.x = Math.PI / 2; crown.position.set(0, top / 2, -R * 1.2); w.add(crown); // 12 点朝抽屉里面（-z），拉开抽屉站在前面看是正的
   const bow = new THREE.Mesh(new THREE.TorusGeometry(R * 0.36, 0.0016, 6, 18), brass); bow.rotation.x = Math.PI / 2; bow.position.set(0, top / 2, -R * 1.62); w.add(bow);
-  const dial = new THREE.Mesh(new THREE.CircleGeometry(R, 32), new THREE.MeshStandardMaterial({ map: tx, roughness: 0.35 })); dial.rotation.x = -Math.PI / 2; dial.position.y = top + 0.0002; w.add(dial);
+  const dial = new THREE.Mesh(new THREE.CircleGeometry(R, 32), new THREE.MeshStandardMaterial({ map: tx, roughness: 0.35, emissive: 0xffffff, emissiveMap: tx, emissiveIntensity: 0 })); dial.rotation.x = -Math.PI / 2; dial.position.y = top + 0.0002; w.add(dial);
   const hand = (len, wd, y, cz = 0) => { const p = new THREE.Group(), m = new THREE.Mesh(new THREE.BoxGeometry(wd, 0.0005, len), ink); m.position.z = -len / 2 + len * 0.12; p.add(m); p.position.set(0, top + y, cz); w.add(p); return p; };
   watch.hands = [hand(R * 0.5, 0.0022, 0.0008), hand(R * 0.78, 0.0014, 0.0014), hand(R * 0.18, 0.0007, 0.0008, R * 0.44)]; // 时针、分针、小秒盘的秒针（小秒盘在 6 点，+z）
-  w.position.set(...WATCH.at); scene.add(w); w.updateMatrixWorld(true); g.attach(w);
+  watch.w = w; watch.dial = dial.material; w.position.set(...WATCH.at); scene.add(w); w.updateMatrixWorld(true); g.attach(w);
   watchSet();
 }
 function xClock() { const t = (((sky.hour % 24) + 24) % 24) * 60; return Math.floor(t / 60) % 12 === 3 && Math.floor(t % 60) === 17 ? t + 15 : t; } // ✕ 那间怀表此刻几点（分钟）：游戏钟点，碰巧 3:17 拨开一刻钟
@@ -4781,6 +4784,10 @@ function select(name, direct) {
   if (!direct && inspectOn()) { // 书架上的日志、桌上和炉里的纸：先飞到眼前（书还会翻开几页），飞完再出卡片；卡片关了飞回去（js/props3d.js）
     if (inspectBusy()) { if (name) return; inspectRelease(); } // 飞的途中点别处不理；按 Esc / × 直接收尾
     else if (inspecting()) inspectRelease(() => { if (!letterHome()) { const l = layers.get('stove_letter'); if (l) l.visible = false; } });
+    if (name && (game.day === 1 || x3.on) && infoOf(name)?.[0] === 'Night Table' && watch.w) { // 床头柜：怀表飞到眼前（第 1 天停着、✕ 那间在走），抽屉同时拉开；字变成下面一行字幕
+      const t = toggles.get('bedside_drawer'); if (t && !t.on) { t.on = true; sfxToggle('bedside_drawer', true); }
+      if (inspectWatch(watch.w, layers.get('bedside_drawer'), watch.dial, () => select(name, true))) { sfx('pick'); return; }
+    }
     const k = name && (/^(living_bookcase|field_log)/.test(name) && infoOf(name)?.[0] === 'Bookcase' && isClue(name) ? 'field_log' : nightNotes(name) || (x3.on && infoOf(name)?.[0] === 'Writing Desk, Chair & Wall Lamp' && layers.get('desk_notes')) ? 'desk_notes' : inspectKind(name) && name);
     if (k && inspectStart(k, bookText(), () => select(name, true), k === 'desk_notes' ? layers.get('desk_page') : undefined)) { sfx(k === 'book' ? 'book' : 'paper'); return; }
   }
@@ -4797,6 +4804,7 @@ function select(name, direct) {
   hintClick(); // 卡关提示：没进展的点击计数
   if (g) cardData = { t: g[0], a: g[1], zt: g[2], story: g[3], zs: g[4], lead: game.day > 1 && name !== 'person_woman' ? '' : g[5], paper: isPaper(g), open: isPaper(g) }; // 纸上的字一打开就展开（原来要再点「走近看」，新玩家多半直接关掉：11-01 评审 #6）
   $('focus').hidden = !!(cardData.paper || fp); // 第一人称里人自己能走近，「走近看」会切去看房子模式（评审 #9）
+  if (inspecting() === 'watch') { const wc = x3.on ? X_CARDS.xwatch : WATCH_CARD; cardData = { t: wc[0], a: wc[1], zt: wc[2], lead: wc[3], zs: wc[4] }; } // 怀表飞在眼前：字幕只留这一句（英文放 lead，中文放译文行）
   card.classList.toggle('clue', !!(g && gameSeen.got));
   if (g || gameSeen.got || people.has(name) || isClue(name)) { showNote(null); cardOpen(); } // 线索、人物：卡片居中，只能点 × / Esc 关
   else { const d = cardData, s = !fp || !d.lead; showNote({ t: d.t, zt: d.zt, text: (s && d.story) || d.lead || '', ztext: (s && d.zs) || LEAD_ZH[d.lead] || '' }); } // 第一人称只给一句说明：整段故事压在准星和要找的东西上（11-01 评审 #7 #8） // 普通物件：不强制读；有故事只放故事（短说明多半是故事第一句的缩写）
@@ -5240,7 +5248,7 @@ function gearHang() { // 挂回原处
 function gearPose() { // 画面右下角露出上半截；只跟着转身、不跟着抬头低头（挂着的提灯总是竖的）；k < 1 沉出画面（手里拿着别的东西时让开）
   const tall = camera.aspect < 0.7, d = tall ? 0.875 : 0.7, hh = d * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)), hw = hh * camera.aspect; // 手机竖屏（UX7）：远一点 = 缩到 0.8 倍，往左让开右下角的语言按钮，再沉一点
   const X = new THREE.Vector3(hw * (tall ? 0.49 : 0.62), -hh * ((tall ? 0.92 : 0.8) + 0.7 * (1 - gear.k)), -d).applyQuaternion(camera.quaternion).add(camera.position);
-  const Q = new THREE.Quaternion().setFromAxisAngle(_hY, fp.yaw + GEAR_YAW).multiply(_hq.setFromAxisAngle(_hX, (RM.matches ? 0 : Math.sin((fp.bob || 0) * 2) * 0.05))); // 走路时轻轻晃（减少动态效果时不晃）
+  const Q = new THREE.Quaternion().setFromAxisAngle(_hY, fp.yaw + GEAR_YAW).multiply(_hq.setFromAxisAngle(_hX, (RM.matches ? 0 : Math.sin((fp.bob || 0) * 2) * 0.05 * (fp.bobA || 0)))); // 走路时轻轻晃（减少动态效果时不晃）
   return { X, Q };
 }
 const GEAR_YAW = 0;
@@ -5287,7 +5295,7 @@ function startFP(id) {
   p.player = true; p.hit.visible = false;
   p.root.traverse((o) => { if (FP.HIDE.test(o.name)) o.visible = false; });
   hand = p.hand || null; p.look = null;
-  fp = { p, yaw: p.root.rotation.y, pitch: -0.15, keys: new Set(), solid: [], floors: [], solidT: 0, eye: null, paused: true, cut: null, crouch: false, bob: 0 };
+  fp = { p, yaw: p.root.rotation.y, pitch: -0.15, keys: new Set(), solid: [], floors: [], solidT: 0, eye: null, paused: true, cut: null, crouch: false, bob: 0, bobA: 0, mv: false };
   fp.solid = fpSolid(); fp.floors = fp.solid.concat(ground, ...(BROOK.bed || [])); fpNearMesh(fp.p.root); window.cabin.fp = fp; // 调试；BROOK.bed：溪岸的细网格盖在压下去的地面上
   controls.enabled = false;
   camera.fov = fpFov(); camera.updateProjectionMatrix();
@@ -5515,6 +5523,7 @@ function stepPrint(r, moving, st = fp) { r = r.position; // 野外雪地上每�
   P.im.setMatrixAt(P.i, o.matrix); P.i = (P.i + 1) % 400; P.im.count = P.n = Math.min(400, P.n + 1); P.im.instanceMatrix.needsUpdate = true;
 }
 const NOKEYS = new Set();
+function fpStride(v) { return Math.min(1.2, Math.max(0.5, 0.35 + 0.25 * v)); } // 步长（米）：走得越快迈得越大，1 m/s ≈ 1.7 步/秒
 function updateFP(dt) {
   const p = fp.p, r = p.root, s = r.scale.x, k = (!card.hidden || fp.paused) && !touchFP ? NOKEYS : fp.keys; // 卡片开着、锁放开（屏幕写着点画面继续）都不走（原来按 W 会偷偷走）
   fpTouchTick(dt); sliceTick(dt); // 触屏点物件后转头 + 动手；切片按位置认房间、书记员跟进门
@@ -5537,19 +5546,22 @@ function updateFP(dt) {
       r.rotation.y += THREE.MathUtils.clamp(angDiff(r.rotation.y, fp.yaw), -8 * dt, 8 * dt); // 身体朝向跟着视线转
       if (f || st) fp.go = null; // 按键接管：取消点地面走路
       const go = fp.go ? fpSteer(r, dt) : null; // 触屏点了地面 / 物件：沿路点走过去
-      let spK = 1; // 走路动画步频 = 实际速度 / 原速（倒着走、弯腰、屋外 ×1.8 都跟着变，动画检查 #13）
+      let spK = 1, sp = 0; const ox = r.position.x, oz = r.position.z; // sp：这帧想走的速度；ox oz：移动前的位置（真正走了多远 → 脚步、起伏按路程推进）
+      // 走路动画步频 = 实际速度 / 原速（倒着走、弯腰、屋外 ×1.8 都跟着变，动画检查 #13）
       if (f || st || go) {
-        const sp = (run ? FP.RUN : WALK_SPEED) * s * (f < 0 ? 0.7 : 1) * (fp.crouch ? 0.6 : 1) * (game.day >= 2 && outdoors(r) ? 1.8 : 1) * (joy ? 0.3 + 0.7 * joy.m : 1); // 屋外路长（到 ✕ 110m）：走快些
+        sp = (run ? FP.RUN : WALK_SPEED) * s * (f < 0 ? 0.7 : 1) * (fp.crouch ? 0.6 : 1) * (game.day >= 2 && outdoors(r) ? 1.8 : 1) * (joy ? 0.3 + 0.7 * joy.m : 1); // 屋外路长（到 ✕ 110m）：走快些
         if (go) _fpV.set(go[0], 0, go[1]).multiplyScalar(sp * dt);
         else _fpV.set(Math.sin(fp.yaw) * f - Math.cos(fp.yaw) * st, 0, Math.cos(fp.yaw) * f + Math.sin(fp.yaw) * st).normalize().multiplyScalar(sp * dt);
         moving = fpTryMove(r, _fpV.x, _fpV.z, s); spK = sp / (WALK_SPEED * s);
       }
-      if (moving) { const jog = run && !fp.crouch; p.play(jog ? 'Jog_Fwd_Loop' : 'Walk_Loop', 0.25); p.cur.timeScale = jog ? 1 : (f < 0 ? -1 : 1) * spK * p.walkTS; } // 倒着走 = 走路动画倒放
-      else { p.play(MOODS.stand.idle, 0.3); p.cur.timeScale = 1; }
       still = !moving && !!fp.last && r.position.distanceToSquared(fp.last) < 1e-10 && fp.ceil != null && !fpBusy(r.position); // 人和东西都没动：上一帧推挤、贴地的结果原样有效，51 条射线全省（11-05 评审 #7）
       if (!still) { const q0 = fpProbe(r.position.x, r.position.y, r.position.z);
       fpPush(r, s, Math.max(0.42 * s, Math.min(1.1 * s, q0.ceil - r.position.y - 0.3)));
       fpTrees(r.position); fpShrubs(r.position); fpKeepOff(r, s); }
+      const md = Math.hypot(r.position.x - ox, r.position.z - oz); if (moving && md < 0.3 * sp * dt) moving = false; // 顶着墙、门按 W：没真走动就不放走路动画、不起伏、不出声
+      fp.md = moving ? md : 0; fp.sp = sp;
+      if (moving) { const jog = run && !fp.crouch; p.play(jog ? 'Jog_Fwd_Loop' : 'Walk_Loop', 0.25); p.cur.timeScale = jog ? 1 : (f < 0 ? -1 : 1) * spK * p.walkTS; } // 倒着走 = 走路动画倒放
+      else { p.play(MOODS.stand.idle, 0.3); p.cur.timeScale = 1; }
       const w = people.get('person_woman'); // 书记员站着闲着、玩家走到 0.9m 内：提前去下一处，别堵过道和书桌（11-01 评审）
       if (w && !w.player && w.mode !== 'sit' && !w.tasks.length && w.roam > 0 && w.roam < 1e8 && Math.abs(w.root.position.y - r.position.y) < 1 && Math.hypot(w.root.position.x - r.position.x, w.root.position.z - r.position.z) < 0.9) w.roam = 0;
       if (!still) { const q = fpProbe(r.position.x, r.position.y, r.position.z);
@@ -5562,7 +5574,11 @@ function updateFP(dt) {
   (fp.last || (fp.last = new THREE.Vector3())).copy(r.position);
   const eyeH = Math.min(1.62 * s, ceil - r.position.y - 0.14);
   fp.crouch = eyeH < 1.62 * s - 0.08;
-  fp.bob = moving ? fp.bob + dt * (run ? 13 : 8.5) : fp.bob * 0.9;
+  if (moving) { // 脚步和起伏按真正走过的路程推进；站着刚起步时相位跳到下一步落地前，第一步立刻响
+    if (!fp.mv && fp.bobA < 0.3) fp.bob = Math.ceil(fp.bob / Math.PI) * Math.PI - 0.001;
+    fp.bob += (fp.md || 0) * Math.PI / fpStride(fp.sp);
+  }
+  fp.mv = moving; fp.bobA += ((moving ? 1 : 0) - fp.bobA) * Math.min(1, dt * 8); // 起伏幅度：停步时 0.1–0.2 秒平滑收到 0，相位不倒退
   audioStep(fp.bob, moving, run);
   const sk = fpStoop(r, s, seatedNow(p), dt), lean = fpLean(r, s); // 低头往前探，免得看见自己的衣领、肩膀（动画检查 #12）
   let eyeY = r.position.y + eyeH - sk;
@@ -5570,7 +5586,7 @@ function updateFP(dt) {
     fpRay.set(_lnO.set(r.position.x + Math.sin(fp.yaw) * lean, eyeY - 0.3, r.position.z + Math.cos(fp.yaw) * lean), _fpU); fpRay.far = 0.6;
     const h = fpRay.intersectObjects(fp.near, false)[0]; if (h) eyeY = Math.min(eyeY, h.point.y - 0.14);
   }
-  _fpO.set(r.position.x + Math.sin(fp.yaw) * lean, eyeY + (RM.matches ? 0 : Math.sin(fp.bob * 2) * 0.012), r.position.z + Math.cos(fp.yaw) * lean);
+  _fpO.set(r.position.x + Math.sin(fp.yaw) * lean, eyeY + (RM.matches ? 0 : Math.sin(fp.bob * 2) * 0.012 * fp.bobA), r.position.z + Math.cos(fp.yaw) * lean);
   const seated = seatedNow(p); // 坐着、她爬梯子时镜头跟头骨
   fp.headK = (fp.headK || 0) + ((seated ? 1 : 0) - (fp.headK || 0)) * Math.min(1, dt * 6);
   if (fp.headK > 0.001 && p.head) { // 头骨（颅底）往上 7cm、沿视线往前 10cm ≈ 眼睛
@@ -5665,7 +5681,7 @@ function mornStart() {
   showQuest();
 }
 const MORN_UP = { lie: 1.3, sat: 3.0, head: [0.31, 0.64, 0.56], yaw: -Math.PI / 2 - 0.5, pitch: 0.95, turn: 1.4 }; // 躺到 1.3s（点「继续」后加载页还要 0.6s 才淡完，像慢慢睁开眼），1.3–3.0s 坐起来（头绕着髋往上往前，俯仰 +0.95 → −0.12、偏航转 71°，峰值角速度约 70°/s），之后照原来前倾、站起、走；head：躺着时眼睛相对站起落脚点（SL.sofa）的偏移；turn：镜头转向角速度上限 1.4 rad/s ≈ 80°/s
-const MORN_WALK = { at: MORN_UP.sat + 1.2, v: WALK_SPEED * 0.94, acc: 0.35, step: 18.1 }; // 走路：1.2s 起步（和站起的尾巴重叠，不停顿）、0.35s 加速到玩家的步速、0.35s 减速；step = 每米头部起伏的相位（同 updateFP：fp.bob 每秒 8.5 × 2 ÷ 0.94 m/s）
+const MORN_WALK = { at: MORN_UP.sat + 1.2, v: WALK_SPEED * 0.94, acc: 0.35, step: 2 * Math.PI / fpStride(WALK_SPEED * 0.94) }; // 走路：1.2s 起步（和站起的尾巴重叠，不停顿）、0.35s 加速到玩家的步速、0.35s 减速；step = 每米头部起伏的相位（同 updateFP：每米 π ÷ 步长，再乘 2）
 function smootherK(x) { x = THREE.MathUtils.clamp(x, 0, 1); return x * x * x * (x * (6 * x - 15) + 10); }
 function mornDist(t, L) { // 走路开始后 t 秒走了多远：梯形速度
   const { v, acc } = MORN_WALK, cruise = Math.max(0, (L - v * acc) / v), T = cruise + 2 * acc;
