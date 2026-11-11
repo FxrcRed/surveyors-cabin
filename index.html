@@ -224,6 +224,7 @@ if (navigator.webdriver || /[?&]nolock\b/.test(location.search)) { let el = null
   #fpHud .dot { position: absolute; left: 50%; top: 50%; width: 6px; height: 6px; margin: -3px 0 0 -3px; border-radius: 50%; background: rgba(244,239,230,.85); box-shadow: 0 0 0 1px rgba(43,38,32,.5); }
   #fpHud .help { position: absolute; left: 50%; bottom: 20px; transform: translateX(-50%); padding: 6px 12px; border-radius: 6px; background: rgba(43,38,32,.7); color: #f4efe6; font-size: var(--fs-xs); text-align: center; white-space: nowrap; transition: opacity .6s; }
   #fpHud .help .zh { display: block; margin-top: 2px; font-size: var(--fs-xs); opacity: .9; }
+  body.signing :is(#fpHud, #quest, #note, #roomNote, #subs, #prog) { visibility: hidden; } /* r2 情节 #3 签字时画面上只留那页纸 */
   #stick { position: fixed; left: 0; top: 0; width: 96px; height: 96px; border-radius: 50%; z-index: 5; pointer-events: none; opacity: 0; transition: opacity .3s; background: rgba(43,38,32,.22); box-shadow: inset 0 0 0 1.5px rgba(244,239,230,.35); }
   #stick.on { opacity: 1; transition: opacity .12s; }
   #stick i { position: absolute; left: 50%; top: 50%; width: 40px; height: 40px; margin: -20px 0 0 -20px; border-radius: 50%; background: rgba(244,239,230,.5); box-shadow: 0 0 0 1px rgba(43,38,32,.35); }
@@ -523,7 +524,7 @@ import { SimplifyModifier } from 'three/addons/modifiers/SimplifyModifier.js';
 import { scene, sun, hemi, renderer, camera, controls, $, lang, esc, lbl, PR_MAX, RM } from './js/core.js';
 import { shared, share } from './js/state.js';
 import { terrain, terrainH, terrainSlope, sstep, makeGroundGeometry, applyTerrain, setBrook, brookAt, brookCutD, groundSpan, BROOK_WL, BROOK_BANK } from './js/terrain.js';
-import { paperMesh, agedPaper, handwrite, makeBook, inspectTick, inspecting, inspectBusy, inspectKind, inspectStart, inspectRelease, inspectDuo } from './js/props3d.js';
+import { paperMesh, agedPaper, handwrite, makeBook, inspectTick, inspecting, inspectBusy, inspectKind, inspectStart, inspectRelease, inspectDuo, sigDraw } from './js/props3d.js';
 import { WX_ZH, sky, skyEl, skyU, indoorU, indoorShade, PANELS, wallU, updateSky } from './js/time-of-day.js';
 import { audioTick, audioPreload, audioStep, audioRung, setIce, sfx, sfxToggle } from './js/audio.js';
 import { updateBirds } from './js/birds.js';
@@ -2706,7 +2707,7 @@ const ROOM_NOTES = {
 };
 // 三日游戏的新文字（2026-10-21 按 story/story-zh.md 定稿写进来，还没挂到物件上、没按天解锁——归第 1 天做）：键 → [标题, 英, 中]，多段用 \n\n
 const GAME_TEXT = {
-  letter: ['Unburnt Letter · Kitchen, Day 1', 'Under the ashes lies half a sheet of paper, scorched at the edges. Only a few lines can be made out:\n\n"…east-north-east, about four miles. Beneath an old spruce the ground has split; the compass spins; the needles are scorched black, as if by fire — yet there is no fire there. Marked ✕. This place is not fit…"\n\n"…bearings enclosed; I beg the Office…"\n\nThe rest is burnt away. He wrote it, did not send it, and put it in at the stove door.', '炉灰底下压着半张纸，边上烧焦了。能认出来的只有几行：\n\n“……东北偏东，约四英里。老云杉根下地面开裂，罗盘打转，松针焦黑，像被火燎过，可那里没有火。已标 ✕。此处不宜……”\n\n“……附坐标，请局里……”\n\n后面烧没了。他写了，没寄，又塞进了炉门。'],
+  letter: ['Unburnt Letter · Kitchen, Day 1', 'Under the ashes lies half a sheet of paper, scorched at the edges. Only a few lines can be made out:\n\n"Inspector —"\n\n"…east-north-east, about four miles. Beneath an old spruce the ground has split; the compass spins; the needles are scorched black, as if by fire — yet there is no fire there. Marked ✕. This place is not fit…"\n\n"…bearings enclosed; I beg the Office…"\n\nThe rest is burnt away. He wrote it, did not send it, and put it in at the stove door.', '炉灰底下压着半张纸，边上烧焦了。能认出来的只有几行：\n\n“稽查先生：”\n\n“……东北偏东，约四英里。老云杉根下地面开裂，罗盘打转，松针焦黑，像被火燎过，可那里没有火。已标 ✕。此处不宜……”\n\n“……附坐标，请局里……”\n\n后面烧没了。他写了，没寄，又塞进了炉门。'],
   logIntro: ['Field Log · Parlour bookcase, bottom left', 'A book of bark paper, stitched together; neat at the front, more and more disordered towards the back. The inspector knows the hand: he watched it sign the commission.', '树皮纸订成的本子，前面工整，后面越写越乱。老稽查认得这笔迹，委任状上的签名是他看着签的。'],
   log1: ['Field Log, first part · Day 1', 'July 19th. East-north-east, about four miles. Beneath an old spruce the ground split open; the compass spins; the needles scorched black. Marked ✕, Do Not Enter. Report written; to be posted at the post-house come spring.\n\nAugust 2nd. Went to look again. The rift no wider. Cannot say why I wished to go again.\n\nSeptember. The map not yet finished. Wrote to the Office, begging leave to stay the winter.', '七月十九。东北偏东，约四英里。老云杉根下地面开裂，罗盘打转，松针焦黑。已标 ✕，勿入。报告写好了，开春去驿站寄。\n\n八月二日。又去看了一次，裂口没变大。说不清为什么想再去。\n\n九月。图还没画完。写信给局里，请准许留下过冬。'],
   log2: ['Field Log, middle part · Day 2, on coming back', 'Eleventh year. There is a stake in the woods with a slanting cut. I do not remember setting it.\n\nNineteenth year. On the way to the ✕, a heap of stones that was never there before, stacked as I stack mine. On the topmost, words in charcoal, in my own hand. I never wrote them.\n\nTwenty-fourth year, winter. Smoke over the trees at dusk. I stood under the porch and watched it: east-north-east, the wrong way. There is no house out there.', '第十一年。林子里有一根桩子，刀口斜着。我不记得立过它。\n\n第十九年。去 ✕ 的路上多了一堆石头，码法跟我的一样。最上面那块有炭笔写的字，是我的笔迹，可我没写过。\n\n第二十四年，冬。傍晚树梢上有一柱烟。我站在门廊下看，烟在东北偏东，方向不对，那边没有人家。'],
@@ -2810,7 +2811,7 @@ const pageTrace = (() => { for (const k of PAST.get().reverse()) { const t = Obj
 if (pageTrace) { PAGE_CARD[3] += '\n\n' + pageTrace[0]; PAGE_CARD[4] += '\n\n' + pageTrace[1]; } // 原地改：isPaper 按数组本身认
 const PAGE_SAYS = ['The clerk reads it twice. "That is my hand. But I have not written it yet."', '书记员看了两遍：“是我的字。可我还没写呢。”'];
 const LETTER_SAYS = ['The clerk looks from the letter to the page in her hand, and says nothing.', '书记员看看信，又看看手里那页纸，没说话。'];
-const LETTER_CARD = ['Unburnt Letter', 'Kitchen', '没烧完的信', '"…east-north-east, about four miles. Beneath an old spruce the ground has split… Marked ✕. This place is not fit…"\n\nThe rest is burnt away.', '“……东北偏东，约四英里。老云杉根下地面开裂……已标 ✕。此处不宜……”\n\n后面烧没了。'];
+const LETTER_CARD = ['Unburnt Letter', 'Kitchen', '没烧完的信', '"Inspector —"\n\n"…east-north-east, about four miles. Beneath an old spruce the ground has split… Marked ✕. This place is not fit…"\n\nThe rest is burnt away.', '“稽查先生：”\n\n“……东北偏东，约四英里。老云杉根下地面开裂……已标 ✕。此处不宜……”\n\n后面烧没了。'];
 const MAP_CARD = ['The ✕ on the Map', 'Parlour', '地图上的 ✕', DAY1_TEXT.map[2], DAY1_TEXT.map[3]];
 const BASIN_CARD = ['Washstand', 'Water Closet', '洗脸架', 'Half a basin of water, frozen into one solid block.', '盆里还有半盆水，冻成了一整块冰。'];
 const WATCH_CARD = ['Night Table', 'Loft', '床头柜', 'In the drawer, a pocket-watch, an old compass, a few pine needles. The watch has stopped at seventeen minutes past three.', '抽屉里有怀表、旧罗盘、几根松针。怀表停在三点十七分。']; // 和第 3 天 X_CARDS.xwatch 同一句式，只差「停了 / 在走」
@@ -3129,6 +3130,7 @@ function planWander(p) {
 const LETTER = { at: [1.385, 0.495, -1.27], size: [0.14, 0.0875], rot: [-Math.PI / 2 + 0.14, 0, 0.35] }; // at：11-10 抬 7mm、往里 8mm（原来前半张压在炉门框下沿后面，蹲下看也只露一条）
 function makeLetter() { // 纸：js/props3d.js 的 paperMesh（纤维、霉点、折痕、卷边的几何）；这里写字、画烧焦的那一边。字是真的英文（卡片里那段），烧掉的一边把行尾吃了
   const m = paperMesh(...LETTER.size, { seed: 19, tone: '#c4b28a', cutout: true, curl: 0.003, crease: 0.002, folds: [['h', 0.5]], wrinkle: 14, draw(x, W0, H0, R) {
+    handwrite(x, ['Inspector —'], { x0: 62, y0: 88, size: 46, pitch: 0, ink: '40,32,26', R, slant: 0.06 }); // 抬头（r2 情节 #7）：三十年里唯一一封没寄的信，是写给你的
     handwrite(x, ['…east-north-east, about four miles.', 'Beneath an old spruce the ground has', 'split… Marked ✕. This place is not fit'], { x0: 62, y0: 150, size: 46, pitch: 66, ink: '40,32,26', R, slant: 0.06 });
     x.strokeStyle = 'rgba(40,32,26,.55)'; x.lineWidth = 3; x.lineCap = 'round'; x.beginPath(); x.moveTo(130, 372); x.bezierCurveTo(240, 360, 330, 392, 460, 366); x.stroke(); // 信末拖出去的一笔
     x.save(); x.scale(W0 / 256, H0 / 160); const W = 256, H = 160;
@@ -3240,9 +3242,51 @@ function makeNotes() { // 11-11 Fable 评审 A2：第 1 夜她写的那页记录
     x.strokeStyle = 'rgba(28,26,50,.7)'; x.lineWidth = 3.4; x.lineCap = 'round'; x.beginPath(); x.moveTo(94, 200); x.bezierCurveTo(300, 190, 560, 208, 860, 194); x.stroke();
     handwrite(x, ['The inspector lit the stove.', 'In the firebox, a letter not', 'burnt through.', '', 'Stores counted; all in order.', 'Stove drawing well.', '', ...extra], { x0: 96, y0: 330, size: 52, pitch: 78, R }); // 前六行和 makePage 同字同位置
   } });
-  m.rotation.set(-Math.PI / 2, 0, 0.1); document.fonts.load('italic 40px "IM Fell English"').then(() => m.userData.repaint());
+  m.rotation.set(-Math.PI / 2, 0, 0.1); m.userData.h = 0.2 + 0.0115 * (extra.length + 1); document.fonts.load('italic 40px "IM Fell English"').then(() => m.userData.repaint());
   const g = new THREE.Group(); g.name = 'desk_notes'; g.position.copy(ghost.position); g.add(m); // 不进 meshes：点它等于点书桌（书桌本来就出这页的卡片）
   scene.add(g); layers.set('desk_notes', g); indoorShade(g);
+}
+// —— 稽查签字（2026-11-11 r2 情节 #3）：签名是 js/props3d.js 的同一笔 SIG。第 1、2 夜结束框点「签字」，夜里那页飞到眼前、页脚一笔笔签上；第 2 天石堆顶上有炭笔写的同一个签名；✕ 那页页脚已经签好了 ——
+const SIG_AT = { u0: 0.44, u1: 0.95, b0: 350, b1: 80, x: 470, y: 340, w: 520 }; // 页脚签名区：横向占纸宽 u0–u1，离下沿 b0–b1 像素；签名左上角 (x, 离下沿 y)、宽 w（都按纸的 1024 宽坐标）
+function notesPage(head, paras, seed, minRows = 0, signed = false) { // 桌上一页她写的记录（第 2 夜、✕ 那页）：同 makeNotes 的纸和字；paras() 现取段落（✕ 那页末句会变），minRows 按最长的那种留够纸长
+  const d = layers.get('loft_desk'); if (!d) return null;
+  const wrap = (t) => { const o = []; let l = ''; for (const w of t.split(' ')) { if (l && (l + ' ' + w).length > 28) { o.push(l); l = w; } else l = l ? l + ' ' + w : w; } if (l) o.push(l); return o; };
+  const rows = () => paras().flatMap((t, i) => [...(i ? [''] : []), ...wrap(t)]), h = 0.2 + 0.0115 * (Math.max(minRows, rows().length) - 6);
+  const m = paperMesh(0.15, h, { seed, tone: '#dcd2b8', curl: 0.004, folds: [['h', 0.5]], wrinkle: 6, draw(x, W, H, R) {
+    handwrite(x, [head], { x0: 96, y0: 170, size: 60, pitch: 0, R });
+    x.strokeStyle = 'rgba(28,26,50,.7)'; x.lineWidth = 3.4; x.lineCap = 'round'; x.beginPath(); x.moveTo(94, 200); x.bezierCurveTo(300, 190, 560, 208, 860, 194); x.stroke();
+    handwrite(x, rows(), { x0: 96, y0: 330, size: 52, pitch: 78, R });
+    if (signed) sigDraw(x, { x0: SIG_AT.x, y0: H - SIG_AT.y, w: SIG_AT.w });
+  } });
+  m.rotation.set(-Math.PI / 2, 0, 0.1); m.userData.h = h; document.fonts.load('italic 40px "IM Fell English"').then(() => m.userData.repaint());
+  const b = new THREE.Box3().setFromObject(d), g = new THREE.Group(); g.name = 'desk_notes'; g.position.set((b.min.x + b.max.x) / 2, b.max.y + 0.006, (b.min.z + b.max.z) / 2); g.add(m); // 同 makePage 的位置
+  scene.add(g); layers.set('desk_notes', g); indoorShade(g); return m;
+}
+function sigLayer(m) { // 签名层：和纸共用几何体（卷边一样），只把一小张画布贴在页脚那块（repeat/offset，画布四边留空，夹边取样是透明的）；一笔笔画时每帧只传这张小图
+  const H = 1024 * m.userData.h / 0.15, { u0, u1, b0, b1 } = SIG_AT, v0 = b1 / H, v1 = b0 / H, k = 512 / ((u1 - u0) * 1024), c = document.createElement('canvas');
+  c.width = 512; c.height = Math.round((b0 - b1) * k);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.repeat.set(1 / (u1 - u0), 1 / (v1 - v0)); t.offset.set(-u0 / (u1 - u0), -v0 / (v1 - v0));
+  const o = new THREE.Mesh(m.geometry, new THREE.MeshBasicMaterial({ map: t, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -4 })); o.raycast = () => {}; m.add(o);
+  const x = c.getContext('2d'); x.setTransform(k, 0, 0, k, -u0 * 1024 * k, -(H - b0) * k); // 画布坐标 = 纸的 1024 宽坐标
+  return (m.userData.sig = { x, t, H });
+}
+function signPrep(n) { // 第 n 夜结束框弹出时：备好夜里那页（第 2 夜这时才摆上桌）和签名层，先在后台编译，点「签字」时不卡
+  if (n === 1 && !layers.get('desk_notes')) makeNotes(); // 读完记录就刷新了：天色没恢复成夜里，那页没摆
+  if (n === 2 && !layers.get('desk_notes')) notesPage('Inquiry Notes, the Second Day.', () => GAME_TEXT.notes2[1].split(String.fromCharCode(10, 10)), 37);
+  const m = layers.get('desk_notes')?.children[0]; if (!m || m.userData.sig) return;
+  sigLayer(m); renderer.compileAsync?.(m, camera, scene)?.catch?.(() => {});
+}
+function signNotes(n) { // 点「签字」：那页飞到眼前（无头测试不飞，原地签），签名 1.2 秒一笔笔画出，停 1 秒进第 n 天。画的时候点一下 / 按键跳到画完，画完再点直接走；减少动态效果直接给画完的
+  signPrep(n); const s = layers.get('desk_notes')?.children[0]?.userData.sig; if (!s) { nextDay(n); return; }
+  document.body.classList.add('signing');
+  const S = window.__sign = { p: 0, skip: matchMedia('(prefers-reduced-motion: reduce)').matches, left: false };
+  const leave = () => { if (!S.left) { S.left = true; clearTimeout(S.go); nextDay(n); } };
+  const block = (e) => { e.stopPropagation(); if (e.cancelable && e.type !== 'keydown') e.preventDefault(); if (e.type === 'pointerdown' || (e.type === 'keydown' && !e.repeat)) { if (S.p >= 1) leave(); else S.skip = true; } }; // 签字时别的点击、按键一律不放过去（不然点到东西会把纸收回去）
+  for (const e of ['pointerdown', 'mousedown', 'mouseup', 'click', 'touchstart', 'touchend', 'keydown', 'wheel', 'contextmenu']) addEventListener(e, block, { capture: true, passive: false });
+  const tick = (now) => { const to = S.skip ? 1 : Math.min(1, (now - S.t0) / 1200); sigDraw(s.x, { x0: SIG_AT.x, y0: s.H - SIG_AT.y, w: SIG_AT.w }, S.p, to); S.p = to; s.t.needsUpdate = true; if (to < 1) requestAnimationFrame(tick); else S.go = setTimeout(leave, 1000); };
+  const start = () => { S.t0 = performance.now(); requestAnimationFrame(tick); if (inspecting()) layers.get('desk_notes').traverse((o) => { if (o.material) { o.material.depthTest = false; o.renderOrder = 999; } }); }; // 纸到了眼前：盖过比纸还近的东西（梯子、门框），只改 GL 状态、不重编译
+  if (!(inspectOn() && inspectStart('desk_notes', bookText(), start))) start();
+  sfx('paper');
 }
 const nightNotes = (name) => game.day === 1 && game.night && !game.dusk && infoOf(name)?.[0] === 'Writing Desk, Chair & Wall Lamp' && layers.get('desk_notes');
 // 开场第二盏灯 11-04 删了（叙事评审 #2：湖边那盏灯后面三天接不上；改成 ✕ 那边的烟，手机竖屏整段飞行都不进画面，所以不留替代）
@@ -3262,7 +3306,7 @@ function setupJournal() { // 把 Journal 按 h3 分节（中英各一份）好�
 }
 function renderJournal() { // 开场一直在；找到工作日志才有序章和「测绘员」；终章、后记等通关（第 3 天）
   const f = game.found, open = { open: true, prologue: f.has('log'), surveyor: f.has('log'), epilogue: f.has('ended'), after: f.has('ended') };
-  const xw = [...f].find((k) => k.startsWith('xw:')); if (xw) xWatchSay(+xw.slice(3)); // ✕ 那间怀表：遗稿写第一次看到时的钟点
+  const xw = [...f].find((k) => k.startsWith('xw:')); if (xw) xWatchSay(+xw.slice(3)); if (game.day >= 3) xNotesSay(); // ✕ 那间怀表：遗稿写第一次看到时的钟点
   for (const d of journal.querySelectorAll('[data-sec]')) d.hidden = !open[d.dataset.sec];
   for (const d of journal.querySelectorAll('[data-end]')) d.hidden = !(f.has('end_' + d.dataset.end) || (d.dataset.end === 'back' && !f.has('end_stay'))); // 终章按看过的结局分块（11-10）；旧存档没有 end_* 的当「回去」
   for (const box of journal.querySelectorAll('.jday')) {
@@ -3463,7 +3507,7 @@ function endDay() { LOG && LOG.ev('day', '第1天结束'); // 第一天读完调
   if (!$('card').hidden || !journal.hidden || !$('dlg').hidden) { setTimeout(endDay, 500); return; }
   if (papersNote(endDay)) return;
   dialog(['The First Day Ends', '第一天结束'], ['The clerk puts out the lamp. In the night the fog comes down over the woods.', '书记员吹熄了灯。夜里，雾把林子盖住了。'],
-    [['Next Morning', '第二天早上', () => nextDay(2)]]);
+    [['Sign', '签字', () => signNotes(2)]]); signPrep(1);
 }
 function dayStartNote() { // 第二天早上：两句开场（第 1 天的旧存档读完了也走这里）
   if (game.day < 2 || game.night) return;
@@ -3781,6 +3825,26 @@ function day2Setup() {
   [0.34, 0.29, 0.24, 0.19, 0.14, 0.1].forEach((r, i) => { const m = new THREE.Mesh(rockGeo(i * 3.1), W.rock), sy = 0.36 + 0.1 * R(); m.scale.set(r * (1 + 0.2 * R()), r * sy, r * (0.85 + 0.2 * R()));
     m.position.set((R() - 0.5) * 0.07, y + r * sy * 0.9, (R() - 0.5) * 0.07); m.rotation.y = R() * 6; m.castShadow = true; cairn.add(m); y += r * sy * 1.7; });
   for (let i = 0; i < 3; i++) { const a = R() * 6.28, m = new THREE.Mesh(rockGeo(9 + i), W.rock), r = 0.06 + 0.05 * R(); m.scale.set(r, r * 0.6, r); m.position.set(Math.cos(a) * (0.45 + 0.15 * R()), 0, Math.sin(a) * (0.45 + 0.15 * R())); cairn.add(m); }
+  { // 最上面那块石头：炭笔写的「✕ → 4 mi.」，底下是稽查的签名（r2 情节 #3，和夜里签的同一笔 SIG）。贴片按顶面几处高度定平面、抬到最高点上 3mm，字头朝石堆背面（站在路上读是正的）；顶面会积雪，雪越大字越淡
+    const top = cairn.children[5], rc = new THREE.Raycaster(), dn = new THREE.Vector3(0, -1, 0); cairn.updateMatrixWorld(true);
+    const hit = (dx, dz) => { rc.set(new THREE.Vector3(top.position.x + dx, 2, top.position.z + dz), dn); return rc.intersectObject(top)[0]?.point; };
+    const P = [[0, 0], [0.05, 0], [0, 0.04], [-0.05, 0], [0, -0.04]].map(([a, b]) => hit(a, b));
+    if (P.every(Boolean)) {
+      const n = P[1].clone().sub(P[0]).cross(P[2].clone().sub(P[0])).normalize(); if (n.y < 0) n.negate();
+      const up = new THREE.Vector3(0, 0, -1).addScaledVector(n, n.z).normalize(), rt = up.clone().cross(n), lift = Math.max(...P.map((p) => p.clone().sub(P[0]).dot(n))) + 0.003;
+      const c = document.createElement('canvas'); c.width = 512; c.height = 340; const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4;
+      const paint = () => { const x = c.getContext('2d'), R = rng(29), ink = '24,22,20'; x.clearRect(0, 0, 512, 340); x.strokeStyle = `rgba(${ink},.92)`; x.lineCap = 'round'; x.lineWidth = 11;
+        x.beginPath(); x.moveTo(52, 70); x.lineTo(118, 150); x.moveTo(122, 66); x.lineTo(50, 152); x.moveTo(150, 112); x.bezierCurveTo(190, 106, 220, 114, 262, 108); x.moveTo(236, 84); x.lineTo(266, 108); x.lineTo(234, 134); x.stroke(); // ✕ 和箭头
+        handwrite(x, ['4 mi.'], { x0: 282, y0: 146, size: 84, pitch: 0, ink, R, slant: 0.05, bleed: 0.02 });
+        sigDraw(x, { x0: 170, y0: 168, w: 330, ink, lw: 0.024 });
+        x.globalCompositeOperation = 'destination-out'; for (let i = 0; i < 2600; i++) { x.fillStyle = `rgba(0,0,0,${0.25 + R() * 0.6})`; x.fillRect(R() * 512, R() * 340, 1 + R() * 3, 1 + R() * 2); } x.globalCompositeOperation = 'source-over'; // 炭笔在粗石面上：断断续续
+        t.needsUpdate = true; };
+      paint(); document.fonts.load('italic 40px "IM Fell English"').then(paint);
+      const dm = new THREE.MeshStandardMaterial({ map: t, transparent: true, depthWrite: false, roughness: 1 }), d = new THREE.Mesh(new THREE.PlaneGeometry(0.125, 0.083), dm);
+      d.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(rt, up, n)); d.position.copy(P[0]).addScaledVector(n, lift); cairn.add(d);
+      d.onBeforeRender = () => { dm.opacity = 1 - 0.55 * THREE.MathUtils.smoothstep(cover.uSnow.value, 0.3, 0.9); };
+    }
+  }
   for (const [name, g] of [['d2_stake', stk], ['d2_blaze', tree], ['d2_cairn', cairn]]) {
     const S = D2_SPOTS[name], [p, rt] = pathAt(S.s), q = p.addScaledVector(rt, S.off);
     d2Add(name, g, q.x, q.z, Math.atan2(-rt.x * Math.sign(S.off), -rt.z * Math.sign(S.off))); // 记号那面朝着路
@@ -3936,6 +4000,23 @@ const X_CARDS = { // 四处不同：卡片只写看到的，不写「它说明�
   xnotes: ['Inquiry Notes', 'Parlour', '调查记录', 'A page of inquiry notes lies open on the desk, in the clerk\'s hand. It is dated today.\n\n' + GAME_TEXT.xNote[1], '书桌上摊着一页调查记录，是书记员的笔迹，写的是今天：\n\n' + GAME_TEXT.xNote[2], 'In the clerk\'s hand.'],
   xfire: ['The Fire', 'Kitchen', '炉火', 'The fire is burning in the stove. Up in the loft the rocking chair is rocking. There is no one in the house.', '炉火烧着，楼上的摇椅在摇，屋里没有人。', 'Someone keeps this fire.'],
 };
+// r2 情节 #1：✕ 那页末尾按玩家在这间屋里、读这页之前先碰的那件现拼一句（只写事实，过去时）。第一件存成 found 的 xd:键（刷新不变）；卡片不念，不缺配音
+const X_NOTE0 = [X_CARDS.xnotes[3], X_CARDS.xnotes[4]];
+const X_DID = { coat: ['The inspector came in, and looked first at the coat rail.', '稽查一进门，先看了衣帽架。'], watch: ['The inspector went up to the loft, and opened the night-table drawer.', '稽查上了阁楼，拉开床头柜的抽屉。'],
+  fire: ['The inspector stood a while before the stove.', '稽查在炉子前站了一会儿。'], rocker: ['The inspector stood a while by the rocking chair.', '稽查在摇椅边站了一会儿。'], basin: ['The inspector went to the washstand.', '稽查走到洗脸架前。'],
+  log: ['The inspector took the field log down from the shelf.', '稽查从书架上取下了日志。'], none: ['The inspector came in, and came straight to read this page.', '稽查一进门，就来看这一页。'] };
+function xNotesSay() { // 改 X_CARDS.xnotes / DAY3_TEXT.xnotes 的正文（同 xWatchSay 的做法）；✕ 那页纸已经摆上桌、末句变了就重画
+  const f = [...game.found], xd = f.find((k) => k.startsWith('xd:')), i = f.indexOf('xnotes'), old = { xcoat: 'coat', xwatch: 'watch', xfire: 'fire', log3: 'log' }; // 没有 xd: 的旧存档：按读这页之前先找到的那个键
+  const s = X_DID[xd ? xd.slice(3) : old[(i < 0 ? f : f.slice(0, i)).find((k) => old[k])]] || X_DID.none;
+  X_CARDS.xnotes[3] = DAY3_TEXT.xnotes[2] = X_NOTE0[0] + ' ' + s[0]; X_CARDS.xnotes[4] = DAY3_TEXT.xnotes[3] = X_NOTE0[1] + s[1];
+  const m = x3.on && layers.get('desk_notes')?.children[0]; if (m && m.userData.did && m.userData.did !== s) { m.userData.did = s; m.userData.repaint(); }
+  return s;
+}
+function xPage() { // ✕ 那间书桌上那页（r2 #1 #3）：她的字，写的是今天；末句写你刚在这屋里做的事；页脚已经签好了你的名字（和夜里签的同一笔）。点书桌飞到眼前，卡片成了下面的字幕
+  if (layers.get('desk_notes')) return;
+  const body = () => [GAME_TEXT.xNote[1].replace(/^Day three\. /, '') + ' ' + xNotesSay()[0]], long = Math.max(...Object.values(X_DID).map((d) => d[0].length));
+  const m = notesPage('Inquiry Notes, the Third Day.', body, 43, Math.ceil((GAME_TEXT.xNote[1].length + long) / 24), true); if (m) m.userData.did = xNotesSay();
+}
 const END_TITLE = { endBack: ['Going Back', '结局 · 回去'], endStay: ['Staying', '结局 · 留下'], endHidden: ['The Lantern', '隐藏结局 · 提灯'], endPage: ['The Page', '隐藏结局 · 那页纸'] };
 const DAY3_TEXT = { // Journal「第三天」：键 → [英标题, 中标题, 英, 中]
   xarrive: ['At the ✕', '✕ 那里', GAME_TEXT.xArrive[1], GAME_TEXT.xArrive[2]],
@@ -3977,10 +4058,12 @@ function quest3() {
 function gameSeen3(name, title, add, got) {
   let over = null;
   if (x3.on) {
+    const f0 = game.found, first = !f0.has('xnotes') && ![...f0].some((k) => k.startsWith('xd:')), did = ['Coat Rail & Greatcoat', 'Coat Rail', 'Boots & Bench', 'Lantern'].includes(title) ? 'coat' : title === 'Night Table' ? 'watch' : title === 'Washstand & Hand Towel' ? 'basin' : title === 'Bookcase' ? 'log' : title === 'Rocking Chair' ? 'rocker' : (/^stove_/.test(name) && title !== 'Kettle & Reservoir') || title === 'The Fire' || title === 'Cast-Iron Stove' ? 'fire' : '';
+    if (first && did) f0.add('xd:' + did); // r2 #1：读那页之前先碰的第一件（xNotesSay 拼末句）
     if (['Coat Rail & Greatcoat', 'Coat Rail', 'Boots & Bench', 'Lantern'].includes(title)) { add('xcoat'); over = X_CARDS.xcoat; } // 'Coat Rail'：大衣穿在身上时的名字（GEAR_RAIL）
     else if (title === 'Night Table') { const r = xWatchSay(xClock()); if (!game.found.has('xwatch')) game.found.add('xw:' + r); add('xwatch'); over = X_CARDS.xwatch; } // 卡片写此刻钟点；遗稿记第一次看到的那个（xw:分钟）
     else if (title === 'Washstand & Hand Towel') { add('xfire'); over = X_BASIN; } // 叙事评审 11-04 #5：和炉火、摇椅同一处（有人在这儿过日子），第 1 天那盆冰在这里回收
-    else if (title === 'Writing Desk, Chair & Wall Lamp') { add('xnotes'); over = X_CARDS.xnotes; }
+    else if (title === 'Writing Desk, Chair & Wall Lamp') { add('xnotes'); xNotesSay(); over = X_CARDS.xnotes; }
     else if (title === 'Map') { add('xnotes'); over = X_MAP; }
     else if (title === 'Bookcase') { add('log3'); over = LOG3_CARD; } // 日志后段：选读，不算四处之一
     else if ((/^stove_/.test(name) && title !== 'Kettle & Reservoir') || title === 'Rocking Chair' || title === 'The Fire' || title === 'Cast-Iron Stove') { add('xfire'); over = X_CARDS.xfire; }
@@ -3996,7 +4079,7 @@ function gameSeen3(name, title, add, got) {
 function endDay2() { LOG && LOG.ev('day', '第2天结束'); // 读完第 2 夜的调查记录：同 endDay，存成第 3 天、重新载入
   if (!$('card').hidden || !journal.hidden || !$('dlg').hidden) { setTimeout(endDay2, 500); return; }
   dialog(['The Second Day Ends', '第二天结束'], ['The clerk puts out the lamp. All night long the fog does not lift.', '书记员吹熄了灯。雾一夜都没有散。'],
-    [['Next Morning', '第三天早上', () => nextDay(3)]]);
+    [['Sign', '签字', () => signNotes(3)]]); signPrep(2);
 }
 function logDetour(s, logs) { // 踪迹 s 米处的点；到倒木跟前往露出的那头绕（脚印用）
   const [q, rt] = pathAt(s), lg = logs.find(([ls]) => Math.abs(ls - s) < 4);
@@ -4179,7 +4262,7 @@ function shiftWorld() { // 第 3 天离家够远（家已被雾盖住）：屋�
   if (fp) mv(fp.p.root);
   xLook(); mmDirty = true;
 }
-function applyX() { x3.on = true; x3.ground?.forEach((m) => { m.visible = true; }); shiftWorld(); xLook(); mapWall(); xEcho(); }
+function applyX() { x3.on = true; x3.ground?.forEach((m) => { m.visible = true; }); shiftWorld(); xLook(); mapWall(); xEcho(); xPage(); }
 // 第 3 天去 ✕ 的路上，你没看的时候多出一行脚印（11-11 Fable F4）：前面那段踪迹连着 3 秒不在画面里，你那行旁边多出并排一行一样大的，往同一个方向一直走到头；只在视野外生成、不出声，整段路一次（存 twin:<起点米数>）
 const TWIN = { side: 1, off: 0.55, away: 0, sph: new THREE.Sphere(new THREE.Vector3(), 1.2) };
 function twinPrints(s0) { // 从踪迹 s0 米处并排走到老云杉（同 d2.prints 的终点）；倒木跟前换到露出那头的外侧，不压在木头上
@@ -4698,7 +4781,7 @@ function select(name, direct) {
   if (!direct && inspectOn()) { // 书架上的日志、桌上和炉里的纸：先飞到眼前（书还会翻开几页），飞完再出卡片；卡片关了飞回去（js/props3d.js）
     if (inspectBusy()) { if (name) return; inspectRelease(); } // 飞的途中点别处不理；按 Esc / × 直接收尾
     else if (inspecting()) inspectRelease(() => { if (!letterHome()) { const l = layers.get('stove_letter'); if (l) l.visible = false; } });
-    const k = name && (/^(living_bookcase|field_log)/.test(name) && infoOf(name)?.[0] === 'Bookcase' && isClue(name) ? 'field_log' : nightNotes(name) ? 'desk_notes' : inspectKind(name) && name);
+    const k = name && (/^(living_bookcase|field_log)/.test(name) && infoOf(name)?.[0] === 'Bookcase' && isClue(name) ? 'field_log' : nightNotes(name) || (x3.on && infoOf(name)?.[0] === 'Writing Desk, Chair & Wall Lamp' && layers.get('desk_notes')) ? 'desk_notes' : inspectKind(name) && name);
     if (k && inspectStart(k, bookText(), () => select(name, true), k === 'desk_notes' ? layers.get('desk_page') : undefined)) { sfx(k === 'book' ? 'book' : 'paper'); return; }
   }
   const prev = selected; selected = name; paint(prev); paint(name);
