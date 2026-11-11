@@ -4167,6 +4167,7 @@ const END_SHOT = { smoke: [3.2, 0.8], hour: 18.3, dur: 30, from: [-7.5, 1.6, 10.
 function endShotStart(kind) {
   const E = { ...END_SHOT, ...(innerHeight > innerWidth ? END_SHOT.tall : END_SHOT.wide) }, V = (a) => new THREE.Vector3(...a), d = $('dlg');
   intro = null; spin = false; controls.enabled = false; document.body.classList.add('endshot');
+  roofWx.hold = 0.9; shadowDirty = true; // 屋顶积雪钉在成片（d≥0.4 连成整片，<1 不会整片滑落），不然刷新后从 0 长，前 15 秒是黑斑
   sky.goal = null; sky.hour = E.hour; sky.play = false;
   camera.fov = E.fov; camera.updateProjectionMatrix(); camera.position.copy(V(E.from)); controls.target.copy(V(E.tgt));
   fly = { t: 0, dur: E.dur, fromPos: V(E.from), toPos: V(E.to), fromTgt: V(E.tgt), toTgt: V(E.tgt), ease: (t) => t * (2 - t) }; // 越推越慢，停在 to
@@ -4176,7 +4177,7 @@ function endShotStart(kind) {
   const smoke = () => { const u = d2.lamp?.userData.plume; if (!u) { setTimeout(smoke, 300); return; } u.uK.value.set(...END_SHOT.smoke); }; smoke(); // 那柱烟加浓压暗、不放大：远看的那柱平时 uK (1.5, 1)，黄昏天上偏淡；颜色还是去了饱和的灰，不会变褐、变红
   const pages = ({ stay: ['endStay'], page: ['endStay', 'endPage'], hidden: ['endBack', 'endHidden'] }[kind] || ['endBack']).flatMap((k) => { const t = GAME_TEXT[k], zh = t[2].split('\n\n'); return t[1].split('\n\n').map((p, i) => [i ? ['', ''] : END_TITLE[k], [p, zh[i] || ''], k]); });
   const next = (i) => {
-    if (i >= pages.length) { d.classList.remove('end'); document.body.classList.remove('endshot'); game.found.delete('endshow:' + kind); saveGame(); if (END_IN.on) endInHold(E); else { fly = null; controls.enabled = true; } endAsk(kind); return; } // 镜头停在推到的地方，交还拖动（不停的话 fly 会和拖动抢相机）；屋里那个镜头等「遗稿齐了」关了再切回院子
+    if (i >= pages.length) { d.classList.remove('end'); document.body.classList.remove('endshot'); roofWx.hold = null; game.found.delete('endshow:' + kind); saveGame(); if (END_IN.on) endInHold(E); else { fly = null; controls.enabled = true; } endAsk(kind); return; } // 镜头停在推到的地方，交还拖动（不停的话 fly 会和拖动抢相机）；屋里那个镜头等「遗稿齐了」关了再切回院子
     if (pages[i][2] === 'endHidden' && !END_IN.on) { endInside(() => next(i)); return; } // 念到提灯：切进屋
     dialog(pages[i][0], pages[i][1], [[i < pages.length - 1 ? 'Continue' : 'The End', i < pages.length - 1 ? '继续' : '完', () => next(i + 1)]]); d.classList.add('end');
   };
