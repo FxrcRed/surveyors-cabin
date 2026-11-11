@@ -530,7 +530,7 @@ import { updateBirds } from './js/birds.js';
 import { LOG } from './js/playlog.js';
 import { volfog, volDraw, volTick, FOG_LAYER } from './js/volfog.js';
 import { applyWeather, wsPos, WS, groundCover, cover, precipHole, setupRoofWeather, wx, roofWx, setWeather, setMist, wxTimer, slideSnow, updatePrecip, updateRoofWeather } from './js/weather.js';
-import { LAMPS, toggles, DOORS, swapSoftProps, splitParts, setupToggles, setupFire, setupWaterFx, toggle, fire, rocker, toggleOf, updateToggles, updateFire, updateLantern, updateRocker, updateWaterFx } from './js/interact.js';
+import { LAMPS, toggles, DOORS, swapSoftProps, splitParts, setupToggles, setupFire, setupWaterFx, toggle, fire, rocker, toggleOf, updateToggles, updateFire, updateLantern, updateRocker, updateWaterFx, updateHalos } from './js/interact.js';
 import { setOutfit, people, SEATS, wakePerson, loadPeople, seatTaken, goHome, SPOTS, routeTasks, NAV, MOODS, fpRise, sitTasks, CLIMB, moodOf, WALK_SPEED, ladderRoot, floorBelow, goTasks, nearNode, navPath, updatePeople } from './js/characters.js';
 // 模块（js/*.js）要用的主页面变量：模块里写 shared.名字，读写都直通这里（写过的才给 setter）
 share({
@@ -6363,7 +6363,7 @@ renderer.setAnimationLoop(() => {
   if (shadowDirty || sunD.dot(shadowSun) < 0.99999 || (Math.abs(roofSig - shadowRoof) > 0.002 && now - shadowAt > 500)) {
     renderer.shadowMap.needsUpdate = true; shadowSun.copy(sunD); shadowRoof = roofSig; shadowDirty = false; shadowAt = now; volfog.sunDirty = true;
   }
-  if (sceneReady) innerCull(now);
+  if (sceneReady) { innerCull(now); updateHalos(INNER.GONE); } // 灯的光晕要用 innerCull 这一帧藏了哪些（js/interact.js）
   const tris = sceneReady ? volDraw(camera.layers.isEnabled(OUT_LAYER), ground.position.y, sunD, now) : renderer.info.render.triangles; // 电脑上带体积雾（js/volfog.js），手机照旧直接画
   if (fpsEl) fpsTick(now, tris, renderer.info.render.calls);
   if (held || (hand && hand.visible) || (gear.lantern && fp)) drawHeld();

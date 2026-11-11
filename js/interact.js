@@ -179,6 +179,7 @@ const LAMPS = {
   ceiling_light_loft_rocker: { pos: [-0.35, 3.72, 1.1], power: 3, range: 4 },
 };
 const GLOW_COLOR = new THREE.Color(0xffc27a);
+const LAMP_COLOR = 0xffc898; // 约 2700K（r2 美术 #2：原 0xffb46b 乘上偏橙的原木，屋里一片橙）；炉火 0xff8a3c 不动，留它当屋里最暖的一处
 const toggles = new Map(); // 图层名 → { on, k(动画进度 0→1), apply(k) }
 // 灯挂在图层下，图层一藏，three.js 就不数这盏灯，可见灯数一变所有受光材质重编译（第 3 天 ✕ 那间藏起提灯，一路连卡 5 次共 17s）。
 // 所以每次渲染前数一数藏着的灯，点亮同样多盏 0 亮度的替身灯（亮度 0 着色器里直接跳过），总数不变。
@@ -223,9 +224,9 @@ function setupToggles() {
   for (const [name, l] of Object.entries(LAMPS)) {
     const g = shared.layers.get(name);
     if (!g) continue;
-    const light = new THREE.PointLight(0xffb46b, 0, l.range, 2);
+    const light = new THREE.PointLight(LAMP_COLOR, 0, l.range, 2);
     light.position.set(...l.pos); // 一直 visible，只调强度：可见灯数变了会让所有材质重编译着色器（开灯卡顿）
-    g.add(light); trackLight(light); // 挂在灯的图层下：揭开屋顶藏灯时光也一起灭
+    g.add(light); trackLight(light); addHalo(light, g, name); // 挂在灯的图层下：揭开屋顶藏灯时光也一起灭
     const mats = g.children.filter((m) => m.isMesh && m.material.userData.glow).map((m) => m.material);
     toggles.set(name, { on: false, k: 0, parts: [(k) => {
       light.intensity = l.power * k;
@@ -236,6 +237,119 @@ function setupToggles() {
   setupNoren();
   toggles.get('entry_noren')?.parts.push((k) => { wallU.w = 1 - k; }); // 门帘 k=1 是卷起：放下时挡住一部分光（roomPass）
   setupRocker();
+  setupIron();
+  setupContact();
+}
+// —— 灯在雾里的光晕（r2 美术 #1）：朝相机的加法面片，代替全屏 bloom。灯本身照旧不切 visible，面片切 visible 不影响灯数 ——
+// 不做深度测试（面片贴着墙、灯罩时，按深度会切出一道硬边）：改成每帧轮流对一盏灯打一条灯→眼睛的射线，被墙、家具挡住就淡掉（玻璃灯罩、灯自己的零件不算挡）。
+// 不挡的时候盖在前景上也对：眼睛和镜头里的眩光本来就是这样。雾自己算（加法面片吃 three 的雾会加出一块雾色）
+const HALO_OPT = { entry_porch_lamp: [2.2, 1.6, 1, 1], entry_lantern: [0.5, 0.45, 0, 1] }, HALO_DEF = [0.6, 0.3, 0, 0]; // [直径 m, 亮度, 在屋外, 四面透光]；吸顶灯、吊灯有灯罩，从上面看不到灯泡
+const HALO_COLOR = new THREE.Color(0xffc898), halos = [];
+let haloTex = null;
+function addHalo(light, g, name) {
+  if (!haloTex) {
+    const c = document.createElement('canvas'); c.width = c.height = 64;
+    const x = c.getContext('2d'), gr = x.createRadialGradient(32, 32, 0, 32, 32, 32);
+    for (const [s, a] of [[0, 1], [0.1, 0.7], [0.3, 0.36], [0.55, 0.13], [0.8, 0.03], [1, 0]]) gr.addColorStop(s, `rgba(255,255,255,${a})`); // 中间一点亮、往外很快淡（雾里散射的样子）
+    x.fillStyle = gr; x.fillRect(0, 0, 64, 64); haloTex = new THREE.CanvasTexture(c);
+  }
+  const [size, a, out, all] = HALO_OPT[name] || HALO_DEF;
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: haloTex, color: HALO_COLOR, blending: THREE.AdditiveBlending, transparent: true, depthWrite: false, depthTest: false, fog: false }));
+  sp.visible = false; sp.raycast = () => {}; sp.name = 'lamp_halo'; sp.renderOrder = 10; scene.add(sp); // 挂在场景下：提灯拿在手里时不在小屋模型下面
+  let mesh = null; g.traverse((o) => { if (!mesh && o.isMesh) mesh = o; });
+  halos.push({ sp, light, g, mesh, size, a, out, all, power: LAMPS[name].power, vis: -1, seen: 1 });
+}
+const _hv = new THREE.Vector3(), _hc = new THREE.Vector3(), sstep = (a, b, x) => smooth01((x - a) / (b - a));
+const haloRay = new THREE.Raycaster(), haloT = { i: 0, t: 0, at: 0, solid: [] }; haloRay.firstHitOnly = true;
+function haloSeen(h, d) { // 灯→眼睛之间有没有不透明的东西（只算小屋和场景里的网格，人不算）
+  haloRay.set(_hv, _hc.clone().divideScalar(d)); haloRay.near = 0.05; haloRay.far = d - 0.1;
+  for (const x of haloRay.intersectObjects(haloT.solid, false)) {
+    const m = x.object.material; if (m && m.transparent) continue;
+    let o = x.object; while (o && o !== h.g) o = o.parent; if (!o) return 0; }
+  return 1;
+}
+function updateHalos(GONE) { // 每帧，innerCull 之后：GONE = innerCull 藏东西用的包围球
+  const now = performance.now(), dt = Math.min(0.1, (now - (haloT.t || now)) / 1000); haloT.t = now;
+  if (now - haloT.at > 500) { haloT.at = now; haloT.solid = shared.meshes.filter(shared.isShown); }
+  const pick = halos.length ? haloT.i++ % halos.length : -1; // 每帧只给一盏灯打射线（约 6 次/秒/盏），亮度平滑过去
+  const cp = camera.position, f = scene.fog, inHouse = Math.abs(cp.x) < 2.17 && Math.abs(cp.z) < 2.17 && cp.y < 5.2; // 小屋原木墙外皮 ±2.17
+  const day = 1 / (1 + hemi.intensity), fogK = Math.min(1, Math.max(0.8, 45 / f.far)), HELD = shared.HELD_LAYER; // 屋外：白天、空气清时晕得淡（散射跟雾浓成正比）
+  halos.forEach((h, hi) => {
+    const { sp, light } = h; let o = light; while (o && o.visible) o = o.parent;
+    let k = o ? 0 : Math.min(1.6, light.intensity / h.power); // 图层藏着（揭屋顶、雾外藏小屋、✕ 屋藏提灯）就不画
+    if (k > 0.004 && h.mesh && h.mesh.boundingSphere === GONE) k = 0; // 人在屋外：innerCull 藏了这盏灯（隔墙），光晕也不画
+    if (k > 0.004 && h.out && inHouse) k = 0; // 门廊灯在墙外：屋里看不到
+    if (k <= 0.004) { sp.visible = false; h.vis = -1; return; }
+    light.getWorldPosition(_hv); _hc.copy(cp).sub(_hv); const d = Math.max(_hc.length(), 1e-3);
+    const held = !!h.mesh && h.mesh.layers.isEnabled(HELD) && !h.mesh.layers.isEnabled(0); // 提在手里：离眼睛 0.7m，缩小、画在手那一遍里
+    if (held) h.seen = 1; else if (hi === pick || h.vis < 0) h.seen = haloSeen(h, d);
+    h.vis = h.vis < 0 ? h.seen : h.vis + (h.seen - h.vis) * Math.min(1, dt * 8); // 刚亮 / 刚露出来时直接取当前结果
+    const s = held ? h.size * 0.4 : h.size;
+    sp.position.copy(_hv); sp.scale.setScalar(s);
+    sp.layers.set(held ? HELD : 0);
+    sp.material.opacity = h.vis * h.a * k * (h.out ? day * fogK : 1) * (held ? 1 : sstep(s * 0.5, s * 2, d)) * (1 - sstep(f.near, f.far, d)) * (h.all ? 1 : sstep(-0.05, 0.25, -_hc.y / d)); // 走到跟前淡掉（人在光里看不出一圈）；远处跟着雾淡掉
+    sp.visible = sp.material.opacity > 0.003;
+  });
+  contactTick();
+}
+// —— 铸铁锅、水壶、炉身（r2 美术 #6）：原来近黑 + 粗糙 1，灯下是一块纯黑剪影；养过的铸铁有一层油亮，灯下有一道暗银色的高光 ——
+// 材质在别的图层（斧头、猎枪、水桶、屋顶泛水）也用着：只给这几个图层换克隆
+const IRON = { layers: ['take_skillet', 'take_pot', 'wall_pot_rail', 'stove_kettle', 'stove_kettle_lid', 'stove_kettle_bail', 'stove_iron_body', 'stove_door'],
+  pot: /^(wall_cast_iron|stove_kettle_steel_grey3)/, stove: /^rusty_metal_sheet/ };
+function setupIron() {
+  const done = new Map();
+  for (const n of IRON.layers) shared.layers.get(n)?.traverse((o) => {
+    if (!o.isMesh) return;
+    const src = o.material, pot = IRON.pot.test(src.name), stove = !pot && IRON.stove.test(src.name);
+    if (!pot && !stove) return;
+    if (!done.has(src)) { const m = src.clone();
+      if (pot) { m.color.set(0x555555); m.roughness = 0.35; m.metalness = 0.7; } else { m.roughness = 0.6; m.metalness = 0.3; } // 屋里没有环境贴图，金属只靠点光源的高光：底色 0x2b2b2b 时 F0 才 0.03，比原来还黑（实测壶 23→6），提到 0x555555 才有一道高光；炉身带锈铁贴图、刷过炉漆，哑一点
+      done.set(src, m); }
+    o.material = done.get(src);
+  });
+}
+// —— 家具脚下的接触阴影（r2 美术 #8）：点光源不投影，凳子、炉子、水桶像浮在地板上。贴地 6mm 一圈暗，乘到地板上；一个 InstancedMesh、一次绘制 ——
+// 只挑放在地上不动的：会动的（门、抽屉、被拉开的书桌椅、摇椅）、能拿起的、挂在炉子侧面的水箱（底下是柴堆）不放；床、沙发、书桌、餐桌、茶几底下 roomUnder 已经压暗了
+const CONTACT = ['dining_stool_1', 'dining_stool_2', 'entry_bench_stool', 'dry_sink', 'entry_sawdust_bucket', 'entry_toilet', 'entry_umbrella_stand', 'entry_washstand',
+  'living_bookcase', 'living_cabinet', 'loft_cabinet', 'loft_bedside_table', 'sink_slop_pail', 'sink_water_bucket', 'stove_iron_body', 'entry_boots'];
+const contact = { im: null, hosts: [], M: [], C: [], at: 0, shown: [], floor: false };
+function setupContact() {
+  const hosts = CONTACT.map((n) => shared.layers.get(n)).filter(Boolean); if (!hosts.length) return;
+  let mdl = hosts[0]; while (mdl.parent && mdl.parent !== scene) mdl = mdl.parent; // 挂在小屋模型下：雾外藏小屋时一起藏，hideOutdoors 也认它是屋里的
+  const N = 64, c = document.createElement('canvas'); c.width = c.height = N;
+  const x = c.getContext('2d'), img = x.createImageData(N, N);
+  for (let j = 0; j < N; j++) for (let i = 0; i < N; i++) { // 圆角方形（家具脚下多是方的），中间压到 0.5，往外软软地过渡到 1（乘 1 = 不变）
+    const u = Math.abs((i + 0.5) / (N / 2) - 1), v = Math.abs((j + 0.5) / (N / 2) - 1), r = Math.pow(u ** 4 + v ** 4, 0.25), g = Math.round(255 * (1 - 0.5 * (1 - sstep(0.4, 1, r))));
+    img.data.set([g, g, g, 255], (j * N + i) * 4);
+  }
+  x.putImageData(img, 0, 0);
+  const tex = new THREE.CanvasTexture(c); tex.colorSpace = THREE.SRGBColorSpace; // 解码再编码回去 = 贴图上的数就是乘到屏幕上的倍数
+  const mat = new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false, toneMapped: false, fog: false,
+    blending: THREE.CustomBlending, blendSrc: THREE.DstColorFactor, blendDst: THREE.ZeroFactor }); // 结果 = 屏幕颜色 × 贴图
+  const im = new THREE.InstancedMesh(new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2), mat, hosts.length);
+  const B = new THREE.Box3(), S = new THREE.Vector3(), C = new THREE.Vector3(), inv = new THREE.Matrix4().copy(mdl.matrixWorld).invert();
+  hosts.forEach((g, i) => {
+    B.setFromObject(g); B.getSize(S); B.getCenter(C);
+    const m = new THREE.Matrix4().makeScale(S.x + Math.min(S.x * 0.3, 0.16), 1, S.z + Math.min(S.z * 0.3, 0.16)).setPosition(C.x, B.min.y + 0.006, C.z).premultiply(inv); // 包围盒 ×1.3，最多各边多出 8cm（别穿过隔墙）
+    contact.M.push(m); im.setMatrixAt(i, m); contact.shown.push(true); contact.C.push(C.clone().setY(B.min.y));
+  });
+  contact.inv = inv;
+  im.raycast = () => {}; im.name = 'contact_shadow'; im.userData.indoor = 1; mdl.add(im); im.computeBoundingSphere();
+  contact.im = im; contact.hosts = hosts;
+}
+const _c0 = new THREE.Matrix4().makeScale(0, 0, 0), _down = new THREE.Vector3(0, -1, 0);
+function contactTick() { // 4 次/秒：家具图层藏了（揭屋顶藏阁楼、✕ 屋藏东西），它脚下那圈也藏
+  const t = performance.now(); if (!contact.im || t - contact.at < 250) return; contact.at = t;
+  let dirty = false;
+  if (!contact.floor) { contact.floor = dirty = true; // 揭幕后（小屋的 BVH 建好了）补一次：脚多半插进地板几毫米，按包围盒底放会被地板盖住。往下打射线找真的地面（跳过家具自己）
+    const rc = new THREE.Raycaster(), solid = shared.meshes.filter(shared.isShown), v = new THREE.Vector3(), M = new THREE.Matrix4(); rc.firstHitOnly = true; rc.far = 0.6;
+    contact.hosts.forEach((g, i) => { const C = contact.C[i]; rc.set(v.set(C.x, C.y + 0.25, C.z), _down);
+      for (const x of rc.intersectObjects(solid, false)) { let o = x.object; while (o && o !== g) o = o.parent;
+        if (!o && x.point.y < C.y + 0.03) { M.copy(contact.M[i]).premultiply(contact.inv.clone().invert()); M.elements[13] = x.point.y + 0.006; contact.M[i].copy(M.premultiply(contact.inv)); contact.im.setMatrixAt(i, contact.M[i]); break; } } }); // 高过家具底的是它拆出去的门板之类，跳过
+    contact.im.computeBoundingSphere(); contact.shown.fill(true); } // 下面按藏没藏重新摆一遍
+  contact.hosts.forEach((g, i) => { let o = g; while (o && o.visible) o = o.parent; const on = !o;
+    if (on !== contact.shown[i]) { contact.shown[i] = on; contact.im.setMatrixAt(i, on ? contact.M[i] : _c0); dirty = true; } });
+  if (dirty) contact.im.instanceMatrix.needsUpdate = true;
 }
 // —— 提灯火苗：glb 里只有蜡烛和灯芯，没有火苗 → 在灯芯上加一个小发光水滴；开灯时长出来、轻轻跳（关灯缩到看不见，不切 visible）——
 const LANTERN_WICK = [-0.099, 1.585, 0.885];
@@ -565,6 +679,7 @@ function setupFire() {
     fire.light.position.copy(g.worldToLocal(new THREE.Vector3(...FIRE_LIGHT))); g.add(fire.light); trackLight(fire.light); // 一直 visible，只调强度
     toggles.set('stove_fire', { on: true, k: 1, parts: [(k) => { fire.k = k; }] });
     shared.layers.get('stove_firebox')?.traverse((o) => { if (o.isMesh && o.material.name === 'stove_embers_glow') { fire.embers = o.material; fire.emberCol = o.material.color.clone(); } }); // 炉膛底的余烬板：火灭了变炉灰
+    setupSparks(g);
   }
   // 烟：Points，位置全在顶点着色器里按「出生后多久」算：上升、散开、随风往 +x 偏、变大变淡
   const geo = new THREE.BufferGeometry(), seed = new Float32Array(SMOKE_N * 2);
@@ -598,6 +713,41 @@ function setupFire() {
   smoke.frustumCulled = false; smoke.renderOrder = 2; smoke.name = 'stove_smoke';
   scene.add(smoke); fire.smokeFx = smoke;
 }
+// 火星（r2 美术 #9 ②）：炉门开着、火燃着时，每秒冒 5 颗，六成从火苗顶上蹦出炉口、被热气托着往上飘 0.4m 灭掉；其余在炉膛里往上往后被烟道抽走（衬着亮火几乎看不见，只是让炉口里偶尔一闪）
+// 炉膛 x 1.13–1.67、y 0.13–0.87、z -1.62～-1.22，炉门口 z -1.19、x 1.30–1.60、y 0.44–0.79（同 stoveK）。位置全在顶点着色器里算，用 viewMatrix（世界坐标），挂在 stove_fire 图层下只为跟着藏
+const SPARK_N = 8, SPARK_CYC = 1.6;
+const sparkU = { uTime: { value: 0 }, uAmt: { value: 0 }, uScale: { value: 1 } };
+function setupSparks(g) {
+  const geo = new THREE.BufferGeometry(), seed = new Float32Array(SPARK_N * 2);
+  for (let i = 0; i < SPARK_N; i++) { seed[i * 2] = i / SPARK_N; seed[i * 2 + 1] = Math.random(); }
+  geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(SPARK_N * 3), 3));
+  geo.setAttribute('seed', new THREE.BufferAttribute(seed, 2));
+  const mat = new THREE.ShaderMaterial({ uniforms: sparkU, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+    vertexShader: `uniform float uTime, uAmt, uScale; attribute vec2 seed; varying float vA;
+      float h( float n ) { return fract( sin( n ) * 43758.5453 ); }
+      void main() {
+        float c = uTime / ${SPARK_CYC.toFixed(1)} + seed.x, id = floor( c ) + seed.y * 97.0;
+        float r1 = h( id * 1.7 + 0.3 ), r2 = h( id * 3.1 + 1.9 ), r3 = h( id * 5.3 + 4.1 );
+        float life = 0.4 + 0.25 * r3, t = fract( c ) / life; // 一圈里只亮前 life 那段
+        vec3 p = vec3( 1.36 + 0.2 * r1, 0.52 + 0.06 * r2, -1.3 + 0.06 * r2 );
+        if ( r3 > 0.4 ) { p.z += 0.08 + t * ( 0.2 + 0.12 * r1 ); p.y += t * ( 0.45 + 0.15 * r1 ); } // 蹦出炉口，被热气贴着炉门上方的炉身往上托（衬着黑炉身才看得见，衬着亮火看不见）
+        else { p.y += t * ( 0.24 + 0.06 * r1 ); p.z -= t * 0.12; } // 炉膛里往上、往后被烟道抽走
+        p.x += sin( uTime * 9.0 + id ) * 0.015 * t;
+        vec4 mv = viewMatrix * vec4( p, 1.0 );
+        gl_Position = projectionMatrix * mv;
+        gl_PointSize = max( 1.5, ( 0.014 + 0.01 * r1 ) * uScale / -mv.z );
+        vA = uAmt * step( t, 1.0 ) * ( 1.0 - t * t * t * t ) * ( 0.7 + 0.3 * sin( uTime * 37.0 + id * 7.0 ) ); // 一闪一闪地灭
+      }`,
+    fragmentShader: `varying float vA;
+      void main() {
+        float d = length( gl_PointCoord - 0.5 ) * 2.0, a = vA * ( 1.0 - smoothstep( 0.45, 1.0, d ) );
+        if ( a < 0.01 ) discard;
+        gl_FragColor = vec4( vec3( 1.0, 0.72, 0.32 ) * a, 1.0 );
+      }` });
+  const s = new THREE.Points(geo, mat);
+  s.frustumCulled = false; s.renderOrder = 2; s.name = 'stove_sparks'; s.visible = false; s.raycast = () => {};
+  g.add(s); fire.sparks = s;
+}
 const SMOKE_GRAY = new THREE.Color(0xc4c0b8), ASH_GRAY = new THREE.Color(0x4a4744);
 function updateFire(dt) {
   fire.t += dt;
@@ -619,6 +769,11 @@ function updateFire(dt) {
     f.m.scale.set(f.s0.x * sx, f.s0.y * sy, f.s0.z * sx);
     f.m.position.set(f.P.x + sx * (f.p0.x - f.P.x), f.P.y + sy * (f.p0.y - f.P.y), f.P.z + sx * (f.p0.z - f.P.z));
   }
+  if (fire.sparks) { // 火星：炉门开着才冒；开关炉门、点火熄火时渐变
+    const a = sparkU.uAmt.value += ((k > 0.5 ? fire.door : 0) - sparkU.uAmt.value) * Math.min(1, dt * 3);
+    sparkU.uTime.value += dt; sparkU.uScale.value = renderer.domElement.height * 0.5 * camera.projectionMatrix.elements[5];
+    fire.sparks.visible = a > 0.01;
+  }
   fire.smoke += ((k > 0.5 ? 1 : 0) - fire.smoke) * Math.min(1, dt / (k > 0.5 ? 3 : 2.5)); // 熄火后烟慢慢停
   if (!fire.smokeFx) return;
   smokeU.uTime.value += dt; smokeU.uWind.value = wx.cur.wind; smokeU.uAmt.value = fire.smoke;
@@ -630,4 +785,4 @@ function updateFire(dt) {
 
 
 share({ LAMPS: () => LAMPS, toggles: () => toggles, DOORS: () => DOORS }); // time-of-day.js、weather.js 用
-export { LAMPS, toggles, DOORS, swapSoftProps, splitParts, setupToggles, setupFire, setupWaterFx, toggle, fire, rocker, toggleOf, updateToggles, updateFire, updateLantern, updateRocker, updateWaterFx };
+export { LAMPS, toggles, DOORS, swapSoftProps, splitParts, setupToggles, setupFire, setupWaterFx, toggle, fire, rocker, toggleOf, updateToggles, updateFire, updateLantern, updateRocker, updateWaterFx, updateHalos };
