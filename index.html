@@ -116,6 +116,8 @@ if (navigator.webdriver || /[?&]nolock\b/.test(location.search)) { let el = null
   #prog { position: fixed; bottom: 62px; left: 50%; transform: translateX(-50%); z-index: 6; width: max-content; max-width: calc(100vw - 32px); pointer-events: none; text-align: center;
     font-size: var(--fs-xs); line-height: 1.5; letter-spacing: .6px; color: rgba(244,239,230,.75); text-shadow: 0 1px 3px rgba(0,0,0,.75), 0 0 8px rgba(0,0,0,.45); transition: opacity .35s; }
   #prog:empty { display: none; }
+  body #subs { background: none; font-size: var(--fs-s); text-shadow: 0 0 2px rgba(0,0,0,.95), 0 1px 4px rgba(0,0,0,.9), 0 0 16px rgba(0,0,0,.7); } /* 开场字幕：不垫深色底框、字小一号，只靠描边阴影压在亮天空上（11-10 iPhone 试玩）；body 前缀压过下面手机那几条 @media 的字号 */
+  @media (max-width: 600px), (max-height: 500px) { body #subs { font-size: 14px; } }
   #subs, #opening p { white-space: pre-line; text-wrap: balance; } /* 字幕里的 \n 换行；自动折行时各行长度均匀，不剩一个字孤零零一行 */
   #note .t { display: block; margin-bottom: 2px; font-style: normal; font-size: var(--fs-l); letter-spacing: 1px; }
   html[data-lang="zh"] #note .t { letter-spacing: 3px; }
@@ -2243,23 +2245,37 @@ function goRoom(r) {
 }
 // —— 配音（2026-10-28，edge-tts 免费语音，生成脚本 tools/voice/make_voice.py）：voice/manifest.json 记「编号 → 毫秒」，编号 = 英文原句的 FNV-1a ——
 // 配音只有英文（用户定），中文界面也播英文、字幕停到念完；没生成的句子照原来计时。src = 'sub' / 'room' / 'note'，收哪块字幕只停哪块的声音
-const VOICE = { ms: null, a: null, src: '', until: 0, keep: false, wait: null, pre: new Map() };
+const VOICE = { ms: null, a: null, src: '', until: 0, keep: false, wait: null, pre: new Map(), pool: [], primed: false };
 fetch('voice/manifest.json').then((r) => (r.ok ? r.json() : null)).then((m) => { VOICE.ms = m; if (m && opening) for (const o of OPENING) voicePre(o[0]); }).catch(() => { /* 没有配音就全按计时 */ });
 function vkey(t) { let h = 0x811c9dc5; for (let i = 0; i < t.length; i++) { h ^= t.charCodeAt(i); h = Math.imul(h, 0x01000193) >>> 0; } return h.toString(16).padStart(8, '0'); }
 function say(en, src, keep) { // en = 英文原句；返回字幕该停的毫秒数，0 = 没有配音；keep = 剧情台词，别的提示排在它后面
   LOG && en && LOG.ev('voice', en); stopVoice(); (window.__said ||= new Set()).add(en); // __said：试玩时出现过的句子，生成脚本拿来查漏
   const ms = en && VOICE.ms && VOICE.ms[vkey(en)];
   if (!ms) return 0;
-  const k = vkey(en), a = VOICE.a = VOICE.pre.get(k) || new Audio(`voice/${k}.mp3`), t0 = performance.now(); VOICE.pre.delete(k);
-  a.play().catch(() => { VOICE.wait = a; }); // 还没点过页面浏览器不让出声：等第一次点击
-  a.addEventListener('playing', () => { a.on = true; if (VOICE.a === a && performance.now() - t0 > 250) voiceRetime(); }, { once: true }); // 慢网 mp3 现下现播：字幕从声音真出来那刻起算，不然截句尾（11-07 声6）
+  const k = vkey(en), a = VOICE.a = voiceEl(k), t0 = performance.now(), tok = a.tok = {}; a.on = false; if (a.currentTime) a.currentTime = 0;
+  a.play().catch(() => { if (VOICE.a === a && a.tok === tok) VOICE.wait = a; }); // 还没点过页面浏览器不让出声：等第一次点击
+  a.addEventListener('playing', () => { if (a.tok !== tok) return; a.on = true; if (VOICE.a === a && performance.now() - t0 > 250) voiceRetime(); }, { once: true }); // 慢网 mp3 现下现播：字幕从声音真出来那刻起算，不然截句尾（11-07 声6）；tok：元素复用了，上一句没触发的监听别算到这句头上
   setTimeout(() => { if (VOICE.a === a && !a.on && VOICE.wait !== a) stopVoice(); }, ms + 600); // 字幕都放完了声音还没下好：这句不念了，别等字幕收了才冒出来
   Object.assign(VOICE, { src, keep: !!keep, dur: ms, until: performance.now() + ms });
   return ms + 700;
 }
-function voicePre(en) { const k = vkey(en); if (VOICE.ms?.[k] && !VOICE.pre.has(k)) { const a = new Audio(`voice/${k}.mp3`); a.preload = 'auto'; VOICE.pre.set(k, a); } } // 先下好：开场几句加载时就下
+function voicePre(en) { const k = vkey(en); if (VOICE.ms?.[k] && !VOICE.pre.has(k)) { const a = new Audio(`voice/${k}.mp3`); a.preload = 'auto'; VOICE.pre.set(k, a); VOICE.pool.push(a); } } // 先下好：开场几句加载时就下
+// iOS Safari 每个 <audio> 要各自在点击里 play() 过一次才许出声（11-10 iPhone 试玩：开场只响了前两句）。所以配音不再每句 new Audio：
+// 第一次点 / 按键时把池里所有元素静音放一下就停（primeVoice），之后每句从池里挑一个空闲的换 src 复用；池里没空闲的才 new（那句在 iOS 上可能要等下一次点击）
+function voiceEl(k) {
+  const pre = VOICE.pre.get(k); if (pre) { VOICE.pre.delete(k); return pre; }
+  const free = VOICE.pool.find((a) => a !== VOICE.a && a !== VOICE.wait && !a.held && ![...VOICE.pre.values()].includes(a));
+  const a = free || new Audio(); a.src = `voice/${k}.mp3`; if (!free && VOICE.pool.length < 8) VOICE.pool.push(a); return a;
+}
+const VOICE_SILENT = 'data:audio/wav;base64,UklGRjQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YRAAAACAgICAgICAgICAgICAgICA';
+function primeVoice() {
+  if (VOICE.primed) return; VOICE.primed = true;
+  while (VOICE.pool.length < 4) { const a = new Audio(VOICE_SILENT); VOICE.pool.push(a); }
+  for (const a of VOICE.pool) if (a !== VOICE.a) { a.muted = true; a.play().then(() => { if (VOICE.a !== a) { a.pause(); a.currentTime = 0; } }).catch(() => {}).finally(() => { a.muted = false; }); } // 静音放着、play 回来再停：同步 pause 也会冒出 playing、可能漏一丝声
+}
 function stopVoice(src) { if (VOICE.a && (!src || VOICE.src === src)) { VOICE.a.pause(); VOICE.a = null; VOICE.until = 0; } }
-function unlockVoice() { // 浏览器在第一次点击 / 按键前不让出声：这一下把被拦的那句从头放，字幕重新计时；这一下不算跳过（justUnlocked）
+function unlockVoice(e) { // 浏览器在第一次点击 / 按键前不让出声：这一下把被拦的那句从头放，字幕重新计时；这一下不算跳过（justUnlocked）
+  if (e && e.type !== 'pointerdown') primeVoice(); // iOS 的 pointerdown 不算用户操作，在那里 play 解不了锁
   const a = VOICE.wait; VOICE.wait = null; if (!a || a !== VOICE.a) return;
   a.currentTime = 0; a.play().catch(() => { if (VOICE.a === a) VOICE.wait = a; }); VOICE.unlockAt = performance.now(); voiceRetime();
 }
@@ -2289,7 +2305,7 @@ function holdNote() { // 线索卡片打开：正在念的旁白停在这里，�
   const c = noteCur; if (!c) return;
   if (c.hint) { endRoomNote(); return; }
   const a = VOICE.src === 'room' ? VOICE.a : null; if (a) a.pause();
-  c.held = { a, left: Math.max(1500, noteEnd - performance.now()) }; noteQ.unshift(c);
+  c.held = { a, left: Math.max(1500, noteEnd - performance.now()) }; noteQ.unshift(c); if (a) a.held = true; // held：配音元素池（voiceEl）别把这句停着的元素拿去念别的
   if (a) { VOICE.a = null; VOICE.until = 0; }
   clearTimeout(noteTimer); $('roomNote').classList.remove('on'); noteCur = null; noteEnd = 0; pumpNote(); // 卡片开着 pumpNote 每 0.5 秒看一次，关了就接上
 }
@@ -2309,7 +2325,7 @@ function pumpNote() {
   el.innerHTML = lbl(text[0], text[1]);
   el.classList.add('on');
   noteCur = it; (window.__noteLog ||= []).push(text[0]); // __noteLog：无头测试数同时出现的旁白
-  const h = it.held; delete it.held;
+  const h = it.held; delete it.held; if (h && h.a) h.a.held = false;
   if (h && h.a) { VOICE.a = h.a; Object.assign(VOICE, { src: 'room', keep: !it.room, dur: Math.max(0, h.left - 700), until: now + h.left }); h.a.play().catch(() => { VOICE.wait = h.a; }); } // 卡片关了：从停下的地方接着念
   if (!h) it.at = performance.now();
   const ms = h ? h.left : say(text[0], 'room', !it.room) || 7000;
@@ -2835,6 +2851,7 @@ const OPENING = [
   ['The door stood ajar and the porch lamp was burning. No one was home, and the stove was cold.', '大门虚掩，门廊灯亮着，屋里没有人，炉子是冷的。'],
   ['Night is coming on. Tonight you stop here.', '天快黑了，今晚先在这里住下。'],
 ];
+window.__openingLines = OPENING.map((o) => o[0]); // 调试：opentrace.py 核对开场每句都真念了
 let opening = game.found.size === 0 ? { i: -1, timer: 0 } : null; // null = 不播（回访、已看过）
 function startOpening() { if (opening) opening.timer = setTimeout(nextSub, 800); }
 function nextSub() {
@@ -3023,7 +3040,7 @@ function chgSay(key, on) {
 }
 function chgTouch(name) { // toggle 里调：玩家刚开 / 关了一样东西
   const key = toggles.has(name) ? name : DOORS[name]?.parent;
-  if (game.day !== 1 || game.night || !game.found.has('page') || !key || !chgNoun(key)) return;
+  if (game.day !== 1 || game.night || !game.found.has('page') || !key || !chgNoun(key) || HOUSE_LAMPS.includes(key)) return; // 她领路时开的四盏灯不算（11-10 iPhone 试玩：轻触误关了灯，过一会儿自己亮回来、记录写「稽查把关掉的灯又打开了」，读成「她开过，老头又开一次」）；壁灯照旧
   if ([...game.found].filter((k) => k.startsWith('chg:')).length >= CHG_MAX || chg.pend?.flipped) return;
   const g = layers.get(key); if (!g) return;
   chg.pend = { key, t: toggles.get(key), on: toggles.get(key).on, pos: new THREE.Box3().setFromObject(g).getCenter(new THREE.Vector3()), away: 0, back: 0 };
@@ -5345,7 +5362,7 @@ function updateFP(dt) {
 // —— 第一人称切片（2026-10-28，网址带 ?fp）：开场落在门廊，玩家就是稽查，推门进屋；书记员当同伴。手机：点哪走哪 + 拖动转头，11-10 加了左下浮动摇杆——
 // 2026-10-29 起是默认（用户：旧的环视版第 1 天不要了）；?nofp 只留给老的无头测试 day1.py。?touch：电脑上测触屏那套
 const SLICE = !/[?&]nofp\b/.test(location.search), touchFP = matchMedia('(pointer: coarse)').matches || /[?&]touch\b/.test(location.search);
-const SL = { man: [-0.05, 8.4], woman: [0.75, 8.15], door: [[-0.05, 2.45], [-0.05, 1.5]], sofa: [0.19, -0.17], seen: game.seen, room: undefined, t: 0, w: null, liveT: 0 }; // man/woman：开场停步、第一人称起点（离前墙约 6.4m，定格时小屋约占画面宽 1/3，用户嫌 z 6.0 时屋子撑满画面）；door：门外 → 门里（门轴 x -0.49、z 1.9）；man/woman 离门 4m（2026-10-31，用户：原来 1.5m 只看到门板，门和门廊灯要整体入画）
+const SL = { man: [-0.05, 8.4], woman: [0.75, 8.15], door: [[-0.05, 2.45], [-0.05, 1.5]], pull: [0.62, 2.55], sofa: [0.19, -0.17], seen: game.seen, room: undefined, t: 0, w: null, liveT: 0 }; // man/woman：开场停步、第一人称起点（离前墙约 6.4m，定格时小屋约占画面宽 1/3，用户嫌 z 6.0 时屋子撑满画面）；door：门外 → 门里（门轴 x -0.49、z 1.9）；man/woman 离门 4m（2026-10-31，用户：原来 1.5m 只看到门板，门和门廊灯要整体入画）
 const FP_DRAG = 1.5, FP_TURN = 2.1, FP_STEER = 1.2, _slO = new THREE.Vector3(), _slD = new THREE.Vector3();
 const fpT = { id: null, x: 0, y: 0, x0: 0, y0: 0, t: 0, drag: false, at: 0 };
 const fpS = { id: null, x: 0, y: 0, x0: 0, y0: 0, t: 0, drag: false, cx: 0, cy: 0, f: 0, st: 0, m: 0, show: 0 }; // 触屏浮动摇杆（11-10 用户：点哪走哪不方便，要摇杆）：f 前后、st 左右（-1–1），m 推的幅度（死区外 0–1）
@@ -5495,7 +5512,7 @@ function sliceTick(dt) {
   const dw0 = toggles.get('door_wood'), nr0 = toggles.get('entry_noren'); // 门被推开（on = false 是开）：先把门口帘子拉起来，再进屋
   if (dw0 && nr0 && !dw0.on && !SL.norenUp) { SL.norenUp = true; nr0.on = true; }
   const w0 = people.get('person_woman');
-  if (dw0 && dw0.on && SL.w === 'in' && w0 && Math.hypot(w0.root.position.x - SL.door[0][0], w0.root.position.z - SL.door[0][1]) < 0.6) { dw0.on = false; dw0.ajar = 0; sfxToggle('door_wood', false); } // 她领路走到门前：推开虚掩的门（不然玩家按 W 贴着门扇滑到门轴卡住）
+  if (dw0 && dw0.on && SL.w === 'in' && w0 && (Math.hypot(w0.root.position.x - SL.door[0][0], w0.root.position.z - SL.door[0][1]) < 0.6 || (w0.cur && w0.cur.getClip().name === 'Interact' && Math.hypot(w0.root.position.x - SL.pull[0], w0.root.position.z - SL.pull[1]) < 0.4))) { dw0.on = false; dw0.ajar = 0; sfxToggle('door_wood', false); } // 她领路走到门前：推开虚掩的门（不然玩家按 W 贴着门扇滑到门轴卡住）；大门往外开（门扇扫到 z 2.88）：她先站到扫过范围外的门闩一侧 SL.pull，抬手时门开，转完再进（11-10 iPhone 试玩：原来走到门外 0.55m 才推，门扇从她身上扫过去）；门前 0.6m 那个条件是兜底
   if (rn !== SL.room) { // 原来 goRoom 里做的那几件，改成走进去时做
     SL.room = rn; inside = rn ? ROOMS.find((r) => r.name === rn) : null;
     if (rn) game.entered = true;
@@ -5511,7 +5528,7 @@ function sliceTick(dt) {
   if (SL.auto && !SL.auto.go && w && SL.w === 'in' && fp.p.root.position.z - w.root.position.z > 2) { fpGo(...WALK_IN); fp.go.follow = w; SL.auto.go = fp.go; SL.walked = true; } // 让她先走出 2m 再跟上；walked：被带着穿过玄关了，之后自己第一次回玄关不再替他转头找过道口
   if (w && SL.w === 'porch' && (SL.liveT > 1.5 || rn || SL.auto)) { // 玩家一拿到操作她就先进屋领路：进门往右穿过帘子、一路开灯，站到书架前看着书桌（评审④ v2 #2：原来等他进门 6 秒才跟，玄关成了死角；不站路点 sw，挡稽查的路；之后照白天的样子在楼下转）
     const A = SL.auto, lt = (n) => (A ? [['lamp', n]] : lampTasks(n)); // 带玩家进屋（SL.auto）：屋里三盏灯路过就亮，不停下抬手（原来她在过道口停 7 秒，玩家贴着她后背等）；门口那盏照旧抬手开，玩家在门外 2m 看着亮起来
-    SL.w = 'in'; w.tasks = [['walk', ...SL.door[0]], ['walk', ...SL.door[1]], ...goTasks(w, ...SL.door[1], 'entry'), ...lampTasks('ceiling_light_entry'), ...goTasks(w, ...NAV.entry, 'hall'), ...lt('hall_pendant_south'), ...lt('hall_pendant_north'), ...goTasks(w, ...NAV.hall, 'ne'), ...lt('ceiling_light_living'), ...(A ? [...goTasks(w, ...NAV.ne, 'dish'), ['walk', ...NAV.dish], ['face', NAV.dish[0], -1.9]] : [...goTasks(w, ...NAV.ne, 'books'), ['walk', ...NAV.books], ['face', -1.4, -1.15]])]; w.roam = A ? 60 : 25; w.next = 8; // 带玩家进屋时她停在东边柜子前 NAV.dish：停在书架前 NAV.books 会贴着画面右边露半个身子（人物近景不好看）。站满 60 秒再开始转：领路只用 18 秒，按原来的 25 秒她正好在玩家读完纸去生火时晃到炉子前（fpslice.py 生火那步点到水壶）
+    SL.w = 'in'; const dwP = toggles.get('door_wood'); w.tasks = [...(dwP && dwP.on ? [['walk', ...SL.pull], ['face', 0.3, 1.9], ['anim', 'Interact']] : []), ['walk', ...SL.door[0]], ['walk', ...SL.door[1]], ...goTasks(w, ...SL.door[1], 'entry'), ...lampTasks('ceiling_light_entry'), ...goTasks(w, ...NAV.entry, 'hall'), ...lt('hall_pendant_south'), ...lt('hall_pendant_north'), ...goTasks(w, ...NAV.hall, 'ne'), ...lt('ceiling_light_living'), ...(A ? [...goTasks(w, ...NAV.ne, 'dish'), ['walk', ...NAV.dish], ['face', NAV.dish[0], -1.9]] : [...goTasks(w, ...NAV.ne, 'books'), ['walk', ...NAV.books], ['face', -1.4, -1.15]])]; w.roam = A ? 60 : 25; w.next = 8; // 带玩家进屋时她停在东边柜子前 NAV.dish：停在书架前 NAV.books 会贴着画面右边露半个身子（人物近景不好看）。站满 60 秒再开始转：领路只用 18 秒，按原来的 25 秒她正好在玩家读完纸去生火时晃到炉子前（fpslice.py 生火那步点到水壶）
   }
 }
 // 触屏：左下半区按下 = 浮动摇杆（按住 0.16 秒或推开才出圆盘，松手淡出；推的幅度 = 走速），别处单指拖动转头，两只手指可同时用；轻点（<600ms、移动 <10px）= 走过去
@@ -5945,13 +5962,16 @@ function updateIntro(now) {
   if (x === 1) endIntro(false);
 }
 // 动画中点击、滚轮、按键：跳过，平滑飞到首页视角
-for (const ev of ['pointerdown', 'wheel']) canvas.addEventListener(ev, () => { if (!justUnlocked()) endIntro(true); }); // 头一下是放出配音（unlockVoice），再点才跳过
+let introPoke = false, introPress = 0; // 点画面、滚轮不再跳过（11-10 iPhone 试玩：拿手机时误触就跳了），只让快进图标马上出来；按住 0.6 秒或点快进图标才跳过，按键照旧跳过
+canvas.addEventListener('wheel', () => { if (intro) introPoke = true; });
+canvas.addEventListener('pointerdown', () => { if (!intro) return; introPoke = true; clearTimeout(introPress); introPress = setTimeout(() => endIntro(true), 600); });
+for (const ev of ['pointerup', 'pointercancel']) addEventListener(ev, () => clearTimeout(introPress));
 addEventListener('keydown', () => { if (!justUnlocked()) { endIntro(true); mornEnd(); } }); // 早上那段只认按键跳过（点画面是要锁鼠标）
 const skipHint = $('skipHint'); let introSeen = 0; skipHint.onclick = () => endIntro(true);
 setInterval(() => { // 开场飞行：等了 10 秒、或已经点过 / 按过一下（头一下只放出配音、不算跳过）才淡入一个快进图标，不写字、不常驻（A5）
-  if (!intro) { introSeen = 0; skipHint.classList.remove('on'); return; }
+  if (!intro) { introSeen = 0; introPoke = false; skipHint.classList.remove('on'); return; }
   if (!introSeen) introSeen = performance.now();
-  skipHint.classList.toggle('on', performance.now() - introSeen > 10000 || VOICE.unlockAt != null);
+  skipHint.classList.toggle('on', performance.now() - introSeen > 10000 || VOICE.unlockAt != null || introPoke);
 }, 500);
 
 // 自适应分辨率：帧间隔平均持续 >24ms（不到 ~42 帧）就把像素比降 0.25（最低 1，大屏/高分屏上像素着色是大头）；跑满屏幕刷新率再慢慢升回去
