@@ -219,6 +219,9 @@ if (navigator.webdriver || /[?&]nolock\b/.test(location.search)) { let el = null
   #fpHud .dot { position: absolute; left: 50%; top: 50%; width: 6px; height: 6px; margin: -3px 0 0 -3px; border-radius: 50%; background: rgba(244,239,230,.85); box-shadow: 0 0 0 1px rgba(43,38,32,.5); }
   #fpHud .help { position: absolute; left: 50%; bottom: 20px; transform: translateX(-50%); padding: 6px 12px; border-radius: 6px; background: rgba(43,38,32,.7); color: #f4efe6; font-size: var(--fs-xs); text-align: center; white-space: nowrap; transition: opacity .6s; }
   #fpHud .help .zh { display: block; margin-top: 2px; font-size: var(--fs-xs); opacity: .9; }
+  #stick { position: fixed; left: 0; top: 0; width: 96px; height: 96px; border-radius: 50%; z-index: 5; pointer-events: none; opacity: 0; transition: opacity .3s; background: rgba(43,38,32,.22); box-shadow: inset 0 0 0 1.5px rgba(244,239,230,.35); }
+  #stick.on { opacity: 1; transition: opacity .12s; }
+  #stick i { position: absolute; left: 50%; top: 50%; width: 40px; height: 40px; margin: -20px 0 0 -20px; border-radius: 50%; background: rgba(244,239,230,.5); box-shadow: 0 0 0 1px rgba(43,38,32,.35); }
   #fpHud.seen .help { opacity: 0; } /* 只在开局显示一次：电脑上锁住后第一次按方向键、满 6 秒加 seen，触屏碰过画面加 seen，再退出/换天都不再出；位置在画面最下方（2026-10-31 用户要求），旁白在 bottom 150px，不叠 */
   body:has(#enter.wait, #subs.on) #fpHud .help { opacity: 0; } /* 开场字幕和操作说明同在底部 150px：整段开场播完（#enter 去掉 wait）再出，句间空档也不闪（手机上叠成一行，2026-10-30） */
   #fpHud .hint { position: absolute; left: 50%; top: calc(50% + 48px); transform: translateX(-50%); font-size: var(--fs-xs); color: #f4efe6; text-shadow: 0 1px 2px rgba(0,0,0,.7); white-space: nowrap; }
@@ -4700,7 +4703,7 @@ function fpLean(r, s) { // 眼睛在身体中心前多少：平视 12cm；低头
 const fpHud = document.createElement('div'); fpHud.id = 'fpHud'; fpHud.hidden = true; if (game.helpSeen) fpHud.classList.add('seen'); // 键位说明看过一次就不再出（存档 seen 里的 'help'，换天刷新也记得）
 const FP_KEYS = ['<b>WASD</b> to walk · <b>Shift</b> to hurry<br><b>E</b> to take a thing · <b>E</b> again to put it back or drop it · hold <b>right button</b> to turn it over', 'WASD 走动 · Shift 快走 · E 拿取，再按 E 放回原处或丢在地上 · 按住右键翻看']; // 键位：开局说明行和「点画面继续」框第二行共用（说明行只出一次，放锁时还能在框里看到，11-05 评审⑨ #3）
 const FP_HELP = '<span class="en">' + FP_KEYS[0] + '</span><span class="zh">' + FP_KEYS[1] + '</span>'; // 电脑上这行只在锁上指针后才显示（CSS 放锁时藏起），开头不再写「点画面开始」（新手 11-07 新8：点了以后底下还写着点画面开始）
-const FP_HELP_TOUCH = '<span class="en"><b>Tap</b> where to go, or a thing to use it · <b>Drag</b> to look about</span><span class="zh">点哪走到哪，点物件走过去用 · 拖动转头</span>';
+const FP_HELP_TOUCH = '<span class="en"><b>Tap</b> where to go, or a thing to use it · <b>Hold</b> lower left to walk · <b>Drag</b> to look about</span><span class="zh">点哪走到哪，点物件走过去用 · 按住左下推着走 · 拖动转头</span>';
 fpHud.innerHTML = '<div class="dot"></div><div class="help">' + FP_HELP + '</div><div class="hint"></div><div class="resume"><span class="en">Click to continue</span><span class="zh">点画面继续</span><div class="keys"><span class="en">' + FP_KEYS[0] + '</span><span class="zh">' + FP_KEYS[1] + '</span></div></div>';
 document.body.append(fpHud);
 const fpHint = fpHud.querySelector('.hint');
@@ -5262,8 +5265,9 @@ function updateFP(dt) {
   fpTouchTick(dt); sliceTick(dt); // 触屏点物件后转头 + 动手；切片按位置认房间、书记员跟进门
   if ((fp.solidT -= dt) < 0) { fp.solid = fpSolid(); fp.floors = fp.solid.concat(ground, ...(BROOK.bed || [])); fp.solidT = 0.5; fpNearMesh(r); }
   else if (r.position.distanceToSquared(fp.nearAt) > 1) fpNearMesh(r); // 走出 1m（屋外跑步约 0.2 秒）就重筛身边的网格 // 门开关、积雪会变，半秒刷新一次
-  const f = (k.has('KeyW') || k.has('ArrowUp') ? 1 : 0) - (k.has('KeyS') || k.has('ArrowDown') ? 1 : 0);
-  const st = (k.has('KeyD') ? 1 : 0) - (k.has('KeyA') ? 1 : 0);
+  const sk = touchFP && fpS.m > 0 ? fpS : null; // 触屏摇杆推着：当方向键用，推的幅度管走速
+  const f = sk ? sk.f : (k.has('KeyW') || k.has('ArrowUp') ? 1 : 0) - (k.has('KeyS') || k.has('ArrowDown') ? 1 : 0);
+  const st = sk ? sk.st : (k.has('KeyD') ? 1 : 0) - (k.has('KeyA') ? 1 : 0);
   if (!p.tasks.length) { fp.yaw += ((k.has('ArrowLeft') ? 1 : 0) - (k.has('ArrowRight') ? 1 : 0)) * 1.9 * dt; fp.pitch = THREE.MathUtils.clamp(fp.pitch + ((k.has('PageUp') ? 1 : 0) - (k.has('PageDown') ? 1 : 0)) * 1.2 * dt, -1.35, 1.25); } // 只用键盘：← → 转头（fp.yaw 变大 = 往左）、PageUp / PageDown 抬头低头；方向键不再平移（A D 平移）
   const run = (k.has('ShiftLeft') || k.has('ShiftRight')) && f > 0;
   let moving = false, still = false; // still：站着、周围也没东西在动，跳过碰撞射线
@@ -5280,7 +5284,7 @@ function updateFP(dt) {
       const go = fp.go ? fpSteer(r, dt) : null; // 触屏点了地面 / 物件：沿路点走过去
       let spK = 1; // 走路动画步频 = 实际速度 / 原速（倒着走、弯腰、屋外 ×1.8 都跟着变，动画检查 #13）
       if (f || st || go) {
-        const sp = (run ? FP.RUN : WALK_SPEED) * s * (f < 0 ? 0.7 : 1) * (fp.crouch ? 0.6 : 1) * (game.day >= 2 && outdoors(r) ? 1.8 : 1); // 屋外路长（到 ✕ 110m）：走快些
+        const sp = (run ? FP.RUN : WALK_SPEED) * s * (f < 0 ? 0.7 : 1) * (fp.crouch ? 0.6 : 1) * (game.day >= 2 && outdoors(r) ? 1.8 : 1) * (sk ? 0.3 + 0.7 * sk.m : 1); // 屋外路长（到 ✕ 110m）：走快些
         if (go) _fpV.set(go[0], 0, go[1]).multiplyScalar(sp * dt);
         else _fpV.set(Math.sin(fp.yaw) * f - Math.cos(fp.yaw) * st, 0, Math.cos(fp.yaw) * f + Math.sin(fp.yaw) * st).normalize().multiplyScalar(sp * dt);
         moving = fpTryMove(r, _fpV.x, _fpV.z, s); spK = sp / (WALK_SPEED * s);
@@ -5338,12 +5342,13 @@ function updateFP(dt) {
   roomNavSync();
 }
 
-// —— 第一人称切片（2026-10-28，网址带 ?fp）：开场落在门廊，玩家就是稽查，推门进屋；书记员当同伴。手机：点哪走哪 + 拖动转头（不做摇杆）——
+// —— 第一人称切片（2026-10-28，网址带 ?fp）：开场落在门廊，玩家就是稽查，推门进屋；书记员当同伴。手机：点哪走哪 + 拖动转头，11-10 加了左下浮动摇杆——
 // 2026-10-29 起是默认（用户：旧的环视版第 1 天不要了）；?nofp 只留给老的无头测试 day1.py。?touch：电脑上测触屏那套
 const SLICE = !/[?&]nofp\b/.test(location.search), touchFP = matchMedia('(pointer: coarse)').matches || /[?&]touch\b/.test(location.search);
 const SL = { man: [-0.05, 8.4], woman: [0.75, 8.15], door: [[-0.05, 2.45], [-0.05, 1.5]], sofa: [0.19, -0.17], seen: game.seen, room: undefined, t: 0, w: null, liveT: 0 }; // man/woman：开场停步、第一人称起点（离前墙约 6.4m，定格时小屋约占画面宽 1/3，用户嫌 z 6.0 时屋子撑满画面）；door：门外 → 门里（门轴 x -0.49、z 1.9）；man/woman 离门 4m（2026-10-31，用户：原来 1.5m 只看到门板，门和门廊灯要整体入画）
 const FP_DRAG = 1.5, FP_TURN = 2.1, FP_STEER = 1.2, _slO = new THREE.Vector3(), _slD = new THREE.Vector3();
 const fpT = { id: null, x: 0, y: 0, x0: 0, y0: 0, t: 0, drag: false, at: 0 };
+const fpS = { id: null, x: 0, y: 0, x0: 0, y0: 0, t: 0, drag: false, cx: 0, cy: 0, f: 0, st: 0, m: 0, show: 0 }; // 触屏浮动摇杆（11-10 用户：点哪走哪不方便，要摇杆）：f 前后、st 左右（-1–1），m 推的幅度（死区外 0–1）
 // 防晕（11-10 用户手机竖屏玩完头晕）。FP_DRAG：手指拖过一个屏宽，视线转 1.5 个横向视场（原来固定 0.006 弧度/像素，竖屏是 2.9 倍、横屏 2.2 倍）；FP_TURN：走到了替玩家转向物件，最快 120°/s（原来每秒补差的 6 倍：书桌前差约 40° 实测 225°/s，差 150° 就是 900°/s），转到位才开卡片；FP_STEER：自动走路时视线跟路转，最快 69°/s（原来 143°/s）
 // 第一人称视场角：16:9 以内竖直 72°（同原来）；更宽的屏（手机横屏 2.19:1）横向封顶 104.5°（= 16:9 时的横向视野，原来 116° 边上拉得厉害）；竖屏横向至少 60°（原来 390×664 只有 46°、全屏 37°），竖直最多 95°
 function fpFov() { const a = camera.aspect, D = 180 / Math.PI; return Math.min(95, Math.max(2 * Math.atan(Math.tan(30 / D) / a) * D, Math.min(72, 2 * Math.atan(Math.tan(52.25 / D) / a) * D))); }
@@ -5509,26 +5514,45 @@ function sliceTick(dt) {
     SL.w = 'in'; w.tasks = [['walk', ...SL.door[0]], ['walk', ...SL.door[1]], ...goTasks(w, ...SL.door[1], 'entry'), ...lampTasks('ceiling_light_entry'), ...goTasks(w, ...NAV.entry, 'hall'), ...lt('hall_pendant_south'), ...lt('hall_pendant_north'), ...goTasks(w, ...NAV.hall, 'ne'), ...lt('ceiling_light_living'), ...(A ? [...goTasks(w, ...NAV.ne, 'dish'), ['walk', ...NAV.dish], ['face', NAV.dish[0], -1.9]] : [...goTasks(w, ...NAV.ne, 'books'), ['walk', ...NAV.books], ['face', -1.4, -1.15]])]; w.roam = A ? 60 : 25; w.next = 8; // 带玩家进屋时她停在东边柜子前 NAV.dish：停在书架前 NAV.books 会贴着画面右边露半个身子（人物近景不好看）。站满 60 秒再开始转：领路只用 18 秒，按原来的 25 秒她正好在玩家读完纸去生火时晃到炉子前（fpslice.py 生火那步点到水壶）
   }
 }
-// 触屏：单指拖动转头（拖世界：手指往右，视线往左），轻点（<600ms、移动 <10px）= 走过去
+// 触屏：左下半区按下 = 浮动摇杆（按住 0.16 秒或推开才出圆盘，松手淡出；推的幅度 = 走速），别处单指拖动转头，两只手指可同时用；轻点（<600ms、移动 <10px）= 走过去
+// 拖动方向 11-10 改成拖相机（手指往右，视线往右；往上推，抬头）：原来拖世界，用户 iPhone 试玩说和手指反着、不舒服
+const STICK_R = 48, stickEl = touchFP ? document.body.appendChild(Object.assign(document.createElement('div'), { id: 'stick', innerHTML: '<i></i>' })) : null;
+const inStickZone = (e) => e.clientX < innerWidth * 0.5 && e.clientY > innerHeight * 0.4; // 左下半区（时间 / 天气 / 遗稿、小地图是 DOM，按在上面到不了画布）
+function stickShow() { const S = fpS; stickEl.style.transform = `translate(${S.cx - STICK_R}px, ${S.cy - STICK_R}px)`; stickEl.classList.add('on'); }
 canvas.addEventListener('pointerdown', (e) => {
   if (!fp || !touchFP) return;
   e.preventDefault(); fpT.at = performance.now(); // 挡掉浏览器补的 mousedown
-  if (fpT.id !== null) return; // 第二根手指不管
-  Object.assign(fpT, { id: e.pointerId, x: e.clientX, y: e.clientY, x0: e.clientX, y0: e.clientY, t: performance.now(), drag: false });
+  const T = fpS.id === null && inStickZone(e) ? fpS : fpT.id === null ? fpT : null; // 第三根手指不管
+  if (!T) return;
+  Object.assign(T, { id: e.pointerId, x: e.clientX, y: e.clientY, x0: e.clientX, y0: e.clientY, t: performance.now(), drag: false });
+  if (T === fpS) { const M = STICK_R + 8; Object.assign(fpS, { cx: Math.min(Math.max(e.clientX, M), innerWidth - M), cy: Math.min(Math.max(e.clientY, M), innerHeight - M), f: 0, st: 0, m: 0 }); stickEl.firstChild.style.transform = ''; clearTimeout(fpS.show); fpS.show = setTimeout(stickShow, 160); } // 圆盘贴边时往里挪，整个露出来
   fpHud.classList.add('live'); helpDone(); // 碰过屏幕就收起说明
 });
 canvas.addEventListener('pointermove', (e) => {
-  if (!fp || e.pointerId !== fpT.id) return;
+  if (!fp) return;
+  if (e.pointerId === fpS.id) { // 摇杆
+    const S = fpS; S.x = e.clientX; S.y = e.clientY;
+    if (!S.drag && Math.hypot(S.x - S.x0, S.y - S.y0) > 10) { S.drag = true; clearTimeout(S.show); stickShow(); fp.turn = null; roomList.classList.add('shut'); if (!card.hidden) select(null); } // 推摇杆 = 接管：收起房间列表、卡片，不再替玩家转头
+    if (!S.drag) return;
+    let dx = S.x - S.cx, dy = S.y - S.cy; const d = Math.hypot(dx, dy), c = Math.min(d, STICK_R) / (d || 1); dx *= c; dy *= c;
+    stickEl.firstChild.style.transform = `translate(${dx}px, ${dy}px)`;
+    const m = d / STICK_R; S.m = m < 0.15 ? 0 : Math.min(1, (m - 0.15) / 0.75); S.f = S.m ? -dy / STICK_R : 0; S.st = S.m ? dx / STICK_R : 0; // 死区 15%，推到 90% 就是全速
+    return;
+  }
+  if (e.pointerId !== fpT.id) return;
   const dx = e.clientX - fpT.x, dy = e.clientY - fpT.y; fpT.x = e.clientX; fpT.y = e.clientY;
   if (!fpT.drag && Math.hypot(e.clientX - fpT.x0, e.clientY - fpT.y0) > 10) fpT.drag = true;
   if (!fpT.drag) return;
-  const k = fpDrag(); fp.turn = null; fp.yaw += dx * k; fp.pitch = THREE.MathUtils.clamp(fp.pitch + dy * k, -1.35, 1.25);
+  const k = fpDrag(); fp.turn = null; fp.yaw -= dx * k; fp.pitch = THREE.MathUtils.clamp(fp.pitch - dy * k, -1.35, 1.25);
+  if (fp.go) fp.go.free = true; // 点地走路途中自己转过头：这一趟不再把视线拉回走的方向
 });
 for (const ev of ['pointerup', 'pointercancel']) canvas.addEventListener(ev, (e) => {
-  if (e.pointerId !== fpT.id) return;
-  fpT.id = null; fpT.at = performance.now();
-  if (fp && !fpT.drag && ev === 'pointerup' && performance.now() - fpT.t < 600) fpTap(e);
-  fpT.drag = false;
+  const T = e.pointerId === fpS.id ? fpS : e.pointerId === fpT.id ? fpT : null;
+  if (!T) return;
+  T.id = null; fpT.at = performance.now();
+  if (T === fpS) { clearTimeout(fpS.show); fpS.f = fpS.st = fpS.m = 0; stickEl.classList.remove('on'); }
+  if (fp && !T.drag && ev === 'pointerup' && performance.now() - T.t < 600) fpTap(e);
+  T.drag = false;
 });
 function pickNear(e) { // 触屏：手指点偏 20px 以内也算点中线索（评审④ v2 #3：书桌那页纸夹在梯子两根立柱中间，一点就点成梯子）
   const n0 = pick(e); if (n0 && isClue(n0)) return n0;
@@ -5622,7 +5646,7 @@ function fpSteer(r, dt) { // 返回这一帧往哪走（单位向量），到了
     g.stuck = 0; g.replan = true; SL.wait = q.id; return null; } } // 调试
   if (g.stuck > 0.6 && !g.nav && g.pts.length === 1 && d > 0.5) { const [x, z] = g.pts[0]; Object.assign(g, { pts: fpRoute(P.x, P.y, P.z, x, z, 0, true), nav: true, stuck: 0, chk: 1 }); return null; } // 直走卡住：改沿路网走一次
   if (g.stuck > 0.6) return fpArrive(true);
-  if (!fpT.drag) fp.yaw += THREE.MathUtils.clamp(angDiff(fp.yaw, Math.atan2(dx, dz)) * Math.min(1, 3 * dt), -FP_STEER * dt, FP_STEER * dt); // 视线慢慢转向走的方向（拖着时听手指的）
+  if (!fpT.drag && !g.free) fp.yaw += THREE.MathUtils.clamp(angDiff(fp.yaw, Math.atan2(dx, dz)) * Math.min(1, 3 * dt), -FP_STEER * dt, FP_STEER * dt); // 视线慢慢转向走的方向（拖着时听手指的）
   return [dx / d, dz / d];
 }
 function fpArrive(stuck) { // 走到了：点的是物件就转过去看着它，再开关 / 出卡片
