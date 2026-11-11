@@ -517,6 +517,7 @@ import { WX_ZH, sky, skyEl, skyU, indoorU, indoorShade, PANELS, wallU, updateSky
 import { audioTick, audioPreload, audioStep, audioRung, setIce, sfx, sfxToggle } from './js/audio.js';
 import { updateBirds } from './js/birds.js';
 import { LOG } from './js/playlog.js';
+import { volfog, volDraw, volTick, FOG_LAYER } from './js/volfog.js';
 import { applyWeather, wsPos, WS, groundCover, cover, precipHole, setupRoofWeather, wx, roofWx, setWeather, wxTimer, slideSnow, updatePrecip, updateRoofWeather } from './js/weather.js';
 import { LAMPS, toggles, DOORS, swapSoftProps, splitParts, setupToggles, setupFire, setupWaterFx, toggle, fire, rocker, toggleOf, updateToggles, updateFire, updateLantern, updateRocker, updateWaterFx } from './js/interact.js';
 import { setOutfit, people, SEATS, wakePerson, loadPeople, seatTaken, goHome, SPOTS, routeTasks, NAV, MOODS, fpRise, sitTasks, CLIMB, moodOf, climbAt, WALK_SPEED, ladderRoot, floorBelow, goTasks, nearNode, navPath, updatePeople } from './js/characters.js';
@@ -1340,7 +1341,7 @@ function plant(parts, pts, rand, hMin, hMax, y, coll) { // coll：不管离小�
     tint.set(c[0]).multiplyScalar(0.92 + 0.16 * rand());
     ims.forEach((im, k) => !parts[k].trunk && im.setColorAt(i, tint));
   });
-  ims.forEach((im) => { im.computeBoundingSphere(); im.name = 'forest'; scene.add(im); OUTDOOR.push(im); });
+  ims.forEach((im) => { im.computeBoundingSphere(); im.name = 'forest'; im.layers.enable(FOG_LAYER); scene.add(im); OUTDOOR.push(im); }); // FOG_LAYER：体积雾的太阳深度图（js/volfog.js）
   return ims;
 }
 
@@ -4469,6 +4470,7 @@ async function prewarm() {
   renderer.setRenderTarget(hl.rt); renderer.render(scene, camera); renderer.setRenderTarget(null); scene.overrideMaterial = null;
   camera.layers.mask = keep.mask; scene.background = keep.bg; renderer.shadowMap.autoUpdate = keep.shadow; for (const [o, c] of hm) { o.layers.disable(HL_LAYER); o.frustumCulled = c; }
   renderer.render(hl.scene, hl.cam);
+  if (volfog.on) volDraw(true, ground.position.y, sun.position.clone().sub(sun.target.position).normalize(), performance.now(), true); // 体积雾那几遍的着色器、缓冲、噪声贴图也先建好
   camera.position.copy(p); camera.quaternion.copy(q); camera.fov = f; camera.updateProjectionMatrix();
 }
 function paint(name) { setHL(name, (name === selected || name === hovered || name === hintGlow) && !(held && held.name === name)); } // 拿在手里的不描边
@@ -6048,7 +6050,7 @@ function logPoll() {
 renderer.setAnimationLoop(() => {
   // 按真实时间转（原来按帧转，高刷新率屏会转得快），和开场结尾的角速度一致
   const now = performance.now(), dt = Math.min(0.1, (now - (lastT || now)) / 1000); lastT = now;
-  adaptRes(now, dt);
+  adaptRes(now, dt); volTick(now, dt);
   if (LOG) { LOG.tick(dt); logPoll(); }
   if (sceneReady) hideOutdoors(now);
   audioTick(dt, !!VOICE.a && !VOICE.a.paused, !!(intro || morn || SL.auto) || document.body.classList.contains('endshot'));
@@ -6127,10 +6129,10 @@ renderer.setAnimationLoop(() => {
   const roofSig = (roofWx.sides ? roofWx.sides.reduce((a, S) => a + S.d * 7 + S.s, 0) : 0) + (roofWx.ridge ? roofWx.ridge.t * 13 : 0); // 屋脊雪塌掉时 d 不变，也要重画
   // 下雪时积雪一直在长，roofSig 每帧都变：积雪引起的重画最多 0.5 秒一次（原来每帧重画，单帧 303ms vs 12ms，2026-10-30）
   if (shadowDirty || sunD.dot(shadowSun) < 0.99999 || (Math.abs(roofSig - shadowRoof) > 0.002 && now - shadowAt > 500)) {
-    renderer.shadowMap.needsUpdate = true; shadowSun.copy(sunD); shadowRoof = roofSig; shadowDirty = false; shadowAt = now;
+    renderer.shadowMap.needsUpdate = true; shadowSun.copy(sunD); shadowRoof = roofSig; shadowDirty = false; shadowAt = now; volfog.sunDirty = true;
   }
-  if (sceneReady) renderer.render(scene, camera);
-  if (fpsEl) fpsTick(now, renderer.info.render.triangles);
+  const tris = sceneReady ? volDraw(camera.layers.isEnabled(OUT_LAYER), ground.position.y, sunD, now) : renderer.info.render.triangles; // 电脑上带体积雾（js/volfog.js），手机照旧直接画
+  if (fpsEl) fpsTick(now, tris);
   if (held || (hand && hand.visible) || (gear.lantern && fp)) drawHeld();
   drawHighlight();
   updateTitleColor();
