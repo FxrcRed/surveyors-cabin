@@ -5335,9 +5335,9 @@ function updateFP(dt) {
   fpTouchTick(dt); sliceTick(dt); // 触屏点物件后转头 + 动手；切片按位置认房间、书记员跟进门
   if ((fp.solidT -= dt) < 0) { fp.solid = fpSolid(); fp.floors = fp.solid.concat(ground, ...(BROOK.bed || [])); fp.solidT = 0.5; fpNearMesh(r); }
   else if (r.position.distanceToSquared(fp.nearAt) > 1) fpNearMesh(r); // 走出 1m（屋外跑步约 0.2 秒）就重筛身边的网格 // 门开关、积雪会变，半秒刷新一次
-  const sk = touchFP && fpS.m > 0 ? fpS : null; // 触屏摇杆推着：当方向键用，推的幅度管走速
-  const f = sk ? sk.f : (k.has('KeyW') || k.has('ArrowUp') ? 1 : 0) - (k.has('KeyS') || k.has('ArrowDown') ? 1 : 0);
-  const st = sk ? sk.st : (k.has('KeyD') ? 1 : 0) - (k.has('KeyA') ? 1 : 0);
+  const joy = touchFP && fpS.m > 0 ? fpS : null; // 触屏摇杆推着：当方向键用，推的幅度管走速
+  const f = joy ? joy.f : (k.has('KeyW') || k.has('ArrowUp') ? 1 : 0) - (k.has('KeyS') || k.has('ArrowDown') ? 1 : 0);
+  const st = joy ? joy.st : (k.has('KeyD') ? 1 : 0) - (k.has('KeyA') ? 1 : 0);
   if (!p.tasks.length) { fp.yaw += ((k.has('ArrowLeft') ? 1 : 0) - (k.has('ArrowRight') ? 1 : 0)) * 1.9 * dt; fp.pitch = THREE.MathUtils.clamp(fp.pitch + ((k.has('PageUp') ? 1 : 0) - (k.has('PageDown') ? 1 : 0)) * 1.2 * dt, -1.35, 1.25); } // 只用键盘：← → 转头（fp.yaw 变大 = 往左）、PageUp / PageDown 抬头低头；方向键不再平移（A D 平移）
   const run = (k.has('ShiftLeft') || k.has('ShiftRight')) && f > 0;
   let moving = false, still = false; // still：站着、周围也没东西在动，跳过碰撞射线
@@ -5354,7 +5354,7 @@ function updateFP(dt) {
       const go = fp.go ? fpSteer(r, dt) : null; // 触屏点了地面 / 物件：沿路点走过去
       let spK = 1; // 走路动画步频 = 实际速度 / 原速（倒着走、弯腰、屋外 ×1.8 都跟着变，动画检查 #13）
       if (f || st || go) {
-        const sp = (run ? FP.RUN : WALK_SPEED) * s * (f < 0 ? 0.7 : 1) * (fp.crouch ? 0.6 : 1) * (game.day >= 2 && outdoors(r) ? 1.8 : 1) * (sk ? 0.3 + 0.7 * sk.m : 1); // 屋外路长（到 ✕ 110m）：走快些
+        const sp = (run ? FP.RUN : WALK_SPEED) * s * (f < 0 ? 0.7 : 1) * (fp.crouch ? 0.6 : 1) * (game.day >= 2 && outdoors(r) ? 1.8 : 1) * (joy ? 0.3 + 0.7 * joy.m : 1); // 屋外路长（到 ✕ 110m）：走快些
         if (go) _fpV.set(go[0], 0, go[1]).multiplyScalar(sp * dt);
         else _fpV.set(Math.sin(fp.yaw) * f - Math.cos(fp.yaw) * st, 0, Math.cos(fp.yaw) * f + Math.sin(fp.yaw) * st).normalize().multiplyScalar(sp * dt);
         moving = fpTryMove(r, _fpV.x, _fpV.z, s); spK = sp / (WALK_SPEED * s);
