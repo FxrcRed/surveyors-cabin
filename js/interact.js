@@ -208,7 +208,7 @@ function setupToggles() {
   for (const name of Object.keys(DOORS)) {
     if (!pivots[name]) continue;
     const d = DOORS[name], pv = pivots[name], key = d.parent || d.follow || name; // 折叠门两块板共用一个开关；follow = 跟着别人的开关动（壶的提梁）
-    if (!toggles.has(key)) toggles.set(key, { on: false, k: 0, parts: [] });
+    if (!toggles.has(key)) toggles.set(key, { on: false, k: 0, parts: [], T: /drawer|dining_leaf/.test(key) ? 0.45 : key === 'stove_door' ? 0.6 : 0.9 }); // T：转完用几秒，关的声音按它延迟（audio.js）
     toggles.get(key).parts.push((k) => {
       if (d.angle) { if (Array.isArray(d.axis)) pv.quaternion.setFromAxisAngle(new THREE.Vector3(...d.axis), d.angle(k)); else pv.rotation[d.axis || 'y'] = d.angle(k); } // axis 给向量 = 斜轴
       if (d.slide) pv.position.copy(pv.userData.base).add(new THREE.Vector3(...d.slide(k))); // 父级都没旋转，世界方向 = 本地方向
@@ -536,7 +536,7 @@ function updateToggles() {
     const goal = t.on ? t.ajar || 1 : 0; // ajar：关着但没关严（第 1 天大门虚掩，0.75 缓动后 ≈ 留 14° 的缝）
     if (t.k === goal) continue;
     shared.shadowDirty = true;
-    t.k = goal > t.k ? Math.min(goal, t.k + dt / 0.9) : Math.max(goal, t.k - dt / 0.9); // 门 0.9 秒转完
+    t.k = goal > t.k ? Math.min(goal, t.k + dt / (t.T || 0.9)) : Math.max(goal, t.k - dt / (t.T || 0.9));
     const e = t.k * t.k * (3 - 2 * t.k);
     for (const f of t.parts) f(e);
   }
