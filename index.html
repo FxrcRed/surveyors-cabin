@@ -3525,6 +3525,7 @@ function startDusk2() { // 四样找齐：天慢慢转到傍晚，灯在 updateD
 }
 function startNight2() { // 回屋读到日志中段：天黑、书记员走去书桌、壁灯亮
   game.night = game.dusk = true; showQuest();
+  const w = people.get('person_woman'); if (w && !w.player && outdoors(w.root.position)) { const dwP = toggles.get('door_wood'); w.roam = 25; w.next = 8; w.tasks = [...(dwP && dwP.on ? [['walk', ...SL.pull], ['face', 0.3, 1.9], ['anim', 'Interact']] : []), ['walk', ...SL.door[0]], ['walk', ...SL.door[1]], ...goTasks(w, ...SL.door[1], 'entry')]; } // 她还在门廊上看烟：跟着你进屋（走法同开场领路进门）
   setTimeout(() => { sky.play = false; sky.goal = 21; sky.goalRate = 1; clerkToDesk(); }, 2500);
   setTimeout(() => { game.dusk = false; const w = toggles.get('wall_lamp'); if (w) w.on = true; showQuest(); }, 9000);
 }
@@ -3956,8 +3957,13 @@ function updateDay2(dt) {
   if (lampOn) updatePlume(d2.lamp, dt, THREE.MathUtils.smoothstep(sky.hour, 17.2, 17.5));
   if (!fp || game.night) return;
   const r = fp.p.root.position;
-  if (lampOn && !d2.lampSaid && sky.hour > 17.4) { d2.lampSaid = true; if (!f.has('d2light')) { showRoomNote(D2_SAYS.lamp, null, 'd2light'); smokeCue(r); } } // 烟升起来就说（原来回到小屋 26m 内才说，玩家早点过烟了）
-  if (lampOn && sky.hour > 17.4 && !f.has('saw:yes') && !f.has('saw:no') && !f.has('log2') && !fp.turn && !fp.cut && card.hidden && $('dlg').hidden) { if ((d2.askT = (d2.askT || 0) + dt) > 6.5) smokeAsk(); } // 她说完、镜头转过去看了一阵，才轮到你回话
+  const w2 = people.get('person_woman'), saw = f.has('saw:yes') || f.has('saw:no');
+  if (game.day === 2 && lampOn && !d2.clerkOut && w2 && !w2.player && !f.has('log2')) { // 烟起来了，她出门站到门廊上看（11-11 用户：第 2 天她一直在屋里，没窗看不见烟，你在林子里也听不见她）；趁你看不见那里时挪过去
+    const v = new THREE.Vector3(1.5, floorAt(1.5, 2.9) + 1, 2.9), far = camera.position.distanceTo(v) > 24; v.project(camera);
+    if (far || Math.abs(v.x) > 1.1 || Math.abs(v.y) > 1.1 || v.z > 1) { const L = d2.lamp.position; placeMan(w2, 1.5, 2.9, Math.atan2(L.x - 1.5, L.z - 2.9)); w2.root.position.y = floorAt(1.5, 2.9); w2.roam = w2.next = 1e9; d2.clerkOut = true; } // 同结局画面里她站的门廊位置
+  }
+  if (lampOn && d2.clerkOut && !d2.lampSaid && !saw && sky.hour > 17.4 && Math.hypot(w2.root.position.x - r.x, w2.root.position.z - r.z) < 18) { d2.lampSaid = true; showRoomNote(D2_SAYS.lamp, null, null, true); smokeCue(r); } // 你走回到门廊附近（她看得见你、你听得见她）她才指给你看；你在林子里自己看见烟也照说，后面要你回她一句
+  if (lampOn && d2.lampSaid && sky.hour > 17.4 && !f.has('saw:yes') && !f.has('saw:no') && !f.has('log2') && !fp.turn && !fp.cut && card.hidden && $('dlg').hidden) { if ((d2.askT = (d2.askT || 0) + dt) > 6.5) smokeAsk(); } // 她说完、镜头转过去看了一阵，才轮到你回话
   if (f.has('d2light') && !f.has('log2') && !outdoors(r) && Math.abs(r.x) < 1.7 && Math.abs(r.z) < 1.7) { // 进了屋
     f.add('log2'); saveGame(); renderJournal(); select(null);
     cardData = { t: LOG2_CARD[0], a: LOG2_CARD[1], zt: LOG2_CARD[2], story: LOG2_CARD[3], zs: LOG2_CARD[4], lead: LOG2_CARD[5] };
