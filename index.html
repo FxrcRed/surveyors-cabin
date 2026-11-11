@@ -2791,7 +2791,7 @@ const DAY1_TEXT = {
 const QUEST = { // 屏幕上那一行任务提示：[英, 中]
   inside: ['Have a look around inside.', '往室内看看吧。'],
   page: ['There is a page lying on the writing desk.', '书桌上压着一页纸。'],
-  fire: ['It is cold in here. Get the fire going first.', '有点冷，先把火升起来吧。'],
+  fire: ['', ''], // 11-11 Fable 评审 F2：读完那页纸不提生火，纸就是指示；不去生，炉子过一阵自己烧着（FIRE）
   look: ['Where did he go?', '他往哪儿去了？'],
   dusk: ['', ''],
   night: ['The clerk is writing at the desk. Go and have a look.', '书记员在书桌前写调查记录，去看看。'],
@@ -2812,9 +2812,32 @@ const BASIN_CARD = ['Washstand', 'Water Closet', '洗脸架', 'Half a basin of w
 const WATCH_CARD = ['Night Table', 'Loft', '床头柜', 'In the drawer, a pocket-watch, an old compass, a few pine needles. The watch has stopped at seventeen minutes past three.', '抽屉里有怀表、旧罗盘、几根松针。怀表停在三点十七分。']; // 和第 3 天 X_CARDS.xwatch 同一句式，只差「停了 / 在走」
 const LOG_CARD = ['Field Log', 'Parlour', '工作日志', 'His field log, bark paper stitched together: neat at the front, more and more disordered towards the back. Tonight there will be time to read it.', '他的工作日志，桦树皮纸订成的，前面工整，越往后越乱。今晚再细读。'];
 const NOTES_CARD = ['Inquiry Notes', 'Parlour', '调查记录', '', '', 'In the clerk\'s hand, the ink still wet.'];
+// 11-11 Fable 评审 F3：第 1 夜的记录里写一件玩家真做过的事，只写事实。从上往下第一条成立的；最后一条人人成立（找怀表必上阁楼）。n:键在白天记下（NM、chgTouch、gameSeen）
+const NOTE_ME = {
+  pail: ['The inspector lifted the lid of the slop-pail.', '稽查掀开过污水桶的盖子。', (f) => f.has('n:pail')],
+  out: ['The inspector went out of doors once, and came in again.', '稽查出过一次门，又回来了。', (f) => f.has('n:out')],
+  map: ['The inspector stood a long while before the map.', '稽查在地图前站了很久。', (f) => f.has('n:map')],
+  bed: ['The inspector laid a hand upon the bed in the loft.', '稽查摸过阁楼那张床。', (f) => f.has('n:bed')],
+  door: ['The inspector shut the stove door, and left it so.', '稽查把炉门关上了。', (f) => (toggles.get('stove_door')?.k ?? 0) > 0.5 && ![...f].some((k) => k.startsWith('chg:stove_door'))], // 炉门开局开着（k=0），k=1 是关上：天黑时关着就是玩家关的；房间变化动过炉门的那句已经写了
+  log: ['The inspector read in his field log.', '稽查翻过他的工作日志。', (f) => f.has('log')],
+  loft: ['The inspector went up to the loft, and did not touch the bed.', '稽查上过阁楼，没有碰那张床。', () => true], // 第 2 天床乱了（书记员睡过）
+};
+function noteMe() { return Object.keys(NOTE_ME).find((k) => NOTE_ME[k][2](game.found)); }
+const NM = { map: 0, T: 25, at: null }; // 地图前（2.2m 内、在画面中间）累计站满 T 秒
+setInterval(() => {
+  const f = game.found; if (game.day !== 1 || game.night || !f.has('page') || !fp) return;
+  if (!roomAt(fp.p.root.position) && !f.has('n:out')) { f.add('n:out'); saveGame(); }
+  const g = layers.get('wall_map'); if (f.has('n:map') || !g) return;
+  if (!NM.at) NM.at = new THREE.Box3().setFromObject(g).getCenter(new THREE.Vector3());
+  const v = NM.at.clone().project(camera);
+  if (camera.position.distanceTo(NM.at) < 2.2 && v.z < 1 && Math.abs(v.x) < 0.5 && Math.abs(v.y) < 0.6) NM.map += 0.5;
+  if (NM.map >= NM.T) { f.add('n:map'); saveGame(); }
+}, 500);
+window.cabinNM = NM; // 调试 / 无头测试
 function notes1Text() { // 第 1 夜的记录 = 下午那页一字不差，加上房间变化那句（写成稽查做的）和最后一行；Journal 和卡片共用
   const c = [...game.found].find((k) => k.startsWith('chg:')), l0 = c ? chgLine(c) : ['', ''], b = game.found.has('lback0'); // b：信回到炉膛（LB），写成稽查放回去的
-  const l = [(b ? 'The inspector put the letter back in the firebox. ' : '') + (l0[0] ? l0[0] + ' ' : ''), (b ? '稽查把信放回了炉膛。' : '') + l0[1]];
+  const n = NOTE_ME[[...game.found].find((k) => k.startsWith('nm:'))?.slice(3)] || NOTE_ME[noteMe()]; // F3：玩家真做过的一件事，天黑时挑定存进 found（nm:键），刷新后不变
+  const l = [(b ? 'The inspector put the letter back in the firebox. ' : '') + (l0[0] ? l0[0] + ' ' : '') + n[0] + ' ', (b ? '稽查把信放回了炉膛。' : '') + l0[1] + n[1]];
   const en = `Inquiry Notes, the First Day.\n\nThe inspector lit the stove. In the firebox, a letter not burnt through.\n\n${l[0]}His greatcoat, boots and lantern all in their places. The house is newer than the reports made it.\n\nTomorrow the inspector will go out, east-north-east.`; // 大衣靴子提灯：第 3 天 ✕ 那间衣帽架全空的对照（叙事评审 11-04 #3）
   const zh = `调查记录，第一天。\n\n稽查生了火。炉膛里有一封没烧完的信。\n\n${l[1]}他的大衣、靴子、提灯都在原处。这屋子比报告里写的新。\n\n明天稽查会出门，往东北偏东。`;
   NOTES_CARD[3] = DAY1_TEXT.notes1[2] = en; NOTES_CARD[4] = DAY1_TEXT.notes1[3] = zh;
@@ -2920,10 +2943,11 @@ function gameSeen(name) { // select 里调：这次点的东西算不算线索�
   mmReveal(infoOf(name)?.[1]); // 小地图：点过哪个房间的东西就散开那块雾
   if (game.day >= 3) return gameSeen3(name, title, add, got);
   if (game.day >= 2) return gameSeen2(name, title, add, got);
+  if (title === 'Bed' && !game.night && !f.has('n:bed')) { f.add('n:bed'); saveGame(); } // F3 夜里记录那句（NOTE_ME），不算线索
   if (name === 'desk_page') { add('page'); over = PAGE_CARD; }
   else if (name === 'stove_fire' || name === 'stove_firebox') {
     game.stoveSeen = true; // 自己找到炉膛了：之后进起居室不再提「先生火」
-    if (toggles.get('stove_fire')?.on) { add('fire'); if (!f.has('letter')) { add('letter'); over = LETTER_CARD; } } // 生火前先扒开灰：信就压在底下
+    if (toggles.get('stove_fire')?.on || f.has('fire0')) { add('fire'); if (!f.has('letter')) { add('letter'); over = LETTER_CARD; } } // 生火前先扒开灰：信就压在底下；fire0：炉子是自己烧着的（FIRE），点火苗会先把它灭了，照样算看见、翻出信
   } else if (name === 'stove_letter' && f.has('lback0')) { lbSeen(); add('lbackT'); over = LBACK_CARD; } // 回到炉膛的那封：又拿出来
   else if (name === 'stove_letter') { add('letter'); over = LETTER_CARD; }
   else if ((title === 'Map' || name.startsWith('desk_drawer')) && !f.has('map')) { add('map'); over = MAP_CARD; } // 地图和抽屉合成一条
@@ -3040,6 +3064,7 @@ setInterval(() => {
 window.cabinHint = { hint, fire: hintFire, click: hintClick, HINTS, glow: () => hintGlow };
 function startNight(late) { // 线索找齐：书记员说一句 → 天色转到夜里、她走去书桌 → 壁灯亮起（late：刚弹出「他什么都没带」，等它读完）
   game.night = game.dusk = true;
+  if (![...game.found].some((k) => k.startsWith('nm:'))) { game.found.add('nm:' + noteMe()); saveGame(); notes1Text(); } // F3：记录里那句就按此刻挑定（炉门开没开看这时候）
   const t0 = late ? 6000 : 1500;
   setTimeout(() => showRoomNote(CLERK_SAYS), t0);
   setTimeout(() => { clerkToDesk(); sky.play = false; sky.goal = 18.3; sky.goalRate = 0.15; }, t0 + 3500); // 灯在进屋时就一盏盏开了；天色从下午 15:30 约 19 秒慢慢转到黄昏 18:20（太阳刚落）
@@ -3067,6 +3092,7 @@ function chgSay(key, on) {
 }
 function chgTouch(name) { // toggle 里调：玩家刚开 / 关了一样东西
   const key = toggles.has(name) ? name : DOORS[name]?.parent;
+  if (game.day === 1 && !game.night && name === 'slop_pail_lid' && !game.found.has('n:pail')) { game.found.add('n:pail'); saveGame(); } // F3 夜里记录那句（NOTE_ME）
   if (game.day !== 1 || game.night || !game.found.has('page') || !key || !chgNoun(key) || HOUSE_LAMPS.includes(key)) return; // 她领路时开的四盏灯不算（11-10 iPhone 试玩：轻触误关了灯，过一会儿自己亮回来、记录写「稽查把关掉的灯又打开了」，读成「她开过，老头又开一次」）；壁灯照旧
   if ([...game.found].filter((k) => k.startsWith('chg:')).length >= CHG_MAX || chg.pend?.flipped) return;
   const g = layers.get(key); if (!g) return;
@@ -3161,6 +3187,31 @@ setInterval(() => {
   if (LB.look >= 1) lbSeen();
 }, 500);
 window.cabinLB = LB; // 调试 / 无头测试（day1_flow.js 把 T 改小）
+// —— 炉子自己烧着（11-11 Fable 评审 F2）：读完那页纸任务行不提生火（QUEST.fire 留空）。玩家一直不去生、读完纸满 60 秒且在别处（不在厨房、起居室，看不见炉子）满 12 秒：炉子悄悄烧起来（存 fire0），不出声、不说话。
+// 回到炉前看见（4.5m 内、在画面里）满 1 秒才记 fire（不然人还在阁楼，任务行就跳成「他往哪儿去了」）；夜里记录照写「稽查生了火」。卡关提示照旧走 fire 那条。
+// 一次只变一件：房间变化在等（chg.pend）、信回到炉膛那件还没完（拿了信、没看见放回来的）时先不烧；信那件不等炉子，所以卡不死。
+const FIRE = { since: 0, away: 0, look: 0, T: { since: 60, away: 12 } }; // T：无头测试改小
+setInterval(() => {
+  const f = game.found, t = toggles.get('stove_fire');
+  if (game.day !== 1 || game.night || !f.has('page') || f.has('fire') || !t) return;
+  if (!FIRE.since) FIRE.since = performance.now();
+  camera.updateMatrixWorld(); chgM.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse); chgFr.setFromProjectionMatrix(chgM);
+  const d = camera.position.distanceTo(LB_AT), inView = chgFr.containsPoint(LB_AT);
+  if (!f.has('fire0')) {
+    const rn = fp ? roomAt(fp.p.root.position) : inside && inside.name;
+    FIRE.away = !['Kitchen & Dining', 'Parlour'].includes(rn) && (d > 4.5 || !inView) && !inspecting() ? FIRE.away + 0.5 : 0;
+    if (t.on || FIRE.away < FIRE.T.away || performance.now() - FIRE.since < FIRE.T.since * 1000 || chg.pend || (f.has('letter') && !f.has('lback'))) return;
+    f.add('fire0'); t.on = true; saveGame(); LOG && LOG.ev('clue', '炉子自己烧着'); // 只设 on：k 和烟由 updateToggles / updateFire 慢慢跟上
+    return;
+  }
+  FIRE.look = d < 4.5 && inView && card.hidden ? FIRE.look + 0.5 : 0;
+  if (FIRE.look < 1) return;
+  f.add('fire'); saveGame(); renderJournal(); LOG && LOG.ev('clue', '炉子自己烧着：看见');
+  if (hint.key === 'fire') { hint.key = null; hint.lvl = 0; if (hintGlow) { const n = hintGlow; hintGlow = null; paint(n); } } hintReset();
+  if (day1Done()) startNight(false);
+  showQuest();
+}, 500);
+window.cabinFire = FIRE; // 调试 / 无头测试
 function makePage() { // v2：书桌上那页调查记录（折过三折的纸 + 墨水手写），放在桌面 loft_desk 包围盒顶上、靠前一点；字是卡片里那两句，下面没写的地方留白
   const d = layers.get('loft_desk'); if (!d) return;
   const m = paperMesh(0.15, 0.2, { seed: 23, tone: '#d9cfb4', curl: 0.004, folds: [['h', 0.333], ['h', 0.667]], wrinkle: 10, draw(x, W, H, R) {
@@ -3309,7 +3360,7 @@ function makeMelt() {
 }
 function gameInit() { // 模型和开关都建好后调（loadPeople 之前）：冷炉子、炉膛里的信、时刻、Journal、任务提示
   const f = toggles.get('stove_fire');
-  if (f && !game.found.has('fire')) { f.on = false; f.k = 0; for (const q of f.parts) q(0); fire.smoke = 0; }
+  if (f && !game.found.has('fire') && !game.found.has('fire0')) { f.on = false; f.k = 0; for (const q of f.parts) q(0); fire.smoke = 0; }
   if (letterHome()) makeLetter(); // 还没拿、或第 1 天放回炉膛还没再拿出来
   makeWatch(); makeBasin();
   document.fonts.load('18px "IM Fell English SC"').then(makeBook, makeBook); // 书架上那本工作日志（js/props3d.js；等字体好了再画书脊和封面的字）
