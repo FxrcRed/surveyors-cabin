@@ -3626,28 +3626,28 @@ function updateFogWalls() { // 每帧（updateDay2）：跟着人、颜色跟着
   FW.tree.value.copy(FW_TREE).lerp(FW_SNOW, cover.uSnow.value * 0.5).multiplyScalar(0.3 + 0.7 * day); // 树色（出屏的值，雾在它上面叠）：晴天暗绿，下雪冠上积雪偏灰白，傍晚跟天光暗下去
 }
 // 远处的烟：一柱炊烟升到树冠以上（树照样挡住下半截，不用在林子里清视线通道）。Points，位置在顶点着色器里按「出生后多久」算，同炉子的烟
-const PLUME_N = 110, PLUME_LIFE = 24, PLUME_GRAY = new THREE.Color(0xd8d4cc), PLUME_WARM = new THREE.Color(0xffb070);
+const PLUME_N = 320, PLUME_LIFE = 24, PLUME_COOL = new THREE.Color(0.8, 0.84, 0.92), PLUME_WARM = new THREE.Color(0xffb070);
 function makePlume(H, far) { // H = 烟升多高（米）；far：隔着林子远看的那柱（✕ 门廊往西南，11-04 复测 S4）：树梢以下不画、雾里看不见的树不挡它、压暗加浓（雾和阴天的天是浅灰，浅灰的烟认不出）；→ Group（原点 = 烟囱口），带看不见的点选柱（树冠以上那段）
   const u = { uTime: { value: Math.random() * 50 }, uWind: { value: 0 }, uAmt: { value: 0 }, uScale: { value: 1 }, uColor: { value: new THREE.Color() }, uWarm: { value: new THREE.Color() }, uFogC: { value: new THREE.Color() },
-    uNear: { value: 1e5 }, uLow: { value: far ? 16 : -1e3 }, uK: { value: new THREE.Vector2(far ? 1.5 : 1, 1) } }; // uNear：顶点拉到这个距离以内（updatePlume 按雾设）；uLow：烟升过这个高度才看得见；uK = (浓淡倍数, 明暗倍数)
+    uNear: { value: 1e5 }, uLow: { value: far ? 16 : -1e3 }, uK: { value: new THREE.Vector3(far ? 2.2 : 1, 1, 1) } }; // uK.z = 散开倍数（结局画面放宽，END_SHOT.smoke）；uNear：顶点拉到这个距离以内（updatePlume 按雾设）；uLow：烟升过这个高度才看得见；uK = (浓淡倍数, 明暗倍数)
   const geo = new THREE.BufferGeometry(), seed = new Float32Array(PLUME_N * 2);
   for (let i = 0; i < PLUME_N; i++) { seed[i * 2] = i / PLUME_N; seed[i * 2 + 1] = Math.random(); }
   geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(PLUME_N * 3), 3));
   geo.setAttribute('seed', new THREE.BufferAttribute(seed, 2));
   const mat = new THREE.ShaderMaterial({ uniforms: u, transparent: true, depthWrite: false,
-    vertexShader: `uniform float uTime, uWind, uAmt, uScale, uNear, uLow; uniform vec2 uK; attribute vec2 seed; varying float vA, vAge, vFog;
+    vertexShader: `uniform float uTime, uWind, uAmt, uScale, uNear, uLow; uniform vec3 uK; attribute vec2 seed; varying float vA, vAge, vFog;
       void main() {
         float age = fract(uTime / ${PLUME_LIFE.toFixed(1)} + seed.x), r = seed.y, w = min(uWind, 6.0), a = r * 6.2832 + age * 2.0;
         vec3 p = vec3(0.0, ${H.toFixed(1)} * (1.0 - pow(1.0 - age, 1.8)), 0.0); // 先直升、到顶慢下来摊开（冷天傍晚的炊烟）
         p.x += (1.0 + w * 0.6) * pow(age, 1.5) * 5.0; // 越高越往下风偏
-        p.xz += vec2(cos(a), sin(a)) * (0.3 + age * 3.0 + age * age * 12.0) * (0.4 + 0.6 * r);
+        p.xz += vec2(cos(a), sin(a)) * (0.12 + age * 1.2 + age * age * 4.5) * (0.4 + 0.6 * r) * uK.z; // 11-11 Fable A10：原来散得宽（顶上 15m）、点大，远看一团污渍；收成底部 1m 来宽、往上慢慢散开的一缕
         vec4 mv = modelViewMatrix * vec4(p, 1.0);
         gl_Position = projectionMatrix * vec4(mv.xyz * min(1.0, uNear / -mv.z), 1.0); // 沿视线拉近：屏幕上位置不变，只是更远的树不再挡它
-        gl_PointSize = (2.0 + age * 18.0) * uScale / -mv.z;
+        gl_PointSize = (1.0 + age * 7.0) * uK.z * uScale / -mv.z;
         vAge = age; vFog = smoothstep(30.0, 260.0, -mv.z) * 0.6; // 不吃 scene.fog（第 2 天雾 26m 就到底）：只稍微淡进雾色
-        vA = uK.x * smoothstep(uLow - 6.0, uLow, p.y) * uAmt * smoothstep(0.0, 0.06, age) * pow(1.0 - age, 1.1) * 0.8;
+        vA = uK.x * smoothstep(uLow - 6.0, uLow, p.y) * uAmt * smoothstep(0.0, 0.06, age) * pow(1.0 - age, 1.1) * 0.4; // 点数 ×3、点小：单点淡些
       }`,
-    fragmentShader: `uniform vec3 uColor, uWarm, uFogC; uniform vec2 uK; varying float vA, vAge, vFog;
+    fragmentShader: `uniform vec3 uColor, uWarm, uFogC, uK; varying float vA, vAge, vFog;
       void main() {
         float a = vA * smoothstep(1.0, 0.15, length(gl_PointCoord - 0.5) * 2.0);
         if (a < 0.004) discard;
@@ -3664,9 +3664,9 @@ function updatePlume(g, dt, amt) { // amt 0..1；每帧调（可见时）
   u.uTime.value += dt; u.uWind.value = wx.cur.wind; u.uAmt.value = amt;
   u.uScale.value = renderer.domElement.height * 0.5 * camera.projectionMatrix.elements[5];
   const day = Math.min(1, hemi.intensity / 0.8);
-  u.uColor.value.copy(PLUME_GRAY).multiplyScalar(0.35 + 0.65 * day).lerp(scene.fog.color, 0.25); // 比雾色亮一点，傍晚压在暗下来的天上
-  u.uWarm.value.copy(PLUME_WARM).lerp(u.uColor.value, day * 0.7); u.uFogC.value.copy(scene.fog.color);
-  if (g.userData.far) { const c = u.uColor.value.copy(scene.fog.color).multiply(_plC.setRGB(0.7, 0.74, 0.8)).multiplyScalar(0.4 + 0.6 * day), l = (c.r + c.g + c.b) / 3; c.lerp(_plC.setRGB(l, l, l), 0.6); u.uWarm.value.copy(c); u.uFogC.value.lerp(_plC.setRGB(l, l, l), 0.6); u.uNear.value = scene.fog.far * 0.8; u.uScale.value *= 1.35; } // 远处那柱：雾色 × 偏冷的中灰（11-04 r3 #8：原来 PLUME_GRAY × 0.6，雪雾里像天上一块褐色污渍），点放大 35% 边更散；根部的火光本来就被树挡着；雾在 80% 远处已看不清树，拉到那儿以内（鸟瞰雾远，等于不拉）；远处那柱去掉六成饱和度（11-04 r4 #5：黄昏雾色偏橙，烟成了树梢上一团暗红）
+  u.uColor.value.copy(scene.fog.color).convertLinearToSRGB().multiply(PLUME_COOL); // 天光照着的薄烟逆着阴天看：比天色略暗一点、偏冷（细烟散射偏蓝），跟着天色一起暗；比天浅就和天融成一片认不出（试过）。这个着色器不做色彩空间转换，写进去的就是屏幕上的值，所以雾色先转 sRGB；11-11 前是 PLUME_GRAY × 天光，傍晚压成深褐
+  u.uWarm.value.copy(PLUME_WARM).lerp(u.uColor.value, day * 0.7); u.uFogC.value.copy(scene.fog.color).convertLinearToSRGB(); // 同 uColor：写的是屏幕值
+  if (g.userData.far) { const c = u.uColor.value.copy(scene.fog.color).convertLinearToSRGB().multiply(_plC.setRGB(0.7, 0.74, 0.8)).multiplyScalar(0.75 + 0.25 * day), l = (c.r + c.g + c.b) / 3; c.lerp(_plC.setRGB(l, l, l), 0.6); u.uWarm.value.copy(c); u.uFogC.value.lerp(_plC.setRGB(l, l, l), 0.6); u.uNear.value = scene.fog.far * 0.8; u.uScale.value *= 1.35; } // 远处那柱：雾色 × 偏冷的中灰（11-04 r3 #8：原来 PLUME_GRAY × 0.6，雪雾里像天上一块褐色污渍），点放大 35% 边更散；根部的火光本来就被树挡着；雾在 80% 远处已看不清树，拉到那儿以内（鸟瞰雾远，等于不拉）；远处那柱去掉六成饱和度（11-04 r4 #5：黄昏雾色偏橙，烟成了树梢上一团暗红）
 }
 function markTree(g, H, W) { // 标记树：林子里的云杉模型（pine.glb）放大，不另建模型；→ 「离地 y 米处的树干半径」函数，贴刻痕用
   return loadTree('trees/pine.glb').then((parts) => {
@@ -3734,7 +3734,7 @@ function day2Setup() {
   face(stk, D2_SPOTS.d2_stake.s + 3, 1); // 标桩刀口朝它后面 3m 的踪迹：走过去回头，标桩和门口木桩的刀口同在画面里（11-03 评审④ #2：原来朝小屋，回头只见背面）
   face(tree, D2_SPOTS.d2_blaze.s - 6, 0); // 云杉记号迎着来人：去程顺着脚印走就看得见（评审④ #3：原来朝路的横向，走近时斜得看不清）
   // 林子那头的烟：那边没有人家，却有一柱炊烟升过树梢；傍晚才出现（原来是不吃雾、不被挡的灯光晕，要在林子里清出视线通道）
-  const lamp = makePlume(55);
+  const lamp = makePlume(75); // 11-11 A10：55 → 75，细高一缕
   d2Add('d2_lamp', lamp, D2.lamp[0], D2.lamp[2]); lamp.position.y = gy + 6; lamp.visible = false; d2.lamp = lamp;
   // 脚印：出门沿卵石路走几步，拐进林间踪迹，一直到雾里（和你的一样大；只出不进）
   addLogs(D2_LOGS); d2Scene();
@@ -4070,6 +4070,7 @@ function day3Setup() { // 小路尽头的老云杉 + 裂口 + 焦黑松针；✕
   { const pl = pathCurve.getLength(), at = (s) => pathCurve.getPointAt(Math.min(1, s / pl)), via = [];
     for (let s = 5; s < D3.end - 4; s += 2.5) via.push(logDetour(s, [...D3_LOGS, ...D2_LOGS.filter(([ls]) => ls < D3.fork)])); // 到倒木跟前往露出的那头绕
     d2.prints = makePrints('d2_prints', [new THREE.Vector3(D2.door[0], 0, D2.door[1]), at(0), at(2.5), ...via]); }
+  { const k = [...game.found].find((k) => k.startsWith('twin:')); if (k) twinPrints(+k.slice(5)); } // 刷新：多出的那行照原处重建（在 plantForest 链尾之前建，applyX 跟着挪）
   addLogs(D3_LOGS); d3Scene();
   const g = new THREE.Group(), W = woodMats();
   markTree(g, ...MARK_TREES.spruce); // 林子里同一种云杉，最高最粗的一棵
@@ -4095,7 +4096,7 @@ function day3Setup() { // 小路尽头的老云杉 + 裂口 + 焦黑松针；✕
   { const hx = 2.42 - XSHIFT.x, hz = -1.52 - XSHIFT.y - 4, hd = Math.hypot(hx, hz), hb = Math.min(Math.atan2(hx, hz), Math.atan2(D3.spruceX[0], D3.spruceX[1] - 4) - 0.4); // 从门廊 (0, 4) 看，自家烟囱只比院子西南的老云杉偏 7°，整柱烟在它树冠后面：方位往西挪到离老云杉 ≥ 0.4 rad（23°，比自家实际方位偏西 15°）
     x3.light = d2Add('x_light', lamp, Math.sin(hb) * hd, 4 + Math.cos(hb) * hd); } lamp.position.y = ground.position.y + 4; lamp.visible = false;
   // ✕ 那间屋的烟囱：屋子还没「到」之前，先看见树梢上一柱烟（原来是不吃雾、不被挡的门廊灯光晕），跟着世界一起平移
-  x3.glow = makePlume(55); x3.glow.visible = false;
+  x3.glow = makePlume(75); x3.glow.visible = false; // 同第 2 天那柱（11-11 A10）
   x3.glow.position.set(2.42 + XSHIFT.x, ground.position.y + 3.6, -1.52 + XSHIFT.y); scene.add(x3.glow); OUTDOOR.push(x3.glow); // 烟囱口同 interact.js SMOKE_AT
   if (game.found.has('xarrive') && !game.found.has('ended')) x3.pending = true; // 等树、小溪、电线、林墙都建完再 applyX（plantForest 链尾）：原来在这里就平移世界，之后种的树、建的电线都没跟着挪——✕ 周围站着自家那片树，电线从小棚一路拉到 ✕ 东墙 14 根杆（11-04 F2 复测）
 }
@@ -4120,6 +4121,21 @@ function shiftWorld() { // 第 3 天离家够远（家已被雾盖住）：屋�
   xLook(); mmDirty = true;
 }
 function applyX() { x3.on = true; x3.ground?.forEach((m) => { m.visible = true; }); shiftWorld(); xLook(); mapWall(); xEcho(); }
+// 第 3 天去 ✕ 的路上，你没看的时候多出一行脚印（11-11 Fable F4）：前面那段踪迹连着 3 秒不在画面里，你那行旁边多出并排一行一样大的，往同一个方向一直走到头；只在视野外生成、不出声，整段路一次（存 twin:<起点米数>）
+const TWIN = { side: 1, off: 0.55, away: 0, sph: new THREE.Sphere(new THREE.Vector3(), 1.2) };
+function twinPrints(s0) { // 从踪迹 s0 米处并排走到老云杉（同 d2.prints 的终点）；倒木跟前换到露出那头的外侧，不压在木头上
+  const via = []; for (let s = s0; s < D3.end - 4; s += 2.5) { const lg = D3_LOGS.find(([ls]) => Math.abs(ls - s) < 4), [, rt] = pathAt(s); via.push(logDetour(s, D3_LOGS).addScaledVector(rt, (lg ? -lg[1] : TWIN.side) * TWIN.off)); }
+  x3.twin = via.length > 1 ? makePrints('d3_twin', via) : true; // 挪世界前建的随 OUTDOOR 一起挪；挪过之后 pathAt 已是挪过的坐标
+}
+setInterval(() => {
+  if (game.day < 3 || x3.twin || !fp || !D3.end || d2.veil || x3.on || game.found.has('xarrive') || game.found.has('ended')) return;
+  const r = fp.p.root.position, { d, s } = pathNear(r.x, r.z);
+  if (d > D2.width || s < D3.fork + 8 || s > D3.end - 20) { TWIN.away = 0; return; } // 拐上岔路以后、离老云杉 20m 以前
+  chgM.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse); chgFr.setFromProjectionMatrix(chgM);
+  let seen = false; for (let a = s + 2; a < s + 28 && !seen; a += 1.5) { TWIN.sph.center.copy(pathAt(a)[0]).setY(ground.position.y + 0.3); seen = chgFr.intersectsSphere(TWIN.sph); } // 球半径盖住两行和倒木绕行；28m 外在雾里
+  TWIN.away = seen ? 0 : TWIN.away + 0.5;
+  if (TWIN.away >= 3) { const s0 = Math.round(s + 3); twinPrints(s0); game.found.add('twin:' + s0); saveGame(); }
+}, 500);
 function xEcho() { // 回声（动机评审 #12）：第 1 天看过的人才会注意到的不同，只换同一模型的状态。梯子架在阁楼口、横杆竖着（第 1 天他滑回去、放下了）；第 1 天被「变回去」的那件（chg:），这边是玩家当时弄成的样子。水壶在 updateDay3 里一直烧
   const snap = (n, on) => { const d = toggles.get(n); if (d) { d.on = on; d.k = on ? 1 : 0; for (const p of d.parts) p(d.k); } };
   snap('loft_ladder', true); snap('loft_gate', false);
@@ -4163,7 +4179,7 @@ function ending(kind) { LOG && LOG.ev('end', `结局 ${kind}`); LOG && LOG.ev('d
 }
 // —— 结局画面（11-10，动机评审 #5 #6、美术评审「结局只有黑底文字」）：回到自家，天刚黑，从院子西南角的树影里看小屋：门廊灯亮着，东北偏东的树梢上那柱烟还在升；「留下」时书记员站在门廊东头望着它。
 // 镜头用 fly 慢慢推近，结局文字一段一页压在画面下三分之一，点「继续」翻页，放完才出「遗稿齐了」。机位照宣传图 b-night 那个角度（用户认可过），时刻 18.3：树是黑剪影（日落时树发棕，不用），烟还衬得出来（入夜就看不见了）
-const END_SHOT = { smoke: [3.2, 0.8], hour: 18.3, dur: 30, from: [-7.5, 1.6, 10.5], to: [-6.6, 1.6, 9.3], wide: { fov: 50, tgt: [2, 1.9, -2] }, tall: { fov: 62, tgt: [3.1, 0.4, -1.2] }, woman: [1.5, 2.9] }; // from：右边一棵树挡着半个画面，推到 to 让开，露出门廊东头的人和右上的烟；再往后退或往东挪就钻进树冠里全黑。tall = 竖屏：视野窄，往右偏 5° 才同时装下门和烟；两种都压低视线，把小屋抬到画面中上，下三分之一留给字
+const END_SHOT = { smoke: [4.5, 0.65, 1.6], hour: 18.3, dur: 30, from: [-7.5, 1.6, 10.5], to: [-6.6, 1.6, 9.3], wide: { fov: 50, tgt: [2, 1.9, -2] }, tall: { fov: 62, tgt: [3.1, 0.4, -1.2] }, woman: [1.5, 2.9] }; // from：右边一棵树挡着半个画面，推到 to 让开，露出门廊东头的人和右上的烟；再往后退或往东挪就钻进树冠里全黑。tall = 竖屏：视野窄，往右偏 5° 才同时装下门和烟；两种都压低视线，把小屋抬到画面中上，下三分之一留给字
 function endShotStart(kind) {
   const E = { ...END_SHOT, ...(innerHeight > innerWidth ? END_SHOT.tall : END_SHOT.wide) }, V = (a) => new THREE.Vector3(...a), d = $('dlg');
   intro = null; spin = false; controls.enabled = false; document.body.classList.add('endshot');
@@ -4173,7 +4189,7 @@ function endShotStart(kind) {
   const stand = () => { const w = people.get('person_woman'); if (!w) { setTimeout(stand, 300); return; } // 人物还没载完
     placeMan(w, ...E.woman, Math.atan2(D2.lamp[0] - E.woman[0], D2.lamp[2] - E.woman[1])); w.root.position.y = floorAt(...E.woman); w.roam = w.next = 1e9; }; // 脸朝那柱烟
   if (kind === 'stay' || kind === 'page') stand();
-  const smoke = () => { const u = d2.lamp?.userData.plume; if (!u) { setTimeout(smoke, 300); return; } u.uK.value.set(...END_SHOT.smoke); }; smoke(); // 那柱烟加浓压暗、不放大：远看的那柱平时 uK (1.5, 1)，黄昏天上偏淡；颜色还是去了饱和的灰，不会变褐、变红
+  const smoke = () => { const u = d2.lamp?.userData.plume; if (!u) { setTimeout(smoke, 300); return; } u.uK.value.set(...END_SHOT.smoke); }; smoke(); // 那柱烟加浓压暗、不放大：远看的那柱平时 uK (2.2, 1)，黄昏天上偏淡；颜色还是去了饱和的灰，不会变褐、变红
   const pages = ({ stay: ['endStay'], page: ['endStay', 'endPage'], hidden: ['endBack', 'endHidden'] }[kind] || ['endBack']).flatMap((k) => { const t = GAME_TEXT[k], zh = t[2].split('\n\n'); return t[1].split('\n\n').map((p, i) => [i ? ['', ''] : END_TITLE[k], [p, zh[i] || ''], k]); });
   const next = (i) => {
     if (i >= pages.length) { d.classList.remove('end'); document.body.classList.remove('endshot'); game.found.delete('endshow:' + kind); saveGame(); if (END_IN.on) endInHold(E); else { fly = null; controls.enabled = true; } endAsk(kind); return; } // 镜头停在推到的地方，交还拖动（不停的话 fly 会和拖动抢相机）；屋里那个镜头等「遗稿齐了」关了再切回院子
