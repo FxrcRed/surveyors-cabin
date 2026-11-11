@@ -19,7 +19,7 @@ const PEOPLE = [
   // 打开页面随机二选一：阁楼摇椅上看书（Sitting_Read_Loop + Book），或书桌前写笔记（Sitting_Write_Loop + Notebook、Pen）；这两个动作是 Blender 里用 IK 在坐姿上摆的。
   // 她的坐姿骨盆在脚后 0.324、坐面比根节点高 0.444（未缩放，男的是 0.34 / 0.468）。调试：网址带 ?woman=read / ?woman=desk 固定一种。
   // 2026-10-20 起她也能第一人称操作（手 hand_woman.glb），也会自己起来走动、爬梯子上下阁楼（见「女调查员的日常」）；坐哪张椅子就做哪件事（seatActs），别的座位是普通坐姿。
-  { id: 'person_woman', url: 'characters/woman.glb', scale: 0.896, mode: 'sit', sitBack: 0.324, sitUp: 0.49, walkTS: 1.29, // walkTS：她的 Walk_Loop 一周期 1.71s，原速支撑脚只蹬 0.69 m/s，按 WALK_SPEED 走会往前滑 22%（2026-11-07 动画检查 #3）
+  { id: 'person_woman', url: 'characters/woman.glb', scale: 0.896, mode: 'sit', sitBack: 0.324, sitUp: 0.49, walkTS: 1.29, clerk: true, // walkTS：她的 Walk_Loop 一周期 1.71s，原速支撑脚只蹬 0.69 m/s，按 WALK_SPEED 走会往前滑 22%（2026-11-07 动画检查 #3）
     hand: 'characters/hand_woman.glb', handMat: { HandSleeve: 'MI_Peasant' },
     seatActs: { loft_rocking_chair: { idle: 'Sitting_Read_Loop', props: ['Book', 'Cushion'] }, loft_chair: { idle: 'Sitting_Write_Loop', props: ['Notebook', 'Pen'] } },
     // 游戏（2026-10-21 用户定）：白天站在一楼地图前、在楼下转（planWander），天黑才走去书桌坐下写调查记录；重开页面时已经天黑就直接坐在书桌前。
@@ -49,6 +49,7 @@ async function loadPeople() {
     const cushion = gltf.scene.getObjectByName('Cushion'); // 靠垫用摇椅座垫同一块红亚麻布
     if (cushion) shared.layers.get('loft_rocking_chair')?.traverse((o) => { if (o.isMesh && o.material?.name === 'loft_mattress_linen_red') cushion.material = o.material; });
     gltf.scene.traverse((o) => { if (o.isMesh) { o.castShadow = o.receiveShadow = true; o.frustumCulled = false; } }); // 蒙皮网格包围球不跟动作，别被裁掉
+    if (P.clerk) clerkLook(gltf.scene); // 要在 indoorShade、loadHand 之前：第一人称的袖子按名字拿这里换过的材质
     // 点选用隐形胶囊：蒙皮网格逐面射线慢，而且包围球是静止姿势的
     const hit = new THREE.Mesh(new THREE.CapsuleGeometry(0.24, 1, 2, 8), new THREE.MeshBasicMaterial({ visible: false }));
     root.add(hit); shared.meshes.push(hit);
@@ -80,6 +81,39 @@ async function loadPeople() {
     if (P.coat) await (p.coatLoad = loadCoat(p).catch(console.error)); // 预热前到齐：原来第 2、3 天开局才下载，3 个材质现编译卡约 0.7 秒（11-09 性能评审）
     if (OUTFIT[P.id]) applyOutfit(p); // 存档恢复时 gearOn 可能比人先到
   }));
+}
+// —— 书记员的衣着（2026-11-11 Fable 评审 A4：银发双髻加皮甲像奇幻游戏角色，不像测绘局的年轻书记员）：不换模型，只在网页里改材质 ——
+// 头发、眉毛（MI_Hair_2*，银白贴图）乘深棕。衣服四块网格共用一张贴图（MI_Peasant / .001），每块各 clone 一份材质、按亮度重画贴图：
+// 上衣和手臂：深色的皮背心、胸衣 → 灰绿呢料，浅色衬衣袖 → 去饱和的本白麻布，中间亮度的皮带护腕去饱和压暗；裤子整块 → 炭灰棕呢料；靴子整块 → 深棕皮。
+// 第一次全按亮度分（上下一身灰绿，像连体紧身衣），所以按网格分。粗糙度贴图去掉、拉到 0.92（呢料不反光）。不碰 glb 解析出来的原材质。
+// 裤子、靴子的材质改名：第一人称袖子按名字 'MI_Peasant' 拿手臂那份（loadHand）。
+const CLERK_HAIR = new THREE.Color().setRGB(0.30, 0.21, 0.15, THREE.SRGBColorSpace);
+const CLERK_CLOTH = { // 贴图像素值（sRGB 0–1），画进 canvas 不经 Color，不用转线性；all：整块按亮度乘这个色（没有浅色、中间色分档）
+  Female_Peasant_Body: { tone: [0.36, 0.39, 0.33] }, Female_Peasant_Arms: { tone: [0.36, 0.39, 0.33] },
+  Female_Peasant_Legs: { tone: [0.25, 0.23, 0.21], all: true, name: 'MI_Peasant_Trousers' }, Female_Peasant_Feet: { tone: [0.27, 0.20, 0.15], all: true, name: 'MI_Peasant_Boots' },
+};
+const CLERK_LINEN = [1.0, 0.98, 0.94];
+function clerkCloth(img, C) {
+  const cv = document.createElement('canvas'); cv.width = img.width; cv.height = img.height;
+  const cx = cv.getContext('2d'); cx.drawImage(img, 0, 0); const D = cx.getImageData(0, 0, cv.width, cv.height), d = D.data;
+  for (let i = 0; i < d.length; i += 4) {
+    const r = d[i] / 255, g = d[i + 1] / 255, b = d[i + 2] / 255, L = 0.299 * r + 0.587 * g + 0.114 * b;
+    const dk = C.all ? 1 : Math.min(1, Math.max(0, (0.42 - L) / 0.15)), lt = C.all ? 0 : Math.min(1, Math.max(0, (L - 0.5) / 0.15)), md = 1 - dk - lt, wk = 0.55 + 1.6 * Math.min(L, 0.4);
+    for (let c = 0; c < 3; c++) { const x = c === 0 ? r : c === 1 ? g : b; d[i + c] = 255 * Math.min(1, md * (0.45 * x + 0.55 * L) * 0.85 + dk * C.tone[c] * wk + lt * (0.3 * x + 0.7 * L * CLERK_LINEN[c])); }
+  }
+  cx.putImageData(D, 0, 0); return cv;
+}
+function clerkLook(root) {
+  const hair = new Map(), cloth = new Map();
+  root.traverse((o) => {
+    if (!o.isMesh) return; const m0 = o.material, C = CLERK_CLOTH[o.name];
+    if (/^MI_Hair/.test(m0.name)) { if (!hair.has(m0)) hair.set(m0, Object.assign(m0.clone(), { color: CLERK_HAIR.clone() })); o.material = hair.get(m0); return; }
+    if (!C || !m0.map) return;
+    const k = C.tone.join() + C.all; if (!cloth.has(k)) cloth.set(k, clerkCloth(m0.map.image, C)); // 上衣、手臂同一套参数，共用一张画好的
+    const m = o.material = m0.clone(); if (C.name) m.name = C.name;
+    m.map = m0.map.clone(); m.map.source = new THREE.Source(cloth.get(k)); m.map.needsUpdate = true; // 要新的 Source：clone 出来的贴图和原贴图共用一个 Source，直接设 .image 会把每一份（连原贴图）都换掉
+    m.roughnessMap = null; m.roughness = 0.92; m.metalness = 0;
+  });
 }
 // —— 外套（2026-11-07 用户定：大衣用 Quaternius Ranger 短上衣）：Ranger 和 Peasant 是同一服装包、同一套骨骼，按骨骼名重新绑到人身上；穿上时藏 Peasant 的上衣和手臂，裤子、鞋不换 ——
 const OUTFIT = {}; // id → 'coat' | 'base'；人还没加载完也先记下
