@@ -246,14 +246,16 @@ const go = (o, k, v, dur, delay = 0) => tw.push({ o, k, v, dur, at: clock + dela
 const after = (delay, fn) => cbs.push({ at: clock + delay, fn });
 let V = null; // 正在看的：{ kind, name, g, home:{p,q}, read:{p,q}, f（0 在原位，1 在相机前）, busy, onHome }
 const _q = new THREE.Quaternion(), _e = new THREE.Euler(), _v = new THREE.Vector3();
-const SIDE = matchMedia('(min-width: 900px) and (min-aspect-ratio: 11/10)'); // 同 index.html #card.side：宽屏纸在左、卡片在右；否则纸在上、卡片在下
-// 占画面宽、高的比例上限；中心在画面上的位置（-1…1）。book：书（原样）；solo：一页纸，放大到画面高的八成多，字要看得清（11-11 Fable 评审 A2：原来只占画面宽的五分之一，手写字读不了）；
-// main / mate：夜里她写的那页和下午那页的淡影并排（「一字不差，只多几行」让玩家自己比）
-const LAY = { wide: { book: [0.36, 0.6, -0.5, 0], solo: [0.40, 0.86, -0.40, 0], main: [0.3, 0.8, -0.22, 0], mate: [0.24, 0.6, -0.74, 0] },
-  tall: { book: [0.8, 0.3, 0, 0.5], solo: [0.8, 0.42, 0, 0.5], main: [0.45, 0.36, 0.5, 0.56], mate: [0.45, 0.36, -0.5, 0.56] } };
-function readPose(wd, ht, mQ, slot = 'book') { // 相机前方：纸/书停在画面一侧，不压在卡片的字下面（11-04 交互评审 UX4）；mQ = 网格自己的朝向（要抵消）
+const SIDE = matchMedia('(min-aspect-ratio: 11/10)'); // 横屏（电脑、手机横屏）一套，竖屏一套；两套都是纸在上、字幕在下（index.html #card.side）
+// 占画面宽、高的比例上限；中心在画面上的位置（-1…1）。纸、书居中当主角，下面留一行字幕的地方（11-11 Fable 评审 A2：原来旁边一张带框卡片比纸还抢眼）。
+// book：翻开的日志；solo：一页纸；main / mate：夜里她写的那页和下午那页的淡影并排（「一字不差，只多几行」让玩家自己比）
+const SHORT = matchMedia('(min-aspect-ratio: 11/10) and (max-height: 500px)'); // 手机横屏：高只有 ~340px，纸再小一点给两三行字幕让位
+const LAY = { wide: { book: [0.7, 0.8, 0, 0.2], solo: [0.5, 0.86, 0, 0.2], main: [0.44, 0.82, 0.2, 0.2], mate: [0.3, 0.62, -0.42, 0.26] },
+  short: { book: [0.62, 0.66, 0, 0.3], solo: [0.5, 0.74, 0, 0.24], main: [0.36, 0.66, 0.2, 0.3], mate: [0.28, 0.56, -0.42, 0.3] },
+  tall: { book: [0.92, 0.42, 0, 0.42], solo: [1.0, 0.62, 0, 0.28], main: [0.9, 0.6, 0.32, 0.3], mate: [0.6, 0.46, -0.53, 0.32] } };
+function readPose(wd, ht, mQ, slot = 'book') { // 相机前方：纸/书停在画面中上部，下面是字幕（LAY）；mQ = 网格自己的朝向（要抵消）
   const vf = THREE.MathUtils.degToRad(camera.fov), hf = 2 * Math.atan(Math.tan(vf / 2) * camera.aspect), tv = Math.tan(vf / 2), th = Math.tan(hf / 2);
-  const [fw, fh, nx, ny] = LAY[SIDE.matches ? 'wide' : 'tall'][slot];
+  const [fw, fh, nx, ny] = LAY[SHORT.matches ? 'short' : SIDE.matches ? 'wide' : 'tall'][slot];
   const d0 = Math.max(slot === 'book' ? 0.3 : 0.12, ht / (fh * 2 * tv), wd / (fw * 2 * th)), d = Math.max(d0, camera.near + 0.06), sc = d / d0; // 纸要拉近到 ~0.16m 才够大；near 大时（不在屋里判定内）停在 near 外、按比例放大，看起来一样大
   const q = camera.quaternion.clone().multiply(_q.setFromEuler(_e.set(slot === 'book' ? -0.22 : -0.1, 0, 0))); // 纸几乎正对镜头
   const fwd = _v.set(0, 0, -1).applyQuaternion(camera.quaternion).clone();
