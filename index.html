@@ -30,13 +30,13 @@ if (navigator.webdriver || /[?&]nolock\b/.test(location.search)) { let el = null
     --serif: "IM Fell English", "Huiwen Mincho", Georgia, "Times New Roman", "Songti SC", "SimSun", serif; }
   html, body { margin: 0; height: 100%; overflow: hidden; background: #cfd8dc; font-family: var(--serif); color: var(--ink); }
   #app { position: fixed; inset: 0; }
-  #loader { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; background: var(--paper); transition: opacity .6s; z-index: 10; }
+  #loader { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; background: #000; color: #d9d2c4; transition: opacity .6s; z-index: 10; } /* 第一屏和换天章节卡同一套：黑底、衬线大字、细进度条（11-11 Fable A9；原来米白底） */
   #loader.done { opacity: 0; pointer-events: none; }
   #loader :is(#startBtn, #retryBtn) { font: inherit; font-size: var(--fs-m); letter-spacing: 2px; color: inherit; background: none; box-shadow: none; border: 1px solid currentColor; border-radius: 6px; padding: 6px 26px; cursor: pointer; }
   #loader #retryBtn { min-height: 44px; } #ldLine { max-width: min(30em, calc(100vw - 48px)); text-align: center; line-height: 1.6; } #ldLine .ch { font-size: 1.7em; letter-spacing: 6px; margin-bottom: 14px; } #ldSub { font-size: var(--fs-s); opacity: .6; letter-spacing: 1px; }
-  #bar { width: min(320px, 70vw); height: 6px; background: #e2d8c8; border-radius: 3px; overflow: hidden; }
-  #bar > div { height: 100%; width: 0; background: var(--accent); transition: width .2s; }
-  #loader.dark { background: #000; color: #d9d2c4; } #loader.dark #pct { display: none; } #loader.dark #bar { height: 1px; background: rgba(217,210,196,.15); } #loader.dark #bar > div { background: rgba(217,210,196,.55); } /* 换天刷新：黑场，接上一页压黑的 #veil（UX5） */
+  #bar { width: min(320px, 70vw); height: 1px; background: rgba(217,210,196,.15); overflow: hidden; }
+  #bar > div { height: 100%; width: 0; background: rgba(217,210,196,.55); transition: width .2s; }
+  #pct { display: none; } #loader.fail #pct { display: block; } /* 只留细进度条；「没能加载」也写在 #pct，报错时露出来（原来换天黑场藏着它，报错看不见） */ /* #loader.dark：换天刷新的黑场，接上一页压黑的 #veil（UX5），只用来把「进入」换成「继续」 */
   /* 标题居中；颜色由脚本按身后画面亮度在黑白之间渐变（--t 0 黑 → 1 白），加一点反色阴影兜底 */
   #title { --t: 0; position: fixed; top: 18px; left: 16px; right: 16px; z-index: 5; pointer-events: none; text-align: center;
     color: rgb(calc(30 + 220 * var(--t)), calc(26 + 220 * var(--t)), calc(22 + 220 * var(--t)));
@@ -47,7 +47,8 @@ if (navigator.webdriver || /[?&]nolock\b/.test(location.search)) { let el = null
   /* 标题中英都显示：英文主标题，下面一行中文（不随语言切换） */
   html #title h1 .en, html #title h1 .zh { display: block !important; }
   #title h1 .zh { margin-top: 2px; font-family: var(--zh); font-size: var(--fs-m); letter-spacing: 6px; }
-  html:has(#fpHud:not([hidden])) #by { display: none; } /* 第一人称：手里的提灯在右下角，署名让开（交互 r2 UX7） */
+  html:has(#fpHud:not([hidden])) #by, body:not(.model) #by { display: none; } /* 第一人称：手里的提灯在右下角，署名让开（交互 r2 UX7）；剧情里不出，挪到「遗稿齐了」（11-11 Fable A7），看模型照旧 */
+  body:not(.model) :is(#skyL #wxBtn, #wxPanel) { display: none; } /* 剧情里天气牌只留时刻，天气名、图标留给看模型（11-11 Fable A7） */
   #by { position: fixed; right: 12px; bottom: 8px; z-index: 5; font-family: "IM Fell English SC", "IM Fell English", Georgia, serif; font-size: var(--fs-xs); letter-spacing: 1px; color: #fff; opacity: .6; text-shadow: 0 1px 3px rgba(0,0,0,.7); pointer-events: none; }
   button, #card, #tip { letter-spacing: .3px; }
   button { font: inherit; font-size: var(--fs-s); padding: 8px 14px; border: 0; border-radius: 6px; background: rgba(255,255,255,.85); color: var(--ink); cursor: pointer; box-shadow: 0 1px 4px rgba(0,0,0,.15); }
@@ -78,9 +79,9 @@ if (navigator.webdriver || /[?&]nolock\b/.test(location.search)) { let el = null
   .clueFly { position: fixed; z-index: 30; pointer-events: none; color: #e0b46a; font: var(--fs-l) "IM Fell English", Georgia, serif; text-shadow: 0 1px 3px rgba(0,0,0,.75); }
   /* 卡片排版：英文只用 IM Fell English 一种（不用小型大写、不用斜体）、中文只用汇文明朝体；四级：标题 21 / 区域 12 / 正文 13.5 / 中文 13，段间距统一 10px，中文译文前一条短细线 */
   #card { padding: 12px 18px 14px; line-height: 1.65; box-sizing: border-box; background: rgba(16,14,12,.8); border: 1px solid rgba(244,239,230,.3); border-radius: 2px; } /* 深色底板（11-04 交互评审 UX4）：没底板时雪地里正文对比度最低 1.7:1 */
-  #card.side { left: 72%; } /* 纸、书飞到画面左侧 1/3，卡片挪到右边，不压在纸上的字上 */
-  @media (min-width: 900px) and (min-aspect-ratio: 11/10) and (min-height: 501px) { #card.side.duo { left: 78%; width: min(400px, calc(100vw - 48px)); } } /* 夜里两页并排（js/props3d.js LAY.main / mate）占了左边 3/5；窄屏、手机横屏照 #card.side */
-  @media (max-width: 899px), (max-aspect-ratio: 11/10) { #card.side { left: 50%; top: auto; bottom: 16px; transform: translateX(-50%); max-height: 52vh; } } @media (max-width: 600px) { #card.side { left: 16px; transform: none; } } /* 窄屏、竖屏：纸在上、卡片在下（同 js/props3d.js readPose 的 SIDE） */
+  #card.side { left: 50%; top: auto; bottom: max(16px, 4vh); transform: translateX(-50%); width: max-content; max-width: min(640px, calc(100vw - 32px)); max-height: none; overflow: visible; padding: 0; background: none; border: 0; border-radius: 0; pointer-events: none; text-align: center; text-wrap: balance; text-shadow: 0 0 2px rgba(0,0,0,.95), 0 1px 4px rgba(0,0,0,.9), 0 0 16px rgba(0,0,0,.7); -webkit-mask-image: none; mask-image: none; } /* 纸、书飞到眼前（js/props3d.js LAY）：纸居中当主角，卡片变成纸下面的字幕，不要框（11-11 Fable A2，同开场字幕 #subs）；点哪都是点遮罩，关法不变 */
+  body:has(#card.side:not([hidden])) :is(#quest, #prog, #fpHud .help, #skyL, #mmap, #langBtn) { opacity: 0; pointer-events: none; } /* 纸下面只留字幕：任务行、操作说明、左下时刻 / 遗稿、语言按钮先让开（手机上字幕宽到压住它们） */
+  #card.side :is(h2, .row, .x, p.story), #card.side.book p.zh { display: none; } #card.side p { margin: 0; } #card.side p.lead { font-size: var(--fs-xs); opacity: .72; } html[data-lang] #card.side p.zh { margin-top: 4px; padding-top: 0; border-top: 0; font-size: var(--fs-s); line-height: 1.75; } /* 只留说明行和译文：英文版纸上的字就是原文，书页上的字已是当前语言 */
   #card h2 { margin: 0 28px 0 0; font-weight: normal; font-size: var(--fs-l); line-height: 1.25; letter-spacing: .3px; }
   #card .area { display: block; margin-top: 3px; font-size: var(--fs-xs); letter-spacing: .6px; opacity: .72; }
   #card .area .zh { margin-left: 2px; letter-spacing: 1px; }
@@ -211,6 +212,7 @@ if (navigator.webdriver || /[?&]nolock\b/.test(location.search)) { let el = null
   @media (max-width: 600px) { body:has(#fpHud:not([hidden])) #skyL .btns { flex-direction: row; gap: 10px; } } /* 手机第一人称：时间、天气、遗稿横排在最底下一行，小地图在它上面露全（交互 r3 #1：竖排加深底盖住小地图 89%） */
   body:has(#fpHud:not([hidden])) #mmap { width: 84px; } @media (max-width: 600px) { body:has(#fpHud:not([hidden])) #mmap { width: 72px; } } /* 第一人称缩小：原来压住左下角的标桩（评审④ v2 #11） */
   #dlg .row { display: flex; gap: 8px; margin-top: 14px; }
+  #dlg .by { margin-top: 14px; font-family: "IM Fell English SC", "IM Fell English", Georgia, serif; font-size: var(--fs-xs); letter-spacing: 1px; opacity: .6; } /* 「遗稿齐了」末尾的署名，同 #by */
   #dlg button { font: inherit; font-size: var(--fs-xs); color: inherit; text-shadow: inherit; background: none; box-shadow: none; border: 1px solid rgba(244,239,230,.45); border-radius: 6px; padding: 5px 10px; cursor: pointer; }
   #dlg button:hover { background: rgba(255,255,255,.12); }
   #sky #backBtn { font-size: var(--fs-m); letter-spacing: 1px; border: 0; }
@@ -314,8 +316,8 @@ if (navigator.webdriver || /[?&]nolock\b/.test(location.search)) { let el = null
     body:has(#card:not([hidden])) :is(#quest, #prog) { opacity: 0; }
     #roomList { top: 46px; right: 58px; margin-right: env(safe-area-inset-right, 0px); flex-direction: row; align-items: center; transform-origin: right center; } #viewBtn[hidden] ~ #roomList { top: 3px; }
     #roomList button { padding: 0 8px; white-space: nowrap; }
-    #card, #card.side { max-height: calc(100vh - 24px); max-height: calc(100dvh - 24px); }
-    #card.side { left: auto; right: 16px; top: 50%; bottom: auto; margin-right: env(safe-area-inset-right, 0px); transform: translateY(-50%); width: min(360px, 46vw); }
+    #card:not(.side) { max-height: calc(100vh - 24px); max-height: calc(100dvh - 24px); }
+    #card.side { bottom: 8px; max-width: calc(100vw - 32px); } html[data-lang] #card.side p.zh { font-size: 13px; line-height: 1.5; } /* 纸下字幕：横屏高只有 ~340px，字幕压成两三行（js/props3d.js LAY.short） */
     #dlg.end { padding-bottom: 14px; } #dlg.end .box { margin-bottom: env(safe-area-inset-bottom, 0px); }
   }
   /* 手机竖屏：盖一层「把手机横过来」的图（网页锁不了方向）；点一下就照竖屏玩（系统锁了竖屏、微信默认不跟着转的人转不过来）。无头测试不出，网址带 ?rot 才出 */
@@ -338,7 +340,8 @@ if (navigator.webdriver || /[?&]nolock\b/.test(location.search)) { let el = null
 <script>try { const rd = (f) => { try { return f(); } catch (e) { return null; } }, K = 'cabin.game.v1', s = rd(() => localStorage.getItem(K)) || rd(() => sessionStorage.getItem(K)) || rd(() => window.name.split('\n').find((l) => l.startsWith(K + '=')).slice(K.length + 1)); // 同 SAVE.get：local 禁了也读得到（r3 #6）
   const g = /[?&]reset/.test(location.search) ? {} : JSON.parse(s || '{}') || {}, t = g.found && g.found.includes('ended') ? null : g.day >= 3 ? ['The Third Day', '第三天', 'The inspector says I was mistaken. I was not mistaken.', '稽查说是看错了。我没有看错。'] : g.day === 2 ? ['The Second Day', '第二天', 'Tomorrow the inspector will go out, east-north-east.', '明天稽查会出门，往东北偏东。'] : null; // 第 2、3 天的加载页是章节卡（11-10，动机评审 #3）：大字第几天 + 昨晚记录的最后一句（悬念接到第二天，原来是一句讲雾的话）+ 小字说进度存了（换天是最容易关网页的地方）
   if (t) { document.getElementById('ldLine').innerHTML = `<div class="ch"><span class="en">${t[0]}</span><span class="zh">${t[1]}</span></div><span class="en">${t[2]}</span><span class="zh">${t[3]}</span>`; document.getElementById('ldSub').innerHTML = '<span class="en">Your place is kept. Close this, and it will wait for you.</span><span class="zh">进度已存，关掉也能接着来。</span>'; }
-  if (g.found && g.found.some((k) => k.startsWith('endshow:'))) { const L = document.getElementById('loader'); L.classList.add('dark'); L.style.transitionDuration = '2.4s'; document.getElementById('ldSub').hidden = true; } // 刚选完结局：黑场不出字，载完慢慢淡入结局画面
+  else document.getElementById('ldLine').innerHTML = '<div class="ch"><span class="en">The Surveyor&#39;s Cabin</span><span class="zh">无名测绘员的遗稿</span></div>'; // 第 1 天（和结局后重来）：章节卡的样子，标题 + 下面「三天 · 约 20 分钟」（11-11 Fable A9）
+  if (g.found && g.found.some((k) => k.startsWith('endshow:'))) { const L = document.getElementById('loader'); L.classList.add('dark'); L.style.transitionDuration = '2.4s'; document.getElementById('ldSub').hidden = document.getElementById('ldLine').hidden = true; } // 刚选完结局：黑场不出字，载完慢慢淡入结局画面
   if (sessionStorage.getItem('cabin.nextDay')) document.getElementById('loader').classList.add('dark'); } catch (e) { /* 读不到存档就用第 1 天那句 */ }</script>
 <script>/* 不认 importmap（iOS 16.4 以下）：整页起不来，加载页换成升级提示（r3 #8；不引 shim，shim 要联外网） */ if (!(window.HTMLScriptElement && HTMLScriptElement.supports && HTMLScriptElement.supports('importmap'))) { document.getElementById('ldLine').innerHTML = '<span class="en">This browser is too old to open it. Please update to iOS 16.4 or later, or use a newer browser.</span><span class="zh">这个浏览器太旧，打不开。请升级到 iOS 16.4 以上，或换用新版浏览器。</span>'; for (const id of ['ldSub', 'bar', 'pct']) document.getElementById(id).hidden = true; }</script>
 <div id="title"><h1><span class="en">The Surveyor's Cabin</span><span class="zh">无名测绘员的遗稿</span></h1></div>
@@ -2035,7 +2038,7 @@ loader.load('cabin.glb', async (gltf) => {
   if (!window.__dl && e.loaded >= 19.6e6 * 0.995) { window.__dl = 1; T('downloaded'); }
 }, (err) => { console.error(err); loadFail(); });
 function loadFail() { // 加载出错或长时间不动（断网、Draco 解码器没下来、加载回调里抛错）：进度停住，给「重试」（2026-11-05 评审⑥ #1：原来 progTick 每帧把报错盖回百分比，永远停在 63%）
-  if (PROG.fail || sceneReady) return; PROG.fail = true;
+  if (PROG.fail || sceneReady) return; PROG.fail = true; $('loader').classList.add('fail');
   pct.innerHTML = lbl('Alas, it could not be loaded.', '唉，没能加载。'); for (const id of ['ldLine', 'ldSub']) $(id).hidden = true; // 上面那行字和「没能加载」别摆在一起（r3 新 #8）
   const b = document.createElement('button'); b.id = 'retryBtn'; b.innerHTML = lbl('Try Again', '重试'); b.onclick = () => location.reload(); $('loader').append(b);
 }
@@ -2231,6 +2234,7 @@ function goRoom(r) {
   inside = r; select(null); endClose(); enterBtn.innerHTML = lbl('Step Outside', '出门'); enterBtn.classList.remove('glow'); showQuest(); placeSpots(r);
   if (!game.entered) { game.entered = true; showQuest(); } // 「已找到 n · 还剩 m」进过屋才出现
   if (STOVE_ROOMS.includes(r.name) && !game.stoveSeen) { game.stoveSeen = true; showQuest(); } // 到了看得见炉子的房间才提「先生火」
+  if (document.body.classList.contains('model') && ROOM_NOTES[r.name]) showRoomNote(ROOM_NOTES[r.name], r.name); // 房间散文旁白只在看模型里念（11-11 Fable A7：剧情第一人称里不放）
   clearTimeout(idleTimer); spin = false;
   const wasInside = !controls.enablePan; // 屋里禁平移：enablePan 还开着 = 这次是从屋外进来
   controls.enablePan = false; controls.enableZoom = false;
@@ -4217,6 +4221,7 @@ function endAsk(now) { // 通关后刷新：不问「继续上次」，告诉玩
   const p = document.createElement('p'), f = game.found; // 四个结局排一行（同遗稿里的顺序）：看过的写名字，刚放完的加粗，没看过的「？？」淡一点；不加说明，让人想点「回到另一间屋的门廊下」
   p.innerHTML = [['back', 'endBack'], ['stay', 'endStay'], ['hidden', 'endHidden'], ['page', 'endPage']].map(([k, t]) => f.has('end_' + k) ? (k === now ? '<b>' : '') + lbl(END_TITLE[t][0], END_TITLE[t][1].replace(/^.*· /, '')) + (k === now ? '</b>' : '') : `<span style="opacity:.45">${lbl('??', '？？')}</span>`).join('　·　');
   $('dlg').querySelector('.row').before(p);
+  const by = document.createElement('div'); by.className = 'by'; by.textContent = 'Vibe Coding by Fxrc'; $('dlg').querySelector('.box').append(by); // 署名放在结局之后（11-11 Fable A7：原来压在开场画面右下）
 }
 function xPorch(k) { // ✕ 那间（挪世界后）：门廊灯大白天也亮得显眼；走近了太阳压暗（雾在 updateDay2 里跟着 x3.near 加浓），屋子从灰里浮出来（r3 #12）
   const g = layers.get('entry_porch_lamp'), t = toggles.get('entry_porch_lamp'); if (!g || !t) return;
@@ -4258,7 +4263,7 @@ function updateDay3(dt) {
 }
 // —— 迷雾小地图（2026-10-27，v3 起底图 = 墙上那张羊皮纸地图，见下面 mapBase）：左下角，北在上；没去过的地方盖着雾。0.3 秒重画一次（2D，不碰 WebGL）。
 const MM_ROOM = { Entry: 'Entry', 'Water Closet': 'Water Closet', Kitchen: 'Kitchen', 'Kitchen & Dining': 'Kitchen', Parlour: 'Parlour', Hall: 'Parlour', Loft: 'Loft' };
-let mmDirty = true, mmT = 0, mmFar = 0, mmPath = 0; // mmFar / mmPath：沿踪迹 / 卵石路走过的最远米数
+let mmDirty = true, mmT = 0, mmFar = 0, mmPath = 0, mmOut = false; // mmFar / mmPath：沿踪迹 / 卵石路走过的最远米数；mmOut：第 2 天起出过门（看模型也算），小地图才出
 function mmReveal(area) { const r = MM_ROOM[area]; if (r && !x3.on && !game.found.has('m:' + r)) { game.found.add('m:' + r); saveGame(); mmDirty = true; } }
 function deskCheck() { // 第 1 天：人在屋里、书桌那页纸进了画面中间才提「书桌上压着一页纸」
   if (game.deskSeen || game.day > 1 || opening || (fp ? [null, 'Entry', 'Water Closet'].includes(roomAt(fp.p.root.position)) : !inside)) return; // 玄关、门口隔着墙看不见书桌（只算投影会在门口就判成看见）
@@ -4294,7 +4299,8 @@ function mmNeedle(c, dt) {
 }
 function mmTick(dt) {
   deskCheck(); // 很便宜：找到后第一行就返回
-  const c = $('mmap'); c.hidden = !!opening || !game.found.has('page'); // 拿到书桌那页纸（接到调查）才出现
+  if (!mmOut && game.day >= 2) mmOut = fp ? outdoors(fp.p.root.position) : document.body.classList.contains('model');
+  const c = $('mmap'); c.hidden = !!opening || !game.found.has('page') || !mmOut; // 第 2 天出门才出（11-11 Fable A7：第 1 天只在屋里，原来是一块空灰片）；拿到书桌那页纸（接到调查）才出现
   mmNeedle(c, dt);
   if (c.hidden || !trailCurve || (mmT += dt) < 0.3) return; mmT = 0; // trailCurve：存档里已拿到那页纸时，加载中小地图就显示了，要等路画好
   if (fp && !x3.on) { // 第一人称走到哪：屋里按位置认房间，屋外记沿路走过的最远处
@@ -4594,7 +4600,7 @@ function setHovered(name) {
 }
 function tipDup() { const t = $('note').querySelector('.t'); tip.classList.toggle('dup', !tip.hidden && !!t && t.textContent === tip.textContent); } // 说明开着、标题和准星旁的名字是同一件：藏名字（手机横屏两行说明顶到名字，「木板大门」叠两遍，r4 #3）
 function clueFly() { // 新线索卡关上：§ 从标题飞进遗稿按钮（遗稿还没出来就飞到任务行）
-  const to = [$('jBtn'), $('quest')].find((e) => e && !e.hidden && e.getBoundingClientRect().width), h = card.querySelector('h2').getBoundingClientRect();
+  const to = [$('jBtn'), $('quest')].find((e) => e && !e.hidden && e.getBoundingClientRect().width), h = (card.classList.contains('side') ? card : card.querySelector('h2')).getBoundingClientRect(); // 字幕模式没有标题：§ 从字幕飞出
   if (!to) return;
   const r = (to.querySelector('.sec') || to).getBoundingClientRect(), s = document.createElement('span');
   s.className = 'clueFly'; s.textContent = '§'; s.style.left = h.left + 'px'; s.style.top = h.top + 'px'; document.body.append(s);
@@ -4606,9 +4612,9 @@ function cardOpen() { // 电脑第一人称：不放开鼠标（UX1），视角�
   if (document.pointerLockElement && !(fp && !touchFP)) document.exitPointerLock();
   $('roomList').classList.add('shut'); // 触屏房间列表收起，别叠在卡片上
   card.hidden = cardBg.hidden = false; drawCard(); cardAt = performance.now(); cardAuto = cardAt - userPickAt > 150; holdNote();
-  card.classList.toggle('side', !!inspecting()); card.classList.toggle('duo', inspectDuo()); // 纸、书飞到眼前时停在一侧，卡片放另一侧；两页并排时卡片再往右让
+  card.classList.toggle('side', !!inspecting()); card.classList.toggle('duo', inspectDuo()); card.classList.toggle('book', inspecting() === 'field_log'); drawCard(); // 纸、书飞到眼前：卡片变成纸下面的字幕（11-11 Fable A2）；side 定了再画一遍，字幕里的译文不分段
 }
-cardBg.addEventListener('click', (e) => { if ((touchFP || e.pointerType === 'touch') && performance.now() - cardAt > 400) select(null); }); // 触屏：点卡片外面也能关（UX8）
+cardBg.addEventListener('click', (e) => { if ((touchFP || e.pointerType === 'touch' || card.classList.contains('side')) && performance.now() - cardAt > 400) select(null); }); // 纸飞到眼前（字幕没有 ×）：看模型里鼠标点外面也关 // 触屏：点卡片外面也能关（UX8）
 const inspectOn = () => !navigator.webdriver || window.cabinFly || /[?&]fly/.test(location.search); // 无头测试（webdriver）默认不飞，原来的流程脚本要求点了立刻出卡片；测飞行：页面里设 window.cabinFly = true
 function bookText() { // 翻开的书页上的字 = 当天工作日志卡片的字
   const d = game.day, G = GAME_TEXT, T = x3.on ? [G.log3[1], G.log3[2]] : d >= 2 ? [G.log2[1], G.log2[2]] : [G.logIntro[1] + String.fromCharCode(10, 10) + G.log1[1], G.logIntro[2] + String.fromCharCode(10, 10) + G.log1[2]];
@@ -4625,7 +4631,7 @@ function select(name, direct) {
   }
   const prev = selected; selected = name; paint(prev); paint(name);
   if (!card.hidden && card.classList.contains('clue')) clueFly();
-  const was = !card.hidden; card.classList.remove('clue', 'side', 'duo'); card.hidden = cardBg.hidden = true;
+  const was = !card.hidden; card.classList.remove('clue', 'side', 'duo', 'book'); card.hidden = cardBg.hidden = true;
   if (!name) { showNote(null); if (was && fp && !touchFP && !document.pointerLockElement) canvas.requestPointerLock?.()?.catch?.(() => {}); return; } // 第一人称关卡片（点 × 是用户手势）：接着锁回鼠标
   if (people.has(name)) wakePerson(name); // 点人物：起来活动一圈
   const pa = card.querySelector('#playAs'); pa.hidden = !people.has(name) || name === 'person_woman' || lite || !!fp; // 游戏里玩家只当老稽查，书记员是同伴 // 触屏还没做摇杆，先不给
@@ -4660,7 +4666,7 @@ function drawCard() { // 英文版：英文标题 + 区域 + 说明 + 故事；�
   lead.classList.toggle('cn', zh); lead.textContent = zh ? LEAD_ZH[d.lead] || '' : d.lead || '';
   const shut = d.paper && !d.open; card.classList.toggle('paper', !!d.open);
   card.querySelector('p.story').textContent = shut ? '' : d.story || '';
-  card.querySelector('p.zh').textContent = shut ? '' : d.zs || '';
+  card.querySelector('p.zh').textContent = shut ? '' : card.classList.contains('side') ? (d.zs || '').replace(/\s*\n+\s*/g, '') : d.zs || ''; // 纸下面的字幕：译文连成一段
   card.scrollTop = 0; cardMore();
 }
 function focusSelected() {
@@ -5577,6 +5583,7 @@ function roomNavSync() { // 每帧（updateFP）：进过屋、不在梯子上�
   if (roomBtn.hidden === on) { roomBtn.hidden = !on; if (!on) roomList.classList.add('shut'); }
 }
 $('viewBtn').onclick = () => {
+  document.body.classList.toggle('model', !!fp); // 看模型 / 剧情：剧情里不出天气名、署名（11-11 Fable A7）
   if (fp) { stopFP(); inside = null; placeRooms(viewList()); enterBtn.innerHTML = lbl('Enter the Cabin', '进屋'); enterBtn.classList.add('glow'); controls.minDistance = 1; controls.maxDistance = 220; resetView(true); return; }
   fly = null; startFP('person_man'); SL.room = undefined; // 位置照旧，sliceTick 重新认房间
 };
@@ -5600,13 +5607,13 @@ function sliceTick(dt) {
     if (rn) game.entered = true;
     if (STOVE_ROOMS.includes(rn)) game.stoveSeen = true;
     if (rn === 'Entry' && !SL.seen.has(rn) && !touchFP && !fp.go && !SL.walked) { const P = fp.p.root.position; fp.turn = { yaw: Math.atan2(1.2 - P.x, 1.25 - P.z), pitch: -0.05, t: 0, name: null }; } // 电脑第一次进玄关：转向东边通屋里的过道口（帘子在 x 0.64），不脸贴衣钉墙（11-05 评审 #5）
-    if (rn && !SL.seen.has(rn) && !(SL.auto && SL.auto.go) && !(fp.go && fp.go.tour && fp.go.tour !== rn)) { SL.seen.add(rn); saveGame(); if (ROOM_NOTES[rn]) showRoomNote(ROOM_NOTES[rn], rn); } // 每间只说一次（走来走去不重复）；被带进屋的路上、「房间」导览路过的房间不说也不算看过（不然玄关、厨房两段旁白排着队念，人到了书桌前字幕还在讲厨房的桌板），等玩家自己走到再说
+    if (rn && !SL.seen.has(rn) && !(SL.auto && SL.auto.go) && !(fp.go && fp.go.tour && fp.go.tour !== rn)) { SL.seen.add(rn); saveGame(); } // 房间散文旁白剧情里不念，只留给看模型（11-11 Fable A7）；原来每间只说一次（走来走去不重复）；被带进屋的路上、「房间」导览路过的房间不说也不算看过（不然玄关、厨房两段旁白排着队念，人到了书桌前字幕还在讲厨房的桌板），等玩家自己走到再说
     showQuest();
   }
-  if (SL.tour && !(fp.go && fp.go.tour)) { const t = SL.tour, P = fp.p.root.position; SL.tour = null; if (rn !== t.room && Math.hypot(P.x - t.x, P.z - t.z) < 0.5 && !SL.seen.has(t.room) && ROOM_NOTES[t.room]) { SL.seen.add(t.room); saveGame(); showRoomNote(ROOM_NOTES[t.room]); } } // 导览走到了、按位置却不在那间（竖屏玄关站在门槛外 z 2.4）：照样念目的地
+  if (SL.tour && !(fp.go && fp.go.tour)) { const t = SL.tour, P = fp.p.root.position; SL.tour = null; if (rn !== t.room && Math.hypot(P.x - t.x, P.z - t.z) < 0.5 && !SL.seen.has(t.room)) { SL.seen.add(t.room); saveGame(); } } // 导览走到了、按位置却不在那间（竖屏玄关站在门槛外 z 2.4）：照样念目的地
   const w = people.get('person_woman');
   if (!fp.paused) SL.liveT += 0.3;
-  if (SL.auto && SL.auto.go && fp.go !== SL.auto.go) { SL.auto = null; if (rn && !SL.seen.has(rn)) { SL.seen.add(rn); saveGame(); if (ROOM_NOTES[rn]) showRoomNote(ROOM_NOTES[rn], rn); } } // 走到了，或者玩家按键 / 点地面接管了：这时所在的房间算看过（存档靠 seen 认「进过屋」，不记的话刷新后又带一遍），有旁白的现在念
+  if (SL.auto && SL.auto.go && fp.go !== SL.auto.go) { SL.auto = null; if (rn && !SL.seen.has(rn)) { SL.seen.add(rn); saveGame(); } } // 走到了，或者玩家按键 / 点地面接管了：这时所在的房间算看过（存档靠 seen 认「进过屋」，不记的话刷新后又带一遍），有旁白的现在念
   if (SL.auto && !SL.auto.go && w && SL.w === 'in' && fp.p.root.position.z - w.root.position.z > 2) { fpGo(...WALK_IN); fp.go.follow = w; SL.auto.go = fp.go; SL.walked = true; } // 让她先走出 2m 再跟上；walked：被带着穿过玄关了，之后自己第一次回玄关不再替他转头找过道口
   if (w && SL.w === 'porch' && (SL.liveT > 1.5 || rn || SL.auto)) { // 玩家一拿到操作她就先进屋领路：进门往右穿过帘子、一路开灯，站到书架前看着书桌（评审④ v2 #2：原来等他进门 6 秒才跟，玄关成了死角；不站路点 sw，挡稽查的路；之后照白天的样子在楼下转）
     const A = SL.auto, lt = (n) => (A ? [['lamp', n]] : lampTasks(n)); // 带玩家进屋（SL.auto）：屋里三盏灯路过就亮，不停下抬手（原来她在过道口停 7 秒，玩家贴着她后背等）；门口那盏照旧抬手开，玩家在门外 2m 看着亮起来
