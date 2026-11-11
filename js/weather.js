@@ -60,12 +60,13 @@ document.fonts.ready.then(fixClockWidth);
 const P_R = 24, P_H = 22;
 const precipU = { uTime: { value: 0 }, uCam: { value: new THREE.Vector3() }, uWind: { value: 0 }, uGround: { value: -1e4 },
   uHole: { value: new THREE.Vector4(0, 0, 0, -1e4) }, uFogN: { value: 30 }, uFogF: { value: 160 }, uScale: { value: 500 } };
+const snowLamp = { uLamp: { value: new THREE.Vector4() }, uLampC: { value: new THREE.Color() } }; // 手里提灯照亮身边的飞雪（11-11 r2 art #7）：(灯的世界位置, 亮度)、灯色 × 雪的反照率；index.html 的 lampSnow 每帧写，w = 0 不照
 function precipMat(snow, color, opacity) {
   return new THREE.ShaderMaterial({
-    uniforms: { ...precipU, uColor: { value: new THREE.Color(color) }, uOpacity: { value: opacity }, uFall: { value: snow ? 1.1 : 9 } },
+    uniforms: { ...precipU, ...(snow ? snowLamp : {}), uColor: { value: new THREE.Color(color) }, uOpacity: { value: opacity }, uFall: { value: snow ? 1.1 : 9 } },
     transparent: true, depthWrite: false, fog: false,
     vertexShader: `uniform float uTime, uWind, uGround, uFogN, uFogF, uScale, uFall; uniform vec3 uCam; uniform vec4 uHole;
-      attribute vec4 aSeed; varying float vA;
+      attribute vec4 aSeed; varying float vA; varying vec3 vL;${snow ? ' uniform vec4 uLamp; uniform vec3 uLampC;' : ''}
       void main() {
         float sp = 0.75 + 0.5 * aSeed.w;
         vec3 box = vec3(${2 * P_R}.0, ${P_H}.0, ${2 * P_R}.0);
@@ -85,12 +86,14 @@ function precipMat(snow, color, opacity) {
         vA = (1.0 - smoothstep(uFogN, uFogF, d)) * (1.0 - smoothstep(${P_R * 0.7}, ${P_R}.0, length(p.xz - uCam.xz)));
         if (kill) gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
         ${snow ? 'gl_PointSize = min(uScale * 0.05 / max(d, 0.1), 24.0);' : ''}
+        vL = vec3(0.0);
+        ${snow ? 'if (uLamp.w > 0.0) { float dl = distance(p, uLamp.xyz), q = clamp(1.0 - pow(dl / 3.0, 4.0), 0.0, 1.0); vL = uLampC * (uLamp.w * q * q / max(dl * dl, 0.36)); } // 同 three 点光源的衰减（平方反比 × 3m 处收尾），离灯太近封顶' : ''}
       }`,
-    fragmentShader: `uniform vec3 uColor; uniform float uOpacity; varying float vA;
+    fragmentShader: `uniform vec3 uColor; uniform float uOpacity; varying float vA; varying vec3 vL;
       void main() {
         float a = uOpacity * vA;
         ${snow ? 'a *= smoothstep(0.5, 0.15, length(gl_PointCoord - 0.5));' : ''}
-        gl_FragColor = vec4(uColor, a);
+        gl_FragColor = vec4(uColor + vL, a);
         #include <colorspace_fragment>
       }`,
   });
@@ -128,6 +131,9 @@ float doorFan(float da, float lo, float hi) { // 角度 [lo, hi] 的扇形；lo�
 float ch(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
 float cn(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f);
   return mix(mix(ch(i), ch(i + vec2(1, 0)), f.x), mix(ch(i + vec2(0, 1)), ch(i + 1.0), f.x), f.y); }
+vec3 cnd(vec2 p) { vec2 i = floor(p), f = fract(p), u = f * f * (3.0 - 2.0 * f), du = 6.0 * f * (1.0 - f); // 同 cn，另带解析梯度 (值, d/dx, d/dy)
+  float a = ch(i), b = ch(i + vec2(1, 0)), c = ch(i + vec2(0, 1)), d = ch(i + 1.0), e = a - b - c + d;
+  return vec3(a + (b - a) * u.x + (c - a) * u.y + e * u.x * u.y, du * vec2(b - a + e * u.y, c - a + e * u.x)); }
 // 雨点落进水洼的涟漪：三层错开的 0.3m 格子，每格每个周期（0.6–1.2s）按雨量决定落不落一滴，落了就从随机圆心扩散一圈细环（最大半径 9cm），越大越淡。
 // 返回 (环的强度, 世界 xz 上的法线偏转)；远处环比像素还细时按 fwidth 淡掉，不出锯齿。原来是 12cm 方格整格闪（看起来是方块）
 vec3 ripples(vec2 p, float t, float amt) {
@@ -160,8 +166,13 @@ vec3 ripples(vec2 p, float t, float amt) {
     float clr = max(doorFan(da, uDoorOld.w, uDoor.w) * uSweep, doorFan(da, uDoorOld.x, uDoorOld.y) * uDoorOld.z); // 当前扇形 + 上一次开关门扫的旧扇形（继续慢慢盖回）
     sn *= 1.0 - clr * (1.0 - smoothstep(uDoor.z - 0.06, uDoor.z, dr));
     sn = clamp(sn + clr * exp(-pow((dr - uDoor.z - 0.05) / 0.05, 2.0)) * smoothstep(0.02, 0.08, uSnow), 0.0, 1.0);
-    diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.86, 0.88, 0.92) * (0.93 + 0.07 * cn(vCovP / 0.2)), sn);
-    roughnessFactor = mix(roughnessFactor, 0.85, sn);`).replace('#include <normal_fragment_maps>', '#include <normal_fragment_maps>\n    normal = normalize(normal + ripN * (1.0 - sn));')
+    // 风棱（11-11 r2 art #3）：顺风拉长的低矮雪垄（转 37° 不和坐标轴对齐，3m 长、0.8m 宽、高约 10cm），法线跟着歪，太阳下看得出起伏；
+    // 阴天漫射光对这点倾斜几乎没反应，所以垄沟再压暗至多 10%（少见一点天；色调映射在雪的亮度上很平，3.5% 看不出）；低洼处的雪偏冷一点
+    vec3 wr = cnd(mat2(0.8, 0.6, -0.6, 0.8) * vCovP * vec2(0.333, 1.25)); vec2 wg = mat2(0.8, -0.6, 0.6, 0.8) * (wr.yz * vec2(0.333, 1.25)) * 0.1;
+    vec3 snN = (viewMatrix * vec4(-wg.x, 0.0, -wg.y, 0.0)).xyz * sn;
+    vec3 snC = vec3(0.86, 0.88, 0.92) * (0.93 + 0.07 * cn(vCovP / 0.2)) * (0.9 + 0.1 * smoothstep(0.15, 0.85, wr.x)) * mix(vec3(1.0), vec3(0.9, 0.93, 1.0), smoothstep(0.45, 0.8, cLow));
+    diffuseColor.rgb = mix(diffuseColor.rgb, snC, sn);
+    roughnessFactor = mix(roughnessFactor, 0.85, sn);`).replace('#include <normal_fragment_maps>', '#include <normal_fragment_maps>\n    normal = normalize(normal + ripN * (1.0 - sn) + snN);')
     // 水洼近镜面，直接反射 scene.environment（RoomEnvironment = 一间有方形灯箱的屋子）会照出一块块方形亮斑 → 水洼里换成模糊的环境光（irradiance/π），涟漪的环再亮一点
     .replace('#include <lights_fragment_maps>', '#include <lights_fragment_maps>\n    radiance = mix(radiance, iblIrradiance * RECIPROCAL_PI * (1.0 + 1.5 * rip), pud * (1.0 - sn));');
 }
@@ -602,4 +613,4 @@ function updateRoofWeather(dt) {
 { const q = (location.search.match(/[?&]wx=(\w+)/) || [])[1], w = WEATHERS.find((e) => e[0] === q); if (w) { setWeather(q, true); if (w[1].snow) cover.uSnow.value = 1; } } // 试玩 / 无头测试：?wx=Blizzard 定天气，下雪类直接满地积雪
 
 share({ applyWeather: () => applyWeather }); // time-of-day.js 用
-export { applyWeather, wsPos, WS, groundCover, cover, precipHole, setupRoofWeather, wx, roofWx, setWeather, setMist, wxTimer, slideSnow, updatePrecip, updateRoofWeather };
+export { snowLamp, applyWeather, wsPos, WS, groundCover, cover, precipHole, setupRoofWeather, wx, roofWx, setWeather, setMist, wxTimer, slideSnow, updatePrecip, updateRoofWeather };

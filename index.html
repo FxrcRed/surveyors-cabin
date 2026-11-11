@@ -529,7 +529,7 @@ import { audioTick, audioPreload, audioStep, audioRung, setIce, sfx, sfxToggle }
 import { updateBirds } from './js/birds.js';
 import { LOG } from './js/playlog.js';
 import { volfog, volDraw, volTick, FOG_LAYER } from './js/volfog.js';
-import { applyWeather, wsPos, WS, groundCover, cover, precipHole, setupRoofWeather, wx, roofWx, setWeather, setMist, wxTimer, slideSnow, updatePrecip, updateRoofWeather } from './js/weather.js';
+import { snowLamp, applyWeather, wsPos, WS, groundCover, cover, precipHole, setupRoofWeather, wx, roofWx, setWeather, setMist, wxTimer, slideSnow, updatePrecip, updateRoofWeather } from './js/weather.js';
 import { LAMPS, toggles, DOORS, swapSoftProps, splitParts, setupToggles, setupFire, setupWaterFx, toggle, fire, rocker, toggleOf, updateToggles, updateFire, updateLantern, updateRocker, updateWaterFx } from './js/interact.js';
 import { setOutfit, people, SEATS, wakePerson, loadPeople, seatTaken, goHome, SPOTS, routeTasks, NAV, MOODS, fpRise, sitTasks, CLIMB, moodOf, WALK_SPEED, ladderRoot, floorBelow, goTasks, nearNode, navPath, updatePeople } from './js/characters.js';
 // 模块（js/*.js）要用的主页面变量：模块里写 shared.名字，读写都直通这里（写过的才给 setter）
@@ -993,7 +993,7 @@ function crownMaterial(opts = {}, bush = false) { // bush：灌木、草（loadP
         float seed = fract(dot(instanceMatrix[3].xz, vec2(0.137, 0.071))) * 10.0;
         float h = fract(sin(dot(floor(position * vec3(7.0, 6.0, 7.0)), vec3(12.9898, 78.233, 37.719)) + seed) * 43758.5453);
         vTreeK = vec3(0.72 + 0.5 * clamp(position.y, 0.0, 1.0), smoothstep(0.62, 1.0, h) * 0.55, smoothstep(0.38, 0.0, h) * 0.5);
-        vSnowK = 0.65 * smoothstep(-0.1, 0.7, normalize(objectNormal).y) + 0.35 * h;` + (bush ? '' : `
+        vSnowK = ` + (bush ? '0.65 * smoothstep(-0.1, 0.7, normalize(objectNormal).y) + 0.35 * h;' : '0.85 * smoothstep(0.05, 0.55, normalize(objectNormal).y) + 0.15 * h;') + (bush ? '' : `
         { float th = length(instanceMatrix[1].xyz), b1 = max(uCrB, 3.0 * smoothstep(5.0, 11.0, th) / max(th, 1.0)); // 11-10 art #7：密林里的大云杉下枝见不到光早枯落，活冠底在 3m 上下；原来 10–14m 的树最低一层冠在 1.2–1.7m，第一人称眼高处一顶顶「蘑菇伞」挡在脸前
           transformed.y = 1.0 - (1.0 - transformed.y) * (1.0 - b1) / (1.0 - uCrB); }`)); // 以树顶为锚把树冠往上压（不动树顶和树干）；5m 以下的幼树枝条照旧到地
     if (!bush) sh.uniforms.uCrB = crB;
@@ -1004,7 +1004,7 @@ function crownMaterial(opts = {}, bush = false) { // bush：灌木、草（loadP
         diffuseColor.rgb *= vTreeK.x;                                                 // 下暗上亮
         diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.26, 0.21, 0.08), vTreeK.y);  // 枯金块
         diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.03, 0.045, 0.03), vTreeK.z); // 深绿块
-        diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.82, 0.85, 0.9), smoothstep(0.0, 0.25, uSnow * 1.4 - (1.0 - vSnowK)) * 0.9); // 积雪`);
+        diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.82, 0.85, 0.9), smoothstep(0.0, 0.25, uSnow * 1.4 - (1.0 - vSnowK)) * 0.9` + (bush ? '' : ' * smoothstep(0.08, 0.3, vSnowK) * ' + (opts.flatShading ? '0.45' : '1.0')) + `); // 积雪（树冠：只积在朝上的面，侧面、底面露出针叶色，11-11 r2 art #4；远处的两节圆锥面朝向一样，按近树侧看的平均覆盖率压到 0.45）`);
     if (bush) { // 11-04 复测 ENV7：灌木一层层的底面朝下、只吃到地面反光，层间一道道黑缝像几张扁饼摞着 → 朝下的面补一份地面（雪）反上来的天光
       // 补光 = 半球光的天色 × 强度（BUSH_B，渲染循环里跟天色更新；11-04 r3 #1：原来是常数，黄昏、夜里每丛亮出白条）
       sh.uniforms.uBushB = BUSH_B;
@@ -3678,7 +3678,7 @@ function updateFogWalls() { // 每帧（updateDay2）：跟着人、颜色跟着
   const on = FOG_L.value > 0 && outdoors(camera.position); fogWalls.visible = on; if (!on) return;
   fogWalls.position.set(camera.position.x, camera.position.y - 4, camera.position.z);
   const day = Math.min(1, hemi.intensity / 0.8);
-  FW.tree.value.copy(FW_TREE).lerp(FW_SNOW, cover.uSnow.value * 0.5).multiplyScalar(0.3 + 0.7 * day); // 树色（出屏的值，雾在它上面叠）：晴天暗绿，下雪冠上积雪偏灰白，傍晚跟天光暗下去
+  FW.tree.value.copy(FW_TREE).lerp(FW_SNOW, Math.min(cover.uSnow.value * 0.4, 0.23)).multiplyScalar(0.3 + 0.7 * day); // 树色（出屏的值，雾在它上面叠）：晴天暗绿，下雪冠上积雪偏灰白，傍晚跟天光暗下去；积雪成分按真树侧看的覆盖率（满雪约 0.41，原来 0.9 时取 0.5）
 }
 // 远处的烟：一柱炊烟升到树冠以上（树照样挡住下半截，不用在林子里清视线通道）。Points，位置在顶点着色器里按「出生后多久」算，同炉子的烟
 const PLUME_N = 320, PLUME_LIFE = 24, PLUME_COOL = new THREE.Color(0.8, 0.84, 0.92), PLUME_WARM = new THREE.Color(0xffb070);
@@ -4628,7 +4628,7 @@ function drawHighlight() {
 // 预热：屋里的物件在屋外被视锥剔除，第一次画到时才编译/上传（原来还有透射缓冲第一次创建）→ 第一次进屋中途卡一下。
 // 加载页揭开前从每个房间视角真实渲染一帧（隐藏的物件也临时显示，雨雪、雪板等第一次出现也不卡）
 async function prewarm() {
-  printPool(); // 脚印材质一起预编译（第一次下雪走路时才建会卡一下）
+  printPool(); breathSprite(); // 脚印、呼气的材质一起预编译（第一次下雪走路时才建会卡一下）
   // Rhino 导出的灯罩玻璃、灯泡、水、火苗带 transmission：画面里只要有一个，three.js 每帧就把整个场景（含森林）多画一遍到透射缓冲 → 改成普通半透明
   scene.traverse((o) => {
     const m = o.material;
@@ -5182,6 +5182,35 @@ function updateGear(dt) {
 const LANT_HAND = { up: 0.105, rot: handRot([0.35, -0.85, 0.4], [1, 0, 0.2]) }; // 拳心在提灯中心上方 up（提梁）；rot：同 HAND.rot 的 e / back，只是不跟着低头（提灯一直竖着）
 const _gv = new THREE.Vector3(), _gv2 = new THREE.Vector3();
 function gearLayer(g, on) { if (gear.lay !== on) { heldLayer(g, on); gear.lay = on; } } // 第一人称画在 HELD_LAYER（不穿墙），鸟瞰挂在人手上要回普通图层
+function lampSnow() { // 提着的灯照亮身边 3m 内的飞雪（雪片着色器按点光源同样的衰减加灯色，见 weather.js snowLamp）
+  const g = gear.lantern && layers.get('entry_lantern'), L = g && g.visible && (gear.light ||= g.children.find((o) => o.isPointLight));
+  if (!L || !L.intensity) { snowLamp.uLamp.value.w = 0; return; }
+  L.getWorldPosition(_gv); snowLamp.uLamp.value.set(_gv.x, _gv.y, _gv.z, L.intensity); snowLamp.uLampC.value.copy(L.color).multiplyScalar(0.95);
+}
+// 书记员在屋外的雪天里呼白气（11-11 r2 art #9 ①）：每 3–4 秒从嘴前往前飘出一小团、1.2 秒散开淡掉；一张面片轮流用（一次只有一团），1 次绘制
+const BREATH = { t: 0, next: 1, sp: null, f: new THREE.Vector3(), o: new THREE.Vector3() };
+function breathSprite() { // prewarm 里先建好（材质跟着预编译，第一次呼气不卡）
+  if (BREATH.sp) return BREATH.sp;
+  const c = document.createElement('canvas'); c.width = c.height = 64; const x = c.getContext('2d'), gr = x.createRadialGradient(32, 32, 0, 32, 32, 32);
+  gr.addColorStop(0, 'rgba(255,255,255,1)'); gr.addColorStop(0.45, 'rgba(255,255,255,0.45)'); gr.addColorStop(1, 'rgba(255,255,255,0)'); x.fillStyle = gr; x.fillRect(0, 0, 64, 64);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
+  const s = BREATH.sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: t, transparent: true, depthWrite: false, fog: true, toneMapped: false, opacity: 0 }));
+  s.renderOrder = 2; s.visible = false; s.raycast = () => {}; scene.add(s); // 不参与点选（Sprite.raycast 要 raycaster.camera，整场景求交会抛错）
+  return s;
+}
+function updateBreath(dt) {
+  const p = people.get('person_woman'), on = !!p && !!p.head && p.root.visible && (!fp || fp.p !== p) && outdoors(p.root.position) && (cover.uSnow.value > 0.3 || wx.cur.snow > 0.05);
+  if (!on) { if (BREATH.sp) BREATH.sp.visible = false; BREATH.t = 0; return; }
+  const s = breathSprite();
+  if (!BREATH.t && (BREATH.next -= dt) <= 0) { BREATH.t = 1e-4; BREATH.next = 3 + Math.random(); p.head.getWorldPosition(BREATH.o); p.root.getWorldDirection(BREATH.f); BREATH.o.y += 0.06; BREATH.o.addScaledVector(BREATH.f, 0.12); }
+  if (!BREATH.t) { s.visible = false; return; }
+  const e = Math.min(1, (BREATH.t += dt) / 1.2); if (e >= 1) { BREATH.t = 0; s.visible = false; return; }
+  p.head.getWorldPosition(_gv); _gv.y += 0.06; _gv.addScaledVector(BREATH.f, 0.12); // 刚呼出时跟着嘴走，越往后越停在空中（边走边呼，人会走过自己的白气）
+  s.visible = true; s.position.lerpVectors(_gv, BREATH.o, e).addScaledVector(BREATH.f, 0.35 * Math.sqrt(e)); s.position.y += 0.05 * e; s.position.x += wx.cur.wind * 0.08 * e; // 呼出去先快后慢，暖气往上一点，跟着风（同雪片往 +x）
+  s.scale.setScalar(0.1 + 0.3 * Math.sqrt(e));
+  s.material.opacity = 0.4 * Math.min(1, e / 0.12) * (1 - e) ** 1.5;
+  s.material.color.setScalar(0.85 * (0.25 + 0.75 * Math.min(1, hemi.intensity / 0.8))); // 同雪片：跟着天光暗下去
+}
 function gearOrbit() { // 鸟瞰：提灯提在他右手上（原来鸟瞰时藏起，人空着手，衣帽架却说他带着，动画检查 #6）
   if (fp || !gear.lantern) return;
   const m = people.get(gear.who || 'person_man'), g = layers.get('entry_lantern'); if (!m || !g) return;
@@ -6287,7 +6316,7 @@ renderer.setAnimationLoop(() => {
   if (sceneReady) hideOutdoors(now);
   audioTick(dt, !!VOICE.a && !VOICE.a.paused, !!(intro || morn || SL.auto) || document.body.classList.contains('endshot'));
   updateBirds(dt);
-  updatePeople(dt); gearOrbit(); // 人动完再把提灯挂到手上
+  updatePeople(dt); gearOrbit(); lampSnow(); updateBreath(dt); // 人动完再把提灯挂到手上
   if (WATER.mat) WATER.mat.userData.u.uT.value = now / 1000;
   if (BROOK.wheel) { BROOK.wheel.rotation.x = -now / 1000 * 0.9; BROOK.snow.value = sstep(0.3, 0.85, cover.uSnow.value); } // 水轮慢转（约 7 秒一圈），底下的叶片顺流走；土岸积雪跟地面差不多同时出现
   if (WATER.ice) { const I = WATER.ice, k1 = wx.name === 'Blizzard' ? 1 : 0; // 浮冰：暴雪时约 4 秒长出来，转晴时缩回去；看不到就不算

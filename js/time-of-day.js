@@ -62,6 +62,7 @@ const skyDome = new THREE.Mesh(new THREE.SphereGeometry(450, 48, 24), new THREE.
       gl_FragColor = vec4(col, 1.0);
       #include <tonemapping_fragment>
       #include <colorspace_fragment>
+      gl_FragColor.rgb += (fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715)))) - 0.5) / 255.0; // ±0.5/255 抖动（交错梯度噪声），暗的阴天渐变不出色带（11-11 r2 art #5）
     }`,
 }));
 skyDome.renderOrder = -1; skyDome.frustumCulled = false;

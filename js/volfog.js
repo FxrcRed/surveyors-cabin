@@ -64,6 +64,7 @@ void main(){ vec3 c = srgbDec(texture(tColor, vUv).rgb);
   for (int y = 0; y < 2; y++) for (int x = 0; x < 2; x++) { vec2 u = b + s * vec2(x, y); float zz = lin(texture(tDepth, u).r), w = (x == 0 ? 1.0 - f.x : f.x) * (y == 0 ? 1.0 - f.y : f.y) / (0.02 + abs(z0 - zz) / (0.1 + z0 * 0.05)); F += texture(tFog, u) * w; W += w; }
   F /= W; gl_FragColor = vec4(min(c * F.a + toneMapping(F.rgb), vec3(1.0)), 1.0);
   #include <colorspace_fragment>
+  gl_FragColor.rgb += (fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715)))) - 0.5) / 255.0; // ±0.5/255 抖动，雾的渐变不出色带
 }`;
 const clip = { value: new THREE.Vector2() }, blurU = { tFog: { value: null }, tDepth: U.tDepth, uDir: { value: new THREE.Vector2() }, uClip: clip };
 const compU = { tColor: { value: null }, tFog: { value: null }, tDepth: U.tDepth, uFogSize: { value: new THREE.Vector2() }, uClip: clip };
