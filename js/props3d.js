@@ -66,6 +66,32 @@ export function handwrite(x, lines, { x0, y0, size, pitch, ink = '28,26,50', R, 
   x.restore();
 }
 
+// 稽查的签名（2026-11-11 r2 情节 #3）：夜里签字、石堆上的炭笔字、✕ 那页页脚都是这同一笔。控制点单位宽 1、y 朝下，Catmull-Rom 连成曲线（= 一串三次贝塞尔）；
+// 往下写的笔画重、往上写的轻，起笔收笔细，整体右斜。两笔：大写起笔的花体 + 一串越写越小的连笔波浪（认不出字母：稽查在故事里没有名字），底下一道往回勾的下划线。sigDraw(x, o, a, b) 只画时间进度 a…b 那一段（0…1，两笔之间抬笔停一下），一笔笔动画就是每帧接着画新的一段
+const SIG = [[[0.13, 0.13], [0.075, 0.05], [0.025, 0.12], [0.075, 0.2], [0.17, 0.13], [0.15, 0.04], [0.1, 0.15], [0.085, 0.34], [0.135, 0.33], [0.19, 0.26], [0.235, 0.23], [0.27, 0.3], [0.31, 0.235], [0.345, 0.295], [0.38, 0.245], [0.41, 0.29], [0.44, 0.255], [0.465, 0.285], [0.49, 0.262], [0.51, 0.28], [0.53, 0.268], [0.6, 0.265]],
+  [[0.72, 0.31], [0.66, 0.4], [0.42, 0.44], [0.18, 0.44], [0.09, 0.41], [0.115, 0.37]]];
+let sigPts = null;
+function sigSample() { // [[x, y, 粗细, 结束时刻], …] 每笔一组；时刻按弧长算，两笔之间空 0.15
+  if (sigPts) return sigPts;
+  let T = 0; sigPts = SIG.map((st, si) => {
+    const P = [st[0], ...st, st[st.length - 1]], o = [];
+    for (let i = 1; i < P.length - 2; i++) { const [p0, p1, p2, p3] = [P[i - 1], P[i], P[i + 1], P[i + 2]], n = Math.max(2, Math.ceil(Math.hypot(p2[0] - p1[0], p2[1] - p1[1]) / 0.004));
+      for (let k = 0; k < n; k++) { const t = k / n, t2 = t * t, t3 = t2 * t; o.push([0, 1].map((j) => 0.5 * (2 * p1[j] + (p2[j] - p0[j]) * t + (2 * p0[j] - 5 * p1[j] + 4 * p2[j] - p3[j]) * t2 + (3 * p1[j] - p0[j] - 3 * p2[j] + p3[j]) * t3))); } }
+    o.push(st[st.length - 1]);
+    let L = 0; for (let i = 1; i < o.length; i++) L += Math.hypot(o[i][0] - o[i - 1][0], o[i][1] - o[i - 1][1]);
+    if (si) T += 0.15; let s = 0;
+    const rows = o.map((p, i) => { const q = o[i - 1] || p, d = Math.hypot(p[0] - q[0], p[1] - q[1]); s += d; return [p[0], p[1], (0.45 + 0.55 * Math.max(0, d ? (p[1] - q[1]) / d : 0)) * Math.min(1, s / 0.03, (L - s) / 0.06 + 0.15), T + s]; });
+    T += L; return rows;
+  });
+  sigPts.T = T; return sigPts;
+}
+export function sigDraw(x, { x0, y0, w, ink = '28,26,50', lw = 0.016, slant = 0.22 }, a = 0, b = 1) {
+  const S = sigSample(), t0 = a * S.T, t1 = b >= 1 ? Infinity : b * S.T, X = (p) => x0 + (p[0] - slant * (p[1] - 0.3)) * w, Y = (p) => y0 + p[1] * w;
+  x.save(); x.strokeStyle = `rgb(${ink})`; x.lineCap = 'round';
+  for (const st of S) for (let i = 1; i < st.length; i++) { const p = st[i]; if (p[3] < t0 || p[3] >= t1) continue; x.lineWidth = Math.max(0.8, lw * w * p[2]); x.beginPath(); x.moveTo(X(st[i - 1]), Y(st[i - 1])); x.lineTo(X(p), Y(p)); x.stroke(); }
+  x.restore();
+}
+
 // 一张纸：纸的纹理 + 画内容的回调 draw(ctx, W, H, R)；几何带一点卷曲、折痕、翘起的角，不是平面。res = 纹理宽（电脑 1024、手机 768，近看字迹才清楚；draw 回调的坐标一律按 1024 宽写）；
 // folds = [['h'|'v', 0…1], …] 折痕画进颜色和凹凸；wrinkle = 皱纹条数。m.userData.repaint()：字体晚到时重画（颜色图换新画布）
 export function paperMesh(w, h, { seed = 1, tone = '#d9cdb0', draw, cutout = false, curl = 0.004, crease = 0, res = matchMedia('(pointer:coarse)').matches ? 768 : 1024, folds = [], wrinkle = 0 } = {}) {
