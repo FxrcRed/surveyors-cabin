@@ -114,12 +114,23 @@ const indoorU = { uIndoor: { value: 1 }, uFlashIn: { value: 1 }, uCamIn: { value
 // 光源在墙内、片元在墙外时，只有从大门洞（南墙 z=1.8、x ±0.45、高 2.1 以下）穿出去、且门开着才算数。小屋没有窗（射线扫过四面墙，只有原木缝）。
 // uWallDoor 放进各 ShaderLib 的 uniforms，值用普通对象（不是 Vector4）：各材质克隆 uniforms 时会共用这一个引用，改一处全变。
 const wallU = { x: 1, y: 0, z: 1, w: 1 }, roomU = { x: 0, y: 1 }; // wallU：x = 大门开度（1 开 0 关，door_wood 开关动画里设），y = 炉门开度，z = 卫生间门开度，w = 门帘放下程度；roomU.x = 折叠餐桌放下程度，roomU.y = 有没有点亮的点光源（0 就跳过屋内遮挡计算，白天省指令）
-for (const id of ['standard', 'physical', 'lambert', 'phong', 'toon']) { THREE.ShaderLib[id].uniforms.uWallDoor = { value: wallU }; THREE.ShaderLib[id].uniforms.uRoomK = { value: roomU }; }
+// 屋内按房间查表（尺寸来自 glb 射线实测）：阁楼楼板 y 2.2、南隔墙 z 0.775、卫生间隔墙 x -0.575、门帘 x 0.64。0 客厅 1 大厅 2 玄关 3 卫生间 4 阁楼 5 大厅上半截（高过楼板，楼下的灯照不到）
+// 行 = 灯所在房间，列 = 片元所在房间：1 通，0 隔死，2 隔着门帘（布，透一半光），-1 玄关 ↔ 卫生间只从门洞过。传 uniform 不写成着色器里的 const 数组：D3D 把 const 数组按片元现填一遍，夜里屋里显卡多约 1.3ms（11-09 报告）
+const ROOM_V = new Float32Array([
+  1, 1, 0, 0, 0, 0,
+  1, 1, 2, 0, 1, 1,
+  0, 2, 1, -1, 0, 0,
+  0, 0, -1, 1, 0, 0,
+  0, 1, 0, 0, 1, 1,
+  1, 1, 2, 0, 1, 1]);
+const roomOf = (p) => p.y >= 2.2 ? (p.x < 0.7 ? 4 : 5) : p.x >= 0.67 ? 1 : p.z < 0.775 ? 0 : p.x < -0.575 ? 3 : 2; // 灯在哪间，同着色器的 roomId；interact.js 每帧算好塞进 decay 传给着色器
+for (const id of ['standard', 'physical', 'lambert', 'phong', 'toon']) { THREE.ShaderLib[id].uniforms.uWallDoor = { value: wallU }; THREE.ShaderLib[id].uniforms.uRoomK = { value: roomU }; THREE.ShaderLib[id].uniforms.uRoomV = { value: ROOM_V }; }
 // 每盏灯一份的代码要跑 11 遍（11-09 起是真循环，不再按灯展开源码，编译量已降；帧时仍跟循环体指令数成正比），ANGLE/D3D 的编译时间和帧时间都跟指令数成正比：试过 9 个盒子的射线求交，冷启动 prewarm 13s → 155s、帧时 11ms → 26ms；楼板隔墙全用平面穿越判断仍要 34s。
-// 所以：灯位固定的遮挡（炉身、吊灯灯罩、壁灯旁的高柜）和家具底下压暗在循环外算，每个片元一次（rFire / rShade / rCab / rU）；屋内分房间查表（ROOM_V），每盏灯只算一次灯在哪间，只有卫生间门洞还做一次平面穿越。
+// 所以：灯位固定的遮挡（炉身、吊灯灯罩、壁灯旁的高柜）和家具底下压暗在循环外算，每个片元一次（rFire / rShade / rCab / rU）；屋内分房间查表（ROOM_V），灯在哪间由 JS 算好（roomOf），只有卫生间门洞还做一次平面穿越。
 THREE.ShaderChunk.lights_pars_begin += `
 uniform vec4 uWallDoor;
 uniform vec2 uRoomK;
+uniform vec4 uRoomV[ 9 ];
 vec3 lightW( vec3 v ) { return ( vec4( v - viewMatrix[ 3 ].xyz, 0.0 ) * viewMatrix ).xyz; }
 float doorRect( vec3 E ) { return ( 1.0 - smoothstep( 0.4, 0.47, abs( E.x ) ) ) * ( 1.0 - smoothstep( 2.0, 2.12, E.y ) ); }
 float wallPass( vec3 L, vec3 P, vec3 d, float outK ) {
@@ -174,19 +185,11 @@ float roomUnder( vec3 P ) {
   if ( P.y < 0.36 ) u *= 1.0 - 0.9 * rampUp( 1.08, 1.16, P.x ) * rampUp( 1.72, 1.64, P.x ) * rampUp( -1.7, -1.62, P.z ) * rampUp( -1.14, -1.22, P.z ); // 铸铁炉底下：炉身挡住所有灯 放在最后，前面的分支会给 u 重新赋值
   return u;
 }
-// 屋内按房间查表（尺寸来自 glb 射线实测）：阁楼楼板 y 2.2、南隔墙 z 0.775、卫生间隔墙 x -0.575、门帘 x 0.64。0 客厅 1 大厅 2 玄关 3 卫生间 4 阁楼 5 大厅上半截（高过楼板，楼下的灯照不到）
-// 行 = 灯所在房间，列 = 片元所在房间：1 通，0 隔死，2 隔着门帘（布，透一半光），-1 玄关 ↔ 卫生间只从门洞过
-const float ROOM_V[ 36 ] = float[ 36 ](
-   1.0, 1.0, 0.0, 0.0, 0.0, 0.0,
-   1.0, 1.0, 2.0, 0.0, 1.0, 1.0,
-   0.0, 2.0, 1.0, -1.0, 0.0, 0.0,
-   0.0, 0.0, -1.0, 1.0, 0.0, 0.0,
-   0.0, 1.0, 0.0, 0.0, 1.0, 1.0,
-   1.0, 1.0, 2.0, 0.0, 1.0, 1.0 );
 float roomId( vec3 p ) { return p.y >= 2.2 ? ( p.x < 0.7 ? 4.0 : 5.0 ) : p.x >= 0.67 ? 1.0 : p.z < 0.775 ? 0.0 : p.x < -0.575 ? 3.0 : 2.0; }
-float roomPass( vec3 L, vec3 d, float pid ) {
+float roomV( int k ) { return uRoomV[ k / 4 ][ k - k / 4 * 4 ]; }
+float roomPass( vec3 L, vec3 d, float lid, vec4 ca, vec2 cb ) { // lid = 灯所在房间（JS 算好，见 roomOf）；ca、cb = 表里片元所在房间那一列（循环外取好），每盏灯只按 lid 挑一个
   if ( max( abs( L.x ), abs( L.z ) ) > 1.8 ) return 1.0;
-  float v = ROOM_V[ int( roomId( L ) * 6.0 + pid + 0.5 ) ];
+  float v = lid < 0.5 ? ca.x : lid < 1.5 ? ca.y : lid < 2.5 ? ca.z : lid < 3.5 ? ca.w : lid < 4.5 ? cb.x : cb.y;
   if ( v < 0.0 ) { // 卫生间门洞 z 0.83–1.50、高 1.97
     float t = ( -0.575 - L.x ) / d.x, z = L.z + d.z * t;
     return uWallDoor.z * smoothstep( 0.81, 0.85, z ) * ( 1.0 - smoothstep( 1.48, 1.52, z ) ) * ( 1.0 - smoothstep( 1.93, 1.99, L.y + d.y * t ) );
@@ -202,17 +205,18 @@ float roomPass( vec3 L, vec3 d, float pid ) {
   THREE.ShaderChunk.lights_fragment_begin = lf.slice(0, h) + `vec3 rP = lightW( geometryPosition ), rL, rD;
 float rOut = smoothstep( 1.83, 1.89, max( abs( rP.x ), abs( rP.z ) ) ), rIn = 1.0 - step( 1e-4, rOut );
 float rU = 1.0, rFire = 1.0, rShadeS = 1.0, rShadeN = 1.0, rCab = 1.0;
-float rRoom = 0.0;
+vec4 rCa = vec4( 1.0 ); vec2 rCb = vec2( 1.0 );
 if ( uRoomK.y > 0.5 && rIn > 0.0 ) { // 白天灯全灭时整段跳过（uRoomK.y 由 scene.onBeforeRender 设）
   rU = roomUnder( rP ); rFire = stoveK( rP ); rShadeS = shadeK( rP, 0.71 ); rShadeN = shadeK( rP, -0.49 ); rCab = cabK( rP );
-  rRoom = roomId( rP );
+  int rk = int( roomId( rP ) + 0.5 );
+  rCa = vec4( roomV( rk ), roomV( 6 + rk ), roomV( 12 + rk ), roomV( 18 + rk ) ); rCb = vec2( roomV( 24 + rk ), roomV( 30 + rk ) );
 }
-` + lf.slice(h, a).replace('#pragma unroll_loop_start', '') + 'pointLight = pointLights[ i ];\n\t\tif ( dot( pointLight.color, vec3( 1.0 ) ) > 0.0 && ( pointLight.distance <= 0.0 || distance( pointLight.position, geometryPosition ) < pointLight.distance ) ) {'
+` + lf.slice(h, a).replace('#pragma unroll_loop_start', '') + 'pointLight = pointLights[ i ];\n\t\tfloat rLR = floor( pointLight.decay * 0.0625 ); pointLight.decay -= 16.0 * rLR;\n\t\tif ( dot( pointLight.color, vec3( 1.0 ) ) > 0.0 && ( pointLight.distance <= 0.0 || distance( pointLight.position, geometryPosition ) < pointLight.distance ) ) {'
     + lf.slice(a + 'pointLight = pointLights[ i ];'.length, b).replace(/#if defined\( USE_SHADOWMAP \) && \( UNROLLED_LOOP_INDEX[\s\S]*?#endif/, '').replace('getPointLightInfo( pointLight, geometryPosition, directLight );',
       `getPointLightInfo( pointLight, geometryPosition, directLight );
 		rL = lightW( pointLight.position ); rD = rP - rL + 1e-5;
 		directLight.color *= wallPass( rL, rP, rD, rOut ) * ( abs( rL.x - 1.4 ) + abs( rL.y - 0.62 ) < 0.03 ? rFire : abs( rL.x - 1.12 ) + abs( rL.y - 1.95 ) < 0.02 ? ( rL.z > 0.0 ? rShadeS : rShadeN ) : rL.x < -1.3 && rL.z < -0.5 ? rCab : 1.0 );
-		if ( rIn > 0.0 ) directLight.color *= rU * roomPass( rL, rD, rRoom );`)
+		if ( rIn > 0.0 && uRoomK.y > 0.5 ) directLight.color *= rU * roomPass( rL, rD, rLR, rCa, rCb );`)
     + lf.slice(b, e) + '\n\t\t}' + lf.slice(e).replace('#pragma unroll_loop_end', '');
 }
 function indoorShade(model) {
@@ -308,4 +312,4 @@ function syncSkyUI() {
 
 
 share({ sunRig: [() => sunRig, (v) => { sunRig = v; }] }); // 模型加载后主页面设
-export { WX_ZH, sky, skyEl, skyU, indoorU, indoorShade, PANELS, wallU, roomU, updateSky };
+export { WX_ZH, sky, skyEl, skyU, indoorU, indoorShade, PANELS, wallU, roomU, roomOf, updateSky };
