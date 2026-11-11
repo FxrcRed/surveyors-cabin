@@ -3043,7 +3043,7 @@ function planWander(p) {
   return [...routeTasks(r.position.x, r.position.y, r.position.z, node), ['walk', ...NAV[node]], ...SPOTS[s].tasks()];
 }
 // 没烧完的信：炉门里那条灰面（y 0.482；柴从 z −1.30 往里），一张纸片，后沿稍翘、斜着放；canvas 画纸色、炭笔字行、一边烧掉的焦边
-const LETTER = { at: [1.385, 0.488, -1.262], size: [0.14, 0.0875], rot: [-Math.PI / 2 + 0.14, 0, 0.35] };
+const LETTER = { at: [1.385, 0.495, -1.27], size: [0.14, 0.0875], rot: [-Math.PI / 2 + 0.14, 0, 0.35] }; // at：11-10 抬 7mm、往里 8mm（原来前半张压在炉门框下沿后面，蹲下看也只露一条）
 function makeLetter() { // 纸：js/props3d.js 的 paperMesh（纤维、霉点、折痕、卷边的几何）；这里写字、画烧焦的那一边。字是真的英文（卡片里那段），烧掉的一边把行尾吃了
   const m = paperMesh(...LETTER.size, { seed: 19, tone: '#c4b28a', cutout: true, curl: 0.003, crease: 0.002, folds: [['h', 0.5]], wrinkle: 14, draw(x, W0, H0, R) {
     handwrite(x, ['…east-north-east, about four miles.', 'Beneath an old spruce the ground has', 'split… Marked ✕. This place is not fit'], { x0: 62, y0: 150, size: 46, pitch: 66, ink: '40,32,26', R, slant: 0.06 });
@@ -3064,6 +3064,9 @@ function makeLetter() { // 纸：js/props3d.js 的 paperMesh（纤维、霉点�
   m.rotation.set(...LETTER.rot); document.fonts.load('italic 40px "IM Fell English"').then(() => m.userData.repaint());
   const g = new THREE.Group(); g.name = 'stove_letter'; g.position.set(...LETTER.at); g.add(m);
   scene.add(g); layers.set('stove_letter', g); meshes.push(m); indoorShade(g);
+  m.receiveShadow = false; // 炉膛里柴的阴影把它整张压成灰黑，近看像一片炉灰（11-10）
+  const fm = m.material; fm.emissive = new THREE.Color(0.42, 0.2, 0.07); fm.emissiveMap = fm.map; fm.emissiveIntensity = 0; // 生着火时纸面映着火光：炉膛四壁都被火照亮，只靠一盏点光源照不到压在柴前的纸
+  m.onBeforeRender = () => { fm.emissiveIntensity = toggles.get('stove_fire')?.on ? 1 : 0; };
 }
 // —— 信回到炉膛（11-10，第 1 天中段必经的怪事；design v3「逐拍改法」）：从炉膛拿出来读过的信，等玩家离开厨房、看不见炉子一阵，又躺回炉膛那片灰上，没烧。
 // 回到炉前看见（3.2m 内、在画面里、中间没东西挡，炉门关着就看不见）满 1 秒，书记员问一句；点它出一张只写看到的卡片，信又拿出来。夜里记录写成「稽查把信放回了炉膛」。
@@ -3077,6 +3080,7 @@ Object.assign(HINTS, { lback: [HINTS.letter[0], HINTS.letter[1], 'stove_letter']
 function lbOwed() { return game.found.has('lback0') && !game.found.has('lback'); } // 放回去了、玩家还没看见：天黑等它
 function day1Done() { return DAY1_NEED.every((k) => game.found.has(k)) && !lbOwed(); }
 function letterHome() { const f = game.found; return !f.has('letter') || (game.day === 1 && f.has('lback0') && !f.has('lbackT')); } // 信该不该在炉膛里
+function letterBack() { const f = game.found; return game.day === 1 && f.has('lback0') && !f.has('lbackT') && !!layers.get('stove_letter')?.visible && (toggles.get('stove_door')?.k ?? 1) < 0.5; } // 放回去的信还在炉膛里、炉门开着（k=1 是关上）
 function lbSeen() { // 看见了（或没等看见就点了）：记一笔，书记员问一句、看一眼炉子；天黑原来在等它就开始
   const f = game.found; if (f.has('lback')) return; f.add('lback'); saveGame(); renderJournal(); LOG && LOG.ev('clue', '信回到炉膛：看见');
   showRoomNote(LBACK_SAYS);
@@ -3702,6 +3706,14 @@ function lostFog(dev, dt) { // dev = 偏出可走范围多少米
   d2.lostT = dev < D2.lostAt ? 0 : d2.lostT + dt;
   if (d2.lostT > D2.lost) { d2.lostT = 0; loopBack(); }
 }
+function smokeCue(r) { // 烟升起、书记员说「你看，有烟」：她转头看烟，镜头也慢慢（≤46°/s）转过去、抬头到树梢上那段烟（点选柱中段），玩家一动鼠标 / 手指就交还。
+  // 11-10 用户（iPhone）：第二天树梢上的东西不好找——在林子里时烟在 37° 以上的仰角，平视看不到；方向只有「东北偏东」一句，林子里分不清
+  const L = d2.lamp.position, ax = L.x + 5, ay = L.y + 30, az = L.z, w = people.get('person_woman');
+  if (w && !w.player) { w.look = [ax, ay, az]; w.lookT = 5; if (!w.tasks.length && w.S == null && w.mode !== 'sit') w.tasks = [['face', ax, az], ['look', ax, ay, az, 5], ['idle', 3]]; } // 闲着就整个人转过去（同提示句那里）
+  if (!fp || fp.go || fp.climb || fp.turn || !card.hidden) return;
+  const e = fp.eye || camera.position;
+  fp.turn = { yaw: Math.atan2(ax - e.x, az - e.z), pitch: THREE.MathUtils.clamp(Math.atan2(ay - e.y, Math.hypot(ax - e.x, az - e.z)), -0.3, 0.75), t: 0, name: null, rate: 0.8 };
+}
 function updateDay2(dt) {
   if (!d2.samples) return;
   const f = game.found, t = performance.now() / 1000;
@@ -3718,7 +3730,7 @@ function updateDay2(dt) {
   if (lampOn) updatePlume(d2.lamp, dt, THREE.MathUtils.smoothstep(sky.hour, 17.2, 17.5));
   if (!fp || game.night) return;
   const r = fp.p.root.position;
-  if (lampOn && !d2.lampSaid && sky.hour > 17.4) { d2.lampSaid = true; if (!f.has('d2light')) showRoomNote(D2_SAYS.lamp, null, 'd2light'); } // 烟升起来就说（原来回到小屋 26m 内才说，玩家早点过烟了）
+  if (lampOn && !d2.lampSaid && sky.hour > 17.4) { d2.lampSaid = true; if (!f.has('d2light')) { showRoomNote(D2_SAYS.lamp, null, 'd2light'); smokeCue(r); } } // 烟升起来就说（原来回到小屋 26m 内才说，玩家早点过烟了）
   if (f.has('d2light') && !f.has('log2') && !outdoors(r) && Math.abs(r.x) < 1.7 && Math.abs(r.z) < 1.7) { // 进了屋
     f.add('log2'); saveGame(); renderJournal(); select(null);
     cardData = { t: LOG2_CARD[0], a: LOG2_CARD[1], zt: LOG2_CARD[2], story: LOG2_CARD[3], zs: LOG2_CARD[4], lead: LOG2_CARD[5] };
@@ -4375,7 +4387,8 @@ function pick(e) {
   let name = pick.side ? 'roof_snow' : hit && hit.object.parent.name;
   if (name === 'entry_toilet_room') return null; // 卫生间隔墙、门框、门柱、门锁都算房屋结构，不可点（2026-10-22 用户定；挡射线照旧）
   if (name === 'toilet_door_B') name = 'toilet_door_A'; // 两扇折叠门算一个：点哪扇都选 A（B 挂在 A 下，描边一起）
-  if (name === 'stove_iron_body' && !toggles.get('stove_fire')?.on) name = 'stove_firebox'; // 炉膛在炉身里，站着点总打到炉身：没生火时点炉子 = 点炉膛（电脑、触屏、悬停都走这里）
+  if (/^stove_(iron_body|firebox|fire)$/.test(name) && letterBack()) name = 'stove_letter'; // 回到炉膛的信只有 14cm、压在炉火前沿，手机上点不中（11-10 用户：炉火里的东西看不见也点不到）：炉门开着时点炉子 = 点信
+  else if (name === 'stove_iron_body' && !toggles.get('stove_fire')?.on) name = 'stove_firebox'; // 炉膛在炉身里，站着点总打到炉身：没生火时点炉子 = 点炉膛（电脑、触屏、悬停都走这里）
   return name && infoOf(name) ? name : null;
 }
 
@@ -4661,8 +4674,21 @@ const FP = { R: 0.17, STEP: 0.22, RUN: 2.6, SENS: 0.0022, HIDE: /^(HeadSkin|Eyeb
 let fp = null; // { p, yaw, pitch, keys, solid, floors, solidT, eye, paused, climb, crouch, bob, inspect }
 const fpRay = new THREE.Raycaster(); fpRay.firstHitOnly = true;
 const _lnO = new THREE.Vector3(), _lnD = new THREE.Vector3();
-function fpLean(r, s) { // 眼睛在身体中心前多少：平视 12cm；低头（俯角 43°→75°）再往前探到 28cm，前面有墙就停在墙前 8cm
-  const base = 0.12 * s, ext = 0.16 * s * THREE.MathUtils.smoothstep(-fp.pitch, 0.75, 1.3);
+const seatedNow = (p) => !!p.seat || p.mode === 'sit' || (climbs(p) && (!!fp.climb || p.S != null));
+// 炉前蹲下看炉膛（11-10 用户：老头太高，炉火里的东西看不见）：炉门开着、站在炉口 0.95m 内、面朝炉子、低头（俯角 > 31°）→ 0.6 秒蹲到眼高 ≈ 0.97m（离地），视线同时落到炉膛口（STOOP.look）。
+// 站着离炉口 0.55m 时信在画面下沿外（俯角要 70° 以上才进画面）；蹲远了（1m）炉门下框挡住平躺的信，所以只在 0.95m 内蹲。走开 1.25m、转开、抬头过平视或关炉门就站起来。站立眼高不改（门洞、阁楼净空、梯子都按它量过）
+const STOOP = { mouth: [1.455, -1.19], look: [1.42, 0.55, -1.27], near: 0.95, far: 1.25, drop: 0.6, T: 0.6 };
+function fpStoop(r, s, seated, dt) {
+  const P = r.position, [mx, mz] = STOOP.mouth, dx = mx - P.x, dz = mz - P.z, d = Math.hypot(dx, dz), off = Math.abs(angDiff(fp.yaw, Math.atan2(dx, dz)));
+  const open = (toggles.get('stove_door')?.k ?? 1) < 0.5, ok = open && !seated && !fp.climb && P.z > mz + 0.15 && P.y < 0.6;
+  if (!ok || d > STOOP.far || off > 0.9 || fp.pitch > 0.1) fp.stoopOn = false;
+  else if (d < STOOP.near && off < 0.6 && fp.pitch < -0.55) fp.stoopOn = true;
+  const k = fp.stoop = THREE.MathUtils.clamp((fp.stoop || 0) + (fp.stoopOn ? 1 : -1) * (RM.matches ? 1 : dt / STOOP.T), 0, 1);
+  if (fp.stoopOn && k < 1 && !RM.matches) { const e = fp.eye || camera.position, [ix, iy, iz] = STOOP.look; fp.pitch += (Math.atan2(iy - e.y, Math.hypot(ix - e.x, iz - e.z)) - fp.pitch) * Math.min(1, dt * 5); } // 蹲下去的那 0.6 秒视线落到炉膛口里（只在往下蹲时带，蹲好了交还玩家）
+  return STOOP.drop * s * THREE.MathUtils.smoothstep(k, 0, 1);
+}
+function fpLean(r, s) { // 眼睛在身体中心前多少：平视 12cm；低头（俯角 43°→75°）再往前探到 28cm，前面有墙就停在墙前 8cm；炉前蹲下时不探（会探到炉顶上方，炉口被炉沿挡住）
+  const base = 0.12 * s, ext = 0.16 * s * THREE.MathUtils.smoothstep(-fp.pitch, 0.75, 1.3) * (1 - (fp.stoop || 0));
   if (ext < 0.002 || !fp.near) return base;
   fpRay.set(_lnO.set(r.position.x, r.position.y + 1.3 * s, r.position.z), _lnD.set(Math.sin(fp.yaw), 0, Math.cos(fp.yaw))); fpRay.far = base + ext + 0.08;
   const h = fpRay.intersectObjects(fp.near, false)[0];
@@ -5036,6 +5062,7 @@ document.addEventListener('pointerlockchange', () => {
 canvas.addEventListener('mousemove', (e) => {
   if (!fp || fp.paused || !card.hidden) return; // 卡片开着视角冻结
   if (fp.inspect && held) { heldTurn(e.movementX, e.movementY); return; } // 按住右键：鼠标翻看手里的东西
+  if (fp.turn?.rate && Math.abs(e.movementX) + Math.abs(e.movementY) > 3) fp.turn = null; // 剧情带视线时玩家自己动鼠标：交还
   fp.yaw -= e.movementX * FP.SENS;
   fp.pitch = THREE.MathUtils.clamp(fp.pitch - e.movementY * FP.SENS, -1.35, 1.25);
 });
@@ -5268,14 +5295,14 @@ function updateFP(dt) {
   fp.crouch = eyeH < 1.62 * s - 0.08;
   fp.bob = moving ? fp.bob + dt * (run ? 13 : 8.5) : fp.bob * 0.9;
   audioStep(fp.bob, moving, run);
-  const lean = fpLean(r, s); // 低头往前探，免得看见自己的衣领、肩膀（动画检查 #12）
-  let eyeY = r.position.y + eyeH;
+  const sk = fpStoop(r, s, seatedNow(p), dt), lean = fpLean(r, s); // 低头往前探，免得看见自己的衣领、肩膀（动画检查 #12）
+  let eyeY = r.position.y + eyeH - sk;
   if (lean > 0.13 * s && fp.near) { // 探出去的地方屋顶更矮（阁楼斜顶每米降 0.8m，探 28cm 就低 22cm）：眼睛跟着压低，不然相机钻进屋顶板，点梯子、点楼下都先打到屋顶、没反应（11-10 用户：手机上了阁楼下不来）。只查眼睛上下 0.3m，探到桌面上方不算
     fpRay.set(_lnO.set(r.position.x + Math.sin(fp.yaw) * lean, eyeY - 0.3, r.position.z + Math.cos(fp.yaw) * lean), _fpU); fpRay.far = 0.6;
     const h = fpRay.intersectObjects(fp.near, false)[0]; if (h) eyeY = Math.min(eyeY, h.point.y - 0.14);
   }
   _fpO.set(r.position.x + Math.sin(fp.yaw) * lean, eyeY + (RM.matches ? 0 : Math.sin(fp.bob * 2) * 0.012), r.position.z + Math.cos(fp.yaw) * lean);
-  const seated = !!p.seat || p.mode === 'sit' || (climbs(p) && (!!fp.climb || p.S != null)); // 坐着、她爬梯子时镜头跟头骨
+  const seated = seatedNow(p); // 坐着、她爬梯子时镜头跟头骨
   fp.headK = (fp.headK || 0) + ((seated ? 1 : 0) - (fp.headK || 0)) * Math.min(1, dt * 6);
   if (fp.headK > 0.001 && p.head) { // 头骨（颅底）往上 7cm、沿视线往前 10cm ≈ 眼睛
     p.head.getWorldPosition(_fpV); _fpV.y += 0.07 * s; _fpV.x += Math.sin(fp.yaw) * 0.1 * s; _fpV.z += Math.cos(fp.yaw) * 0.1 * s;
@@ -5338,7 +5365,7 @@ function sliceStart() {
 // —— 第 2、3 天早上（2026-10-29，用户：去掉开场飞行，每天一开始就在屋里）：约 5.6 秒，玩家只看——他在沙发上醒来、站起来走到炉子边（做早饭），
 // 书记员从阁楼梯子下来（走她自己的爬梯任务 topDown → climb → dismount，和白天上下楼同一套动作；2026-11-01 前是站姿整体平移，美术评审说像雕像滑下来），完了 startFP 交给玩家；按键跳到结尾。当天已有进度（刷新）照旧
 let morn = null;
-const MORN = { T: 6, stove: [1.2, -0.72], eye: [1.2, -0.61] }; // T：6 秒交给玩家（UX6，原来等她走完要 12.5 秒）；eye：过场镜头走到的地方 = 站点往南 0.11m（交接时转身朝南看她，第一人称眼睛在身体前 0.11m，身体正好落回 stove；身体往北挪会钻到吊灯旁的矮处，眼高掉 5cm）
+const MORN = { T: 8.5, stove: [1.2, -0.72], eye: [1.2, -0.61] }; // T：8.5 秒交给玩家（UX6 定 6 秒，原来等她走完要 12.5 秒；11-10 前面加了躺着、坐起来 3 秒，站稳约 4.4 秒）；eye：过场镜头走到的地方 = 站点往南 0.11m（交接时转身朝南看她，第一人称眼睛在身体前 0.11m，身体正好落回 stove；身体往北挪会钻到吊灯旁的矮处，眼高掉 5cm）
 function mornOn() {
   if (!SLICE || game.day < 2 || game.night || game.found.has('ended') || game.found.has('xarrive')) return false;
   return game.day >= 3 || !DAY2_NEED.some((k) => game.found.has(k));
@@ -5360,13 +5387,16 @@ function mornStart() {
   spin = false; fly = null; controls.enabled = false; inside = ROOMS.find((r) => r.name === 'Parlour'); roomsBox.hidden = true; enterBtn.hidden = true;
   camera.fov = fpFov(); camera.updateProjectionMatrix();
   // 起身（起床过场评审 #2）：坐着时眼睛在站起落脚点后 0.47m（头在坐垫上方），先往前下探 0.45s，再伸直 0.9s 站起来；沙发朝北（yaw π）
-  const sit = new THREE.Vector3(sx, f0 + 1.01, sz + 0.47), lean = new THREE.Vector3(sx, f0 + 0.94, sz + 0.25);
-  morn = { t: 0, m, w, D, walk, L: walk.getLength(), sit, lean, eh, ey: null, yaw: Math.PI - 0.17, pitch: -0.12, P: new THREE.Vector3() };
+  // 11-10 用户（iPhone）：「不是从沙发上睡醒起来吗，现在像直接坐起来」→ 先躺着：头枕东头扶手、仰面看屋顶和脚那头（西偏北），不歪头（不转滚角，不晕），再坐起来
+  const sit = new THREE.Vector3(sx, f0 + 1.01, sz + 0.47), lean = new THREE.Vector3(sx, f0 + 0.94, sz + 0.25), lie = new THREE.Vector3(sx + MORN_UP.head[0], f0 + MORN_UP.head[1], sz + MORN_UP.head[2]);
+  morn = { t: 0, m, w, D, walk, L: walk.getLength(), sit, lean, lie, eh, ey: null, yaw: MORN_UP.yaw, pitch: MORN_UP.pitch, P: new THREE.Vector3() };
   mornTick(0); // 第一帧就到沙发上（原来要等下一帧，第一帧还是鸟瞰机位，评审 #11）
   if (RM.matches) { mornTick(MORN.T); return; } // 减少动态效果：不演起身走路，直接站在炉子边交给玩家（mornEnd 里 startFP + showQuest）
   showQuest();
 }
-const MORN_WALK = { at: 1.2, v: WALK_SPEED * 0.94, acc: 0.35, step: 18.1 }; // 走路：1.2s 起步（和站起的尾巴重叠，不停顿）、0.35s 加速到玩家的步速、0.35s 减速；step = 每米头部起伏的相位（同 updateFP：fp.bob 每秒 8.5 × 2 ÷ 0.94 m/s）
+const MORN_UP = { lie: 1.3, sat: 3.0, head: [0.31, 0.64, 0.56], yaw: -Math.PI / 2 - 0.5, pitch: 0.95, turn: 1.4 }; // 躺到 1.3s（点「继续」后加载页还要 0.6s 才淡完，像慢慢睁开眼），1.3–3.0s 坐起来（头绕着髋往上往前，俯仰 +0.95 → −0.12、偏航转 71°，峰值角速度约 70°/s），之后照原来前倾、站起、走；head：躺着时眼睛相对站起落脚点（SL.sofa）的偏移；turn：镜头转向角速度上限 1.4 rad/s ≈ 80°/s
+const MORN_WALK = { at: MORN_UP.sat + 1.2, v: WALK_SPEED * 0.94, acc: 0.35, step: 18.1 }; // 走路：1.2s 起步（和站起的尾巴重叠，不停顿）、0.35s 加速到玩家的步速、0.35s 减速；step = 每米头部起伏的相位（同 updateFP：fp.bob 每秒 8.5 × 2 ÷ 0.94 m/s）
+function smootherK(x) { x = THREE.MathUtils.clamp(x, 0, 1); return x * x * x * (x * (6 * x - 15) + 10); }
 function mornDist(t, L) { // 走路开始后 t 秒走了多远：梯形速度
   const { v, acc } = MORN_WALK, cruise = Math.max(0, (L - v * acc) / v), T = cruise + 2 * acc;
   if (t <= 0) return 0; if (t >= T) return L;
@@ -5377,9 +5407,10 @@ function mornDist(t, L) { // 走路开始后 t 秒走了多远：梯形速度
 function mornTick(dt) {
   const M = morn, t = (M.t += dt), w = M.w.root, P = M.P;
   // 他：起身（0–1.35s：前倾 → 伸直）+ 走到炉子边（1.2s 起，梯形速度，约 2.9s 到）；镜头看前方 / 路线方向，到了炉子边再转身看她（评审 #1：原来一路盯着身后梯子上的她，倒着走）
-  const sd = mornDist(t - MORN_WALK.at, M.L), k = sd / M.L, W0 = M.walk.getPointAt(0);
-  if (t < 0.45) P.lerpVectors(M.sit, M.lean, smoothstep(0, 0.45, t));
-  else { const u = smoothstep(0, 1, Math.min(1, (t - 0.45) / 0.9)); P.lerpVectors(M.lean, W0, u); } // 伸直：缓入缓出，上升峰速约 1 m/s（easeOutCubic 起步就 1.9 m/s，像弹起来）
+  const sd = mornDist(t - MORN_WALK.at, M.L), k = sd / M.L, W0 = M.walk.getPointAt(0), U = MORN_UP, tu = t - U.sat, su = smootherK((t - U.lie) / (U.sat - U.lie)); // tu：坐起来以后的时钟（原来的起身从 0 开始）；su：坐起的进度
+  if (t < U.sat) { P.lerpVectors(M.lie, M.sit, su); P.y = THREE.MathUtils.lerp(M.lie.y, M.sit.y, Math.sin(su * Math.PI / 2)); } // 坐起：头先往上抬、后往前收（绕髋转的弧）
+  else if (tu < 0.45) P.lerpVectors(M.sit, M.lean, smoothstep(0, 0.45, tu));
+  else { const u = smoothstep(0, 1, Math.min(1, (tu - 0.45) / 0.9)); P.lerpVectors(M.lean, W0, u); } // 伸直：缓入缓出，上升峰速约 1 m/s（easeOutCubic 起步就 1.9 m/s，像弹起来）
   P.add(_slD.copy(M.walk.getPointAt(k)).sub(W0)); // 叠上走过的路（起身没做完就起步）
   const fe = (floorBelow(P.x, 0.3, P.z) ?? 0.16) + M.eh; M.ey = M.ey === null ? W0.y : M.ey + (fe - M.ey) * Math.min(1, dt * 12); P.y += M.ey - M.walk.getPointAt(k).y; // 高度跟脚下地面走（同 updateFP），起居室木台下来那 12cm 在台阶边上 0.25s 内降下去；原来曲线把它摊成整段下坡（起床过场评审 #8）
   P.y += Math.sin(sd * MORN_WALK.step) * 0.012 * Math.sin(Math.PI * k); // 头部起伏：按路程、和第一人称同频；两头乘包络，到站不掉一下（评审 #6）
@@ -5387,10 +5418,11 @@ function mornTick(dt) {
   camera.position.copy(P);
   const arrived = k >= 1, out = !M.w.tasks.length; let ty, tp, rate = 6;
   if (!arrived && t >= MORN_WALK.at) { const g = M.walk.getTangentAt(Math.min(0.999, k + 0.08)); ty = Math.atan2(g.x, g.z); tp = -0.12; } // 走路：看路线前方、略低头
-  else if (!arrived) { ty = Math.PI - 0.17; tp = THREE.MathUtils.lerp(-0.12, -0.05, smoothstep(0.45, 1.35, t)); } // 起身：看前方（北，偏炉子那边）
+  else if (!arrived && t < U.sat) { ty = U.yaw + angDiff(U.yaw, Math.PI - 0.17) * su; tp = THREE.MathUtils.lerp(U.pitch, -0.12, su); } // 躺着看屋顶 → 坐起来看前方
+  else if (!arrived) { ty = Math.PI - 0.17; tp = THREE.MathUtils.lerp(-0.12, -0.05, smoothstep(0.45, 1.35, tu)); } // 起身：看前方（北，偏炉子那边）
   else { const q = out ? _slD.set(NAV.hall2[0], w.position.y + 1.45, NAV.hall2[1]) : _slD.copy(w.position).setY(w.position.y + 1.45); q.sub(P);
     ty = Math.atan2(q.x, q.z); tp = Math.min(0.18, Math.atan2(q.y, Math.hypot(q.x, q.z))); rate = out ? 2.5 : 4; } // 到炉子边：转身看她（她下了梯子走到这边就看过道）；俯仰封顶 0.18：镜头停在北吊灯正下方（MORN.eye），灯罩近沿仰角 47°，抬头不超过 0.18 灯罩就在画面外（评审 #4）
-  const e = Math.min(1, dt * rate); M.yaw += angDiff(M.yaw, ty) * e; M.pitch += (tp - M.pitch) * e;
+  const e = Math.min(1, dt * rate), cap = MORN_UP.turn * dt; let dy = angDiff(M.yaw, ty) * e, dp = (tp - M.pitch) * e; const dw = Math.hypot(dy, dp); if (dw > cap) { dy *= cap / dw; dp *= cap / dw; } M.yaw += dy; M.pitch += dp; // 角速度封顶（11-10：起步追路线方向、到炉边转身看她那两下原来一帧 400°/s 以上，手机上晕）
   _fpD.set(Math.sin(M.yaw) * Math.cos(M.pitch), Math.sin(M.pitch), Math.cos(M.yaw) * Math.cos(M.pitch));
   controls.target.copy(P).addScaledVector(_fpD, LOOK_R); camera.lookAt(controls.target);
   if (t >= MORN.T) mornEnd(); // 不等她走完：她接着在背景里走到起居室这边
@@ -5506,6 +5538,7 @@ function fpTap(e) {
   if (p.tasks.length || fp.climb || fp.lad) return; // 起身、爬梯中
   if (p.mode === 'sit') { p.tasks = fpRise(p); return; }
   let name = pickNear(e); if (name && /_rug$|doormat/.test(name)) name = null; // 地毯、门垫当地面
+  if (FAR_LOOK.has(name)) { select(name); return; } // 远处只能看的（树梢上的烟）：点了就是看见了。原来当成物件走过去，人往林子里 50m 外走、被雾绕回门口，手机上永远点不到（11-10 用户：第二天树梢上的东西找不到）
   if (name && name !== 'roof_snow' && name !== p.id) {
     const g = layers.get(name) || people.get(name)?.root; if (!g) return;
     const box = new THREE.Box3().setFromObject(g), c = box.getCenter(new THREE.Vector3());
@@ -5610,9 +5643,9 @@ function fpArrive(stuck) { // 走到了：点的是物件就转过去看着它�
 }
 function fpTouchTick(dt) {
   const t = fp.turn; if (!t) return;
-  const k = RM.matches ? 1 : Math.min(1, dt * 6), dy = angDiff(fp.yaw, t.yaw) * k, dp = (t.pitch - fp.pitch) * k, m = RM.matches ? 1 : Math.min(1, FP_TURN * dt / (Math.hypot(dy, dp) || 1)); t.t += dt; // 减少动态效果：不转，直接切过去
+  const k = RM.matches ? 1 : Math.min(1, dt * (t.rate ? 2.5 : 6)), dy = angDiff(fp.yaw, t.yaw) * k, dp = (t.pitch - fp.pitch) * k, m = RM.matches ? 1 : Math.min(1, (t.rate || FP_TURN) * dt / (Math.hypot(dy, dp) || 1)); t.t += dt; // 减少动态效果：不转，直接切过去；rate：慢转（剧情里带一下视线）
   fp.yaw += dy * m; fp.pitch += dp * m;
-  if (t.t < 0.45 || (t.t < (t.name ? 2.5 : 3) && (Math.abs(angDiff(fp.yaw, t.yaw)) > (t.name ? 0.06 : 0.02) || Math.abs(t.pitch - fp.pitch) > (t.name ? 0.06 : 0.02)))) return; // 房间导览的朝向转到位再停（0.45 秒只转到 93%，玄关偏 7° 衣帽架出画）
+  if (t.t < 0.45 || (t.t < (t.name ? 2.5 : t.rate ? 5 : 3) && (Math.abs(angDiff(fp.yaw, t.yaw)) > (t.name ? 0.06 : 0.02) || Math.abs(t.pitch - fp.pitch) > (t.name ? 0.06 : 0.02)))) return; // 房间导览的朝向转到位再停（0.45 秒只转到 93%，玄关偏 7° 衣帽架出画）
   fp.turn = null; if (!t.name) return;
   if (toggleOf(t.name)) toggle(t.name);
   select(t.name);
@@ -5701,10 +5734,11 @@ function fpAimPick() { // 准星每帧都要结果（fpHover 的计时靠它）�
 // 第一人称悬停分三级（11-04 交互评审 UX3，原来转一圈弹十几次名字）：2m 内能点的东西准星点变环；同一件停 0.45 秒才出名字和描边，离开后多留 0.3 秒防闪；转头快于 90°/秒不出。
 // hovered 只管显示（名字、描边、E 提示），E 拿取 / 坐下按准星实际对着的 aim 算，不用等名字出来
 // 11-04 复测：距离按水平量、屋外记号（d2_）放宽到 3m（UX3）；环也要同一件稳住 0.1 秒才出、离开多留 0.25 秒（UX5，原来一帧一闪；r3 #6：0.15 秒时慢转偶尔灭一下又亮）；准星换到别的东西上旧名字立刻收（UX6，原来多挂 0.3 秒，点到的和名字不是一件）
+const FAR_LOOK = new Set(['d2_lamp', 'x_light']); // 只能远看的线索（两柱烟）：悬停不限距离，触屏点了直接出卡片、不走过去
 const HOV = { near: 2, clue: 3, wait: 450, keep: 250, turn: Math.PI / 2, ring: 100, ringKeep: 250, ringGap: 300 }, hv = { cand: null, since: 0, lost: 0, yaw: 0, pitch: 0, t: 0, ring: -1e9, on: false, off: -1e9 };
 let aim = null;
 function fpHover(n) {
-  const now = performance.now(), dt = Math.max(1, now - hv.t) / 1000, near = n && pick.hd <= (n.startsWith('d2_') ? HOV.clue : HOV.near) ? n : null;
+  const now = performance.now(), dt = Math.max(1, now - hv.t) / 1000, near = n && (FAR_LOOK.has(n) || pick.hd <= (n.startsWith('d2_') ? HOV.clue : HOV.near)) ? n : null; // 树梢上的烟多远都出名字和准星环（原来 3m 内才出，烟在 40m 外，准星对上了也没反应）
   const w = Math.hypot(angDiff(hv.yaw, fp.yaw) * Math.cos(fp.pitch), fp.pitch - hv.pitch) / dt; hv.yaw = fp.yaw; hv.pitch = fp.pitch; hv.t = now;
   aim = n; window.__hv = { near, w }; // 调试 / 无头测试
   if (near !== hv.cand || w > HOV.turn) { hv.cand = near; hv.since = now; }
