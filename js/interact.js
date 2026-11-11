@@ -134,8 +134,8 @@ const DOORS = {
   toilet_door_A: { pivot: [-0.636, 0.825], angle: (k) => k * Math.PI / 2 },
   // B 板反向转 2 倍：两板像手风琴一样对折，B 的外沿沿门洞滑，不往卫生间里扫大弧（同向转会撞到马桶上坐着的人）
   toilet_door_B: { pivot: [-0.978, 0.825], parent: 'toilet_door_A', angle: (k) => -k * Math.PI },
-  // 炉门：Rhino 里半开 45°；第一次关上之后，再开就开到 90°（wide），之后在关 / 90° 之间切换
-  stove_door: { pivot: [1.588, -1.207], angle(k) { if (k >= 1) this.wide = true; return this.wide ? Math.PI / 4 - k * Math.PI / 2 : -k * Math.PI / 4; } },
+  // 炉门：Rhino 里半开 45°（转角 0）；开着一律开到 90°（11-10：原来没关过时停在 45°，正好斜挡在炉口前，蹲下也看不见炉膛里的信），关上是 −45°
+  stove_door: { pivot: [1.588, -1.207], angle: (k) => Math.PI / 4 - k * Math.PI / 2 },
   // 柜门（box = 拆图层用的 x0,x1,z0,z1 范围；k=1 是开）。客厅柜第 3 扇 Rhino 里是开着的，k=1 是关，加载时关上
   living_cabinet_door_1: { from: 'living_cabinet', box: [-1.5, -1.36, -0.48, -0.07], pivot: [-1.415, -0.478], angle: (k) => k * Math.PI / 2 },
   living_cabinet_door_2: { from: 'living_cabinet', box: [-1.5, -1.36, -0.07, 0.31], pivot: [-1.415, 0.302], angle: (k) => -k * Math.PI / 2 },
