@@ -8,14 +8,15 @@ import { shared, share } from './state.js';
 // cloud 天空变灰、太阳变弱、星月隐去；fogK 把雾混到 near/far（far 至少 = 相机距离 + far×0.5，拉远也看得到小屋）；
 // rain/snow 粒子密度 0–1；wind 风速 m/s（沿 +x）；bolt 有无闪电。切换时所有数值约 3 秒渐变。
 const WEATHERS = [
-  ['Fair',         { cloud: 0,    fogK: 0,   near: 30, far: 160, rain: 0,   snow: 0,   wind: 0,   bolt: 0 }],
-  ['Overcast',     { cloud: 0.75, fogK: 0.3, near: 20, far: 120, rain: 0,   snow: 0,   wind: 0.5, bolt: 0 }],
-  ['Rain',         { cloud: 0.85, fogK: 0.6, near: 10, far: 80,  rain: 0.55, snow: 0,  wind: 1.5, bolt: 0 }],
-  ['Thunderstorm', { cloud: 0.97, fogK: 0.7, near: 6,  far: 60,  rain: 1,   snow: 0,   wind: 4,   bolt: 1 }],
-  ['Snow',         { cloud: 0.7,  fogK: 0.5, near: 10, far: 90,  rain: 0,   snow: 0.45, wind: 0.6, bolt: 0 }],
-  ['Blizzard',     { cloud: 0.9,  fogK: 1,   near: 1,  far: 32,  rain: 0,   snow: 1,   wind: 9,   bolt: 0 }],
-  ['Fog',          { cloud: 0.6,  fogK: 1,   near: 0,  far: 24,  rain: 0,   snow: 0,   wind: 0.2, bolt: 0 }],
+  ['Fair',         { cloud: 0,    fogK: 0,   near: 30, far: 160, rain: 0,   snow: 0,   wind: 0,   bolt: 0, cool: 0 }],
+  ['Overcast',     { cloud: 0.75, fogK: 0.3, near: 20, far: 120, rain: 0,   snow: 0,   wind: 0.5, bolt: 0, cool: 0 }],
+  ['Rain',         { cloud: 0.85, fogK: 0.6, near: 10, far: 80,  rain: 0.55, snow: 0,  wind: 1.5, bolt: 0, cool: 0 }],
+  ['Thunderstorm', { cloud: 0.97, fogK: 0.7, near: 6,  far: 60,  rain: 1,   snow: 0,   wind: 4,   bolt: 1, cool: 0 }],
+  ['Snow',         { cloud: 0.7,  fogK: 0.5, near: 10, far: 90,  rain: 0,   snow: 0.45, wind: 0.6, bolt: 0, cool: 0 }],
+  ['Blizzard',     { cloud: 0.9,  fogK: 1,   near: 1,  far: 32,  rain: 0,   snow: 1,   wind: 9,   bolt: 0, cool: 0 }],
+  ['Fog',          { cloud: 0.6,  fogK: 1,   near: 0,  far: 24,  rain: 0,   snow: 0,   wind: 0.2, bolt: 0, cool: 0 }],
 ];
+const MIST = { cloud: 0.7, fogK: 0.9, near: 4, far: 70, rain: 0, snow: 0, wind: 0.3, bolt: 0, cool: 0.7 }; // 第 1 天到达：傍晚薄雾，不在天气面板里（setMist）；cool = 天和雾偏冷蓝灰的程度
 const wx = { name: 'Fair', goal: WEATHERS[0][1], cur: { ...WEATHERS[0][1] }, t: 0, flashes: [], nextBolt: 4, flash: 0 };
 // 天气按钮前的抽象图标：20×20 细线（样式见 #wxIco）。晴 = 圆 + 八道短芒；云系 = 地平线上的半圆（DOME），下面加雨丝 / 闪电 / 雪点；雾 = 三道错开的横线
 const DOME = 'M4 10a6 6 0 0 1 12 0M2.5 10h15', wxDot = (x, y) => `<circle class="f" cx="${x}" cy="${y}" r=".95"/>`;
@@ -44,6 +45,7 @@ function setWeather(n, now, show = n) { // show：界面上写的名字和图标
   wxTimer = setTimeout(() => { const o = WEATHERS.filter((w) => w[0] !== wx.name && (!wx.pool || wx.pool.includes(w[0]))); setWeather(o[Math.floor(Math.random() * o.length)][0]); }, (120 + Math.random() * 120) * 1000);
 }
 setWeather(WEATHERS[Math.floor(Math.random() * WEATHERS.length)][0], true);
+function setMist() { setWeather('Overcast', true, 'Fog'); clearTimeout(wxTimer); wx.goal = MIST; wx.cur = { ...MIST }; } // 标签写雾；不自动换天气
 // 底部三个按钮：天气在正中，时间、Journal 分在两边、离它一样远（CSS grid 1fr auto 1fr）；时钟按最宽的数字定宽、右对齐，
 // 每分钟跳字时什么都不动；只有时段名、天气名变的那一下整排挪一次（原来按最长文字给每个按钮留宽，Snow 后面空一大截，看着不居中）
 function fixClockWidth() {
@@ -164,7 +166,7 @@ vec3 ripples(vec2 p, float t, float amt) {
     .replace('#include <lights_fragment_maps>', '#include <lights_fragment_maps>\n    radiance = mix(radiance, iblIrradiance * RECIPROCAL_PI * (1.0 + 1.5 * rip), pud * (1.0 - sn));');
 }
 
-const _grey = new THREE.Color(), _snowB = new THREE.Color();
+const _grey = new THREE.Color(), _snowB = new THREE.Color(), _cool = new THREE.Color();
 const greyOf = (c, k) => _grey.setScalar((0.3 * c.r + 0.59 * c.g + 0.11 * c.b) * k);
 function applyWeather(dt) { // 在 applySky 之后：天空/光照按天气压暗；闪电
   const c = wx.cur, g = wx.goal, k = Math.min(1, dt * 0.8);
@@ -173,9 +175,11 @@ function applyWeather(dt) { // 在 applySky 之后：天空/光照按天气压�
   skyU.uTop.value.lerp(greyOf(skyU.uTop.value, 0.75), c.cloud);
   skyU.uHor.value.lerp(greyOf(skyU.uHor.value, 0.85), c.cloud);
   skyU.uTop.value.lerp(skyU.uHor.value, c.fogK * 0.85); // 浓雾里天顶也是雾色
+  if (c.cool > 0.001) for (const v of [skyU.uHor.value, skyU.uTop.value]) v.lerp(_cool.setRGB(0.80, 0.93, 1.16).multiplyScalar(0.3 * v.r + 0.59 * v.g + 0.11 * v.b), c.cool); // 阴天黄昏的漫射光偏蓝：雾和天往冷蓝灰靠（亮度不变），屋外只剩门廊灯一处暖色
   scene.fog.color.copy(skyU.uHor.value);
   sun.intensity *= 1 - 0.92 * c.cloud;
   hemi.color.lerp(greyOf(hemi.color, 1), c.cloud * 0.7);
+  if (c.cool > 0.001) hemi.color.lerp(_cool.setRGB(0.80, 0.93, 1.16).multiplyScalar(0.3 * hemi.color.r + 0.59 * hemi.color.g + 0.11 * hemi.color.b), c.cool);
   sun.color.lerp(greyOf(sun.color, 1.3), c.cloud * 0.9); // 阴天、雨雪里直射光被云层散成漫射，没有夕阳那种饱和橙红（11-05 art #9：雪天黄昏树冠成锈红褐色）；1.3 补回去饱和损失的亮度
   hemi.groundColor.lerp(_snowB.copy(hemi.color).multiplyScalar(0.75), THREE.MathUtils.smoothstep(cover.uSnow.value, 0.3, 0.85)); // 地上有雪时，从下往上的反光是雪（反照率约 0.8 × 天光，中性灰白），不是褐土：树冠、灌木底面不再发褐
   hemi.intensity *= 1 - 0.3 * c.cloud;
@@ -598,4 +602,4 @@ function updateRoofWeather(dt) {
 { const q = (location.search.match(/[?&]wx=(\w+)/) || [])[1], w = WEATHERS.find((e) => e[0] === q); if (w) { setWeather(q, true); if (w[1].snow) cover.uSnow.value = 1; } } // 试玩 / 无头测试：?wx=Blizzard 定天气，下雪类直接满地积雪
 
 share({ applyWeather: () => applyWeather }); // time-of-day.js 用
-export { applyWeather, wsPos, WS, groundCover, cover, precipHole, setupRoofWeather, wx, roofWx, setWeather, wxTimer, slideSnow, updatePrecip, updateRoofWeather };
+export { applyWeather, wsPos, WS, groundCover, cover, precipHole, setupRoofWeather, wx, roofWx, setWeather, setMist, wxTimer, slideSnow, updatePrecip, updateRoofWeather };

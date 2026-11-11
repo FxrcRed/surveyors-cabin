@@ -101,7 +101,7 @@ export function paperMesh(w, h, { seed = 1, tone = '#d9cdb0', draw, cutout = fal
     p.setZ(i, z);
   }
   geo.computeVertexNormals();
-  const map = tex(paint()), m = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ map, bumpMap: tex(bump, false), bumpScale: 1.4, roughness: 0.93, side: THREE.DoubleSide, alphaTest: cutout ? 0.5 : 0 }));
+  const map = tex(paint()), m = new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ map, bumpMap: tex(bump, false), bumpScale: 1.4, roughness: 0.93, side: THREE.DoubleSide, alphaTest: cutout ? 0.5 : 0, emissive: 0xffffff, emissiveMap: map, emissiveIntensity: 0 })); // 自发光平时是 0；飞到眼前时调高（applyView），夜里屋里暗也读得清。一开始就带着 emissiveMap，别中途加（会换着色器程序、卡一下）
   m.userData.repaint = () => { map.image = paint(); map.needsUpdate = true; };
   m.receiveShadow = true; return m;
 }
@@ -247,20 +247,28 @@ const after = (delay, fn) => cbs.push({ at: clock + delay, fn });
 let V = null; // 正在看的：{ kind, name, g, home:{p,q}, read:{p,q}, f（0 在原位，1 在相机前）, busy, onHome }
 const _q = new THREE.Quaternion(), _e = new THREE.Euler(), _v = new THREE.Vector3();
 const SIDE = matchMedia('(min-width: 900px) and (min-aspect-ratio: 11/10)'); // 同 index.html #card.side：宽屏纸在左、卡片在右；否则纸在上、卡片在下
-function readPose(wd, ht, mQ) { // 相机前方：纸/书停在画面一侧，不压在卡片的字下面（11-04 交互评审 UX4）；mQ = 网格自己的朝向（要抵消）
+// 占画面宽、高的比例上限；中心在画面上的位置（-1…1）。book：书（原样）；solo：一页纸，放大到画面高的八成多，字要看得清（11-11 Fable 评审 A2：原来只占画面宽的五分之一，手写字读不了）；
+// main / mate：夜里她写的那页和下午那页的淡影并排（「一字不差，只多几行」让玩家自己比）
+const LAY = { wide: { book: [0.36, 0.6, -0.5, 0], solo: [0.40, 0.86, -0.40, 0], main: [0.3, 0.8, -0.22, 0], mate: [0.24, 0.6, -0.74, 0] },
+  tall: { book: [0.8, 0.3, 0, 0.5], solo: [0.8, 0.42, 0, 0.5], main: [0.45, 0.36, 0.5, 0.56], mate: [0.45, 0.36, -0.5, 0.56] } };
+function readPose(wd, ht, mQ, slot = 'book') { // 相机前方：纸/书停在画面一侧，不压在卡片的字下面（11-04 交互评审 UX4）；mQ = 网格自己的朝向（要抵消）
   const vf = THREE.MathUtils.degToRad(camera.fov), hf = 2 * Math.atan(Math.tan(vf / 2) * camera.aspect), tv = Math.tan(vf / 2), th = Math.tan(hf / 2);
-  const [fw, fh, nx, ny] = SIDE.matches ? [0.36, 0.6, -0.5, 0] : [0.8, 0.3, 0, 0.5]; // 占画面宽、高的比例上限；中心在画面上的位置（-1…1）
-  const d = Math.max(0.3, ht / (fh * 2 * tv), wd / (fw * 2 * th));
-  const q = camera.quaternion.clone().multiply(_q.setFromEuler(_e.set(-0.22, 0, 0)));
+  const [fw, fh, nx, ny] = LAY[SIDE.matches ? 'wide' : 'tall'][slot];
+  const d0 = Math.max(slot === 'book' ? 0.3 : 0.12, ht / (fh * 2 * tv), wd / (fw * 2 * th)), d = Math.max(d0, camera.near + 0.06), sc = d / d0; // 纸要拉近到 ~0.16m 才够大；near 大时（不在屋里判定内）停在 near 外、按比例放大，看起来一样大
+  const q = camera.quaternion.clone().multiply(_q.setFromEuler(_e.set(slot === 'book' ? -0.22 : -0.1, 0, 0))); // 纸几乎正对镜头
   const fwd = _v.set(0, 0, -1).applyQuaternion(camera.quaternion).clone();
   const p = camera.position.clone().addScaledVector(fwd, d).addScaledVector(_v.set(1, 0, 0).applyQuaternion(camera.quaternion), nx * d * th).addScaledVector(_v.set(0, 1, 0).applyQuaternion(camera.quaternion), ny * d * tv);
-  return { p, q: mQ ? q.multiply(mQ.clone().invert()) : q };
+  return { p, q: mQ ? q.multiply(mQ.clone().invert()) : q, sc };
 }
 function applyView() {
   if (!V) return;
-  const f = V.f, g = V.g; V.read = readPose(...V.spec); // 每帧按当前相机重算：看的时候相机还在惯性转动，书 / 纸始终在画面中央
+  const f = V.f, g = V.g; V.read = readPose(...V.spec, V.slot); // 每帧按当前相机重算：看的时候相机还在惯性转动，书 / 纸始终在画面中央
   g.position.lerpVectors(V.home.p, V.read.p, f); g.quaternion.slerpQuaternions(V.home.q, V.read.q, f);
   g.position.y += Math.sin(Math.PI * f) * 0.08; // 飞的时候先抬一下
+  if (V.kind === 'paper') g.children[0].material.emissiveIntensity = 0.5 * f; // 举到灯下看
+  V.hs ??= g.scale.x; g.scale.setScalar(V.hs * (1 + (V.read.sc - 1) * f)); // hs：原来的缩放
+  if (V.mate) { const r = readPose(...V.mspec, 'mate'), m = V.mate; m.visible = f > 0.02; m.children[0].material.opacity = 0.62 * f; // 淡影：从同一处飞出来，停在左边
+    m.position.lerpVectors(V.home.p, r.p, f); m.quaternion.slerpQuaternions(V.home.q, r.q, f); m.children[0].material.emissiveIntensity = 0.5 * f; V.ms ??= m.scale.x; m.scale.setScalar(V.ms * (1 + (r.sc - 1) * f)); m.position.y += Math.sin(Math.PI * f) * 0.08; }
   if (V.kind === 'book') g.position.addScaledVector(_v.set(1, 0, 0).applyQuaternion(V.read.q), (BW / 2) * book.A.open * f);
 }
 export function inspectTick(dt) {
@@ -274,11 +282,12 @@ export function inspectTick(dt) {
 }
 export const inspecting = () => V?.name || null;
 export const inspectBusy = () => !!V?.busy;
+export const inspectDuo = () => !!V?.mate;
 export function inspectSkip() { if (V?.busy) inspectTick(100); } // 点一下 / Esc：直接跳到这一段的结尾
 
 // 哪些点击要飞出来：书架上的书（日志）、桌上和炉里的纸
-export function inspectKind(name) { return name === 'desk_page' || name === 'stove_letter' ? 'paper' : name === 'field_log' ? 'book' : null; }
-export function inspectStart(name, text, done) { // text = { en, zh }（书用）；翻完调 done()
+export function inspectKind(name) { return name === 'desk_page' || name === 'stove_letter' || name === 'desk_notes' ? 'paper' : name === 'field_log' ? 'book' : null; }
+export function inspectStart(name, text, done, mate) { // text = { en, zh }（书用）；翻完调 done()；mate = 并排飞出来的另一页（结构同 g：一个 Group 里一张纸）
   const kind = inspectKind(name), g = shared.layers.get(name); if (!kind || !g || V) return false;
   if (kind === 'book') {
     if (!book) return false;
@@ -290,7 +299,8 @@ export function inspectStart(name, text, done) { // text = { en, zh }（书用�
     after(4.7, () => { V.busy = false; done(); });
   } else {
     const m = g.children[0], b = new THREE.Box3().setFromObject(m), s = b.getSize(new THREE.Vector3()), long = Math.max(s.x, s.z), short = Math.min(s.x, s.z);
-    V = { kind, name, g, home: { p: g.position.clone(), q: g.quaternion.clone() }, spec: [long, short < 0.1 ? short * 1.2 : long, m.quaternion.clone()], f: 0, busy: true };
+    V = { kind, name, g, home: { p: g.position.clone(), q: g.quaternion.clone() }, spec: [long, short < 0.1 ? short * 1.2 : long, m.quaternion.clone()], slot: mate ? 'main' : 'solo', mate: mate || null, f: 0, busy: true };
+    if (mate) { const mm = mate.children[0], ms = new THREE.Box3().setFromObject(mm).getSize(new THREE.Vector3()), ml = Math.max(ms.x, ms.z); V.mspec = [ml, Math.min(ms.x, ms.z) < 0.1 ? Math.min(ms.x, ms.z) * 1.2 : ml, mm.quaternion.clone()]; } // 淡影用自己的尺寸和朝向（下午那页斜放 0.25）
     go(V, 'f', 1, 0.9); after(1.1, () => { V.busy = false; done(); });
   }
   return true;
@@ -304,4 +314,4 @@ export function inspectRelease(onHome) { // 卡片关了：飞回原位（书先
     go(A, 'cover', 0, 0.35, 0.3); go(A, 'open', 0, 0.5, 0.4); go(v, 'f', 0, 0.85, 0.55); after(1.5, () => end(v));
   } else { go(v, 'f', 0, 0.8); after(0.85, () => end(v)); }
 }
-function end(v) { if (V === v) V = null; v.g.position.copy(v.home.p); v.g.quaternion.copy(v.home.q); v.onHome?.(); }
+function end(v) { if (V === v) V = null; v.g.position.copy(v.home.p); v.g.quaternion.copy(v.home.q); if (v.hs) v.g.scale.setScalar(v.hs); if (v.mate && v.ms) v.mate.scale.setScalar(v.ms); if (v.mate) v.mate.visible = false; v.onHome?.(); }
