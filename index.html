@@ -2106,6 +2106,12 @@ const ROOMS = [
   { name: 'Kitchen & Dining', zh: '厨房与餐桌', pos: [-1.0, 1.75, 0.1], tgt: [1.0, 0.95, -1.0], fov: 72 }, // 西边靠墙斜看东北：干洗槽、盘架、挂锅杆、炉子、东墙桌板同框（原 fov 85 广角变形、人物贴脸）
   { name: 'Loft',         zh: '阁楼',   pos: [0.45, 3.25, 1.35], tgt: [-0.9, 2.6, -0.7],   fov: 72 },
 ];
+// 看模型里屋外的两处（2026-11-10，用户 15）：同列表里排在六间屋后面。pos/tgt 是世界坐标，按码头（124,248）和水轮（13.3,17.6）的包围盒在无头里试出来的；
+// via = 飞过去的途经点（先升到 ≥30m 高空飞过林子，树最高约 22m；落点前一段在湖面上或溪中线上空，那里没有树）。「湖」不在 fonts/zh.woff2 里，码头只写「码头」
+const SCENES = [
+  { name: 'Lake Dock',       zh: '码头',       pos: [116.8, 2.5, 255.2], tgt: [127.3, 0.3, 253.0], fov: 55, via: [[100, 30, 235], [112, 12, 250]] },
+  { name: 'Brook Generator', zh: '水力发电机', pos: [17.2, 2.6, 20.8],   tgt: [12.1, 1.1, 18.5],   fov: 52, via: [[17.2, 30, 20.8], [17.2, 10, 20.8]], tall: { tgt: [13.9, 1.0, 17.0], fov: 64 } }, // tall：竖屏横向视野窄、右侧列表压在画面右边，主体（水轮）往左挪、视场角放宽
+];
 const INSIDE_FOV = 66, OUTSIDE_FOV = 40;
 // 屋里飞行的视线：起止方向的偏航/俯仰和目标距离，供渲染循环插值
 const angDiff = (a, b) => Math.atan2(Math.sin(b - a), Math.cos(b - a));
@@ -2187,6 +2193,25 @@ for (const r of ROOMS) {
   b.onclick = () => goRoom(r);
   roomsBox.appendChild(b);
 }
+for (const s of SCENES) {
+  const b = document.createElement('button'); b.innerHTML = lbl(s.name, s.zh); b.dataset.room = s.name;
+  b.onclick = () => goScene(s);
+  roomsBox.appendChild(b);
+}
+function goScene(s) { // 看模型：飞到屋外一处（码头 / 水轮）；从屋里出去、从另一处过来都行
+  if (!home) return;
+  endIntro(true); if (fp) return;
+  inside = null; select(null); endClose(); clearTimeout(idleTimer); spin = false;
+  enterBtn.innerHTML = lbl('Enter the Cabin', '进屋'); enterBtn.classList.add('glow'); enterBtn.classList.remove('nogo'); showQuest();
+  controls.enablePan = true; controls.enableZoom = true; controls.rotateSpeed = 1; controls.minDistance = 0; controls.maxDistance = Infinity; // 同 leaveCabin：飞完 fly.out 再收成 1–220m
+  const from = camera.position.clone(), fromTgt = controls.target.clone(), to = new THREE.Vector3(...s.pos), view = (innerHeight > innerWidth && s.tall) || s, toTgt = new THREE.Vector3(...view.tgt);
+  const pts = [from, ...s.via.map((v) => new THREE.Vector3(...v)), to];
+  pts.splice(1, 0, new THREE.Vector3(from.x + (pts[1].x - from.x) * 0.15, Math.max(from.y, pts[1].y), from.z + (pts[1].z - from.z) * 0.15)); // 起点上方先爬高，别贴着地面（屋里出来 = 穿屋顶，同出屋）
+  const curve = new THREE.CatmullRomCurve3(pts, false, 'centripetal'), len = curve.getLength();
+  fly = { t: 0, fromPos: from, fromTgt, fromFov: camera.fov, toPos: to, toTgt, toFov: view.fov, smooth: true, dur: THREE.MathUtils.clamp(len / 24, 3.5, 12), curve, out: true };
+  fly.look = lookPlan(from, fromTgt, to, toTgt);
+  for (const b of roomsBox.children) b.classList.toggle('on', b.dataset.room === s.name);
+}
 function goRoom(r) {
   if (!home) return;
   endIntro(true); // 开场还没飞完就点进屋：先结束开场，否则下面的飞行会被开场覆盖
@@ -2220,7 +2245,7 @@ function goRoom(r) {
     // 首页在自动旋转：接过它的速度（位置绕目标点的切向速度 + 视线偏航角速度），飞行中 t(1-s)³ 衰减掉，起步不会先停一下
     const sa = -2 * Math.PI / 60 * controls.autoRotateSpeed * spinK;
     fly.v0 = UP.clone().cross(from.clone().sub(fly.fromTgt)).multiplyScalar(sa); fly.w0 = sa; spinK = 0;
-    placeRooms(null); // 底部那排先淡出，飞到了再在右侧淡入（渲染循环里飞完时）
+    placeRooms(viewList()); // 底部那排先淡出，飞到了再在右侧淡入（渲染循环里飞完时）；看模型时列表一直在
   } else {
     // 屋里换房间（2026-10-28 改，原来直线穿墙）：沿门洞节点走最短路，直线 + 圆角（routeCurve），视线只在拐角转、最后一段转向房间视角（aimRoute）
     const pts = camRoute(camera.position, r.name);
@@ -2357,6 +2382,7 @@ function leaveCabin() {
 // 房间列表的位置：'bottom' = 屋外选房间（放进 #sky、进屋按钮上方横排），'side' = 屋里（右侧竖排），null = 收起。
 // 换位置先淡出 .28 秒再挪、再淡入；#sky 有 transform，右侧那种 fixed 定位不能放在它里面，所以是挪 DOM
 const skyBox = document.getElementById('sky');
+const viewList = () => (SLICE && game.day === 1 ? 'side' : null); // 看模型（第 1 天切片里的鸟瞰）：屋外也留着右侧列表，里面有屋外两处（SCENES）
 let roomsT = 0, roomsAt = null, roomsWant = null; // roomsAt = 现在摆在哪，roomsWant = 要去哪（淡出途中两者不同）
 function placeRooms(mode) {
   roomsWant = mode; clearTimeout(roomsT);
@@ -2373,7 +2399,7 @@ function placeRooms(mode) {
 enterBtn.onclick = () => {
   if (!home) return;
   // 屋外点进屋：直接飞到玄关，飞到了右侧再出房间列表（渲染循环里）
-  if (inside) { placeRooms(null); enterBtn.innerHTML = lbl('Enter the Cabin', '进屋'); enterBtn.classList.add('glow'); leaveCabin(); enterBtn.classList.remove('nogo'); }
+  if (inside) { placeRooms(viewList()); enterBtn.innerHTML = lbl('Enter the Cabin', '进屋'); enterBtn.classList.add('glow'); leaveCabin(); enterBtn.classList.remove('nogo'); }
   else goRoom(ROOMS[0]);
 };
 
@@ -5437,7 +5463,7 @@ function roomNavSync() { // 每帧（updateFP）：进过屋、不在梯子上�
   if (roomBtn.hidden === on) { roomBtn.hidden = !on; if (!on) roomList.classList.add('shut'); }
 }
 $('viewBtn').onclick = () => {
-  if (fp) { stopFP(); inside = null; placeRooms(null); enterBtn.innerHTML = lbl('Enter the Cabin', '进屋'); enterBtn.classList.add('glow'); controls.minDistance = 1; controls.maxDistance = 220; resetView(true); return; }
+  if (fp) { stopFP(); inside = null; placeRooms(viewList()); enterBtn.innerHTML = lbl('Enter the Cabin', '进屋'); enterBtn.classList.add('glow'); controls.minDistance = 1; controls.maxDistance = 220; resetView(true); return; }
   fly = null; startFP('person_man'); SL.room = undefined; // 位置照旧，sliceTick 重新认房间
 };
 function roomAt(P) { // 稽查站在哪间（切片按位置触发房间说明、「先生火」；门槛 z 1.9 外算屋外）
