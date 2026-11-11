@@ -432,7 +432,8 @@ if (navigator.webdriver || /[?&]nolock\b/.test(location.search)) { let el = null
   <p><em class="k">No irregularity found. The Surveyor's whereabouts unknown.</em> It is recommended that another be sent to keep the station.</p>
   <h4>A page that was not sent</h4>
   <p>I was in the rocking chair when he came back. He told me of the other place: the same house, the same mat, the same chopping block by the door.</p>
-  <p>I asked him whether I was there. He said no.</p>
+  <p data-ans="no">I asked him whether I was there. He said no.</p>
+  <p data-ans="yes">I asked him whether I was there. He said yes: my hand on the desk, and no one in the house.</p>
   <p>My hand was steady when I wrote <em>No irregularity found</em>.</p>
   <p>This house is newer than the reports made it. I wrote that on the first night. I do not care to think it any further.</p>
   <p>Tonight there is smoke over the trees again, east-north-east. I did not call him to look.</p>
@@ -485,7 +486,8 @@ if (navigator.webdriver || /[?&]nolock\b/.test(location.search)) { let el = null
   <p><em class="k">未发现异常。测绘员下落不明。</em>请局里另派人来看着这个站。</p>
   <h4>没交上去的一页</h4>
   <p>他回来的时候，我在摇椅上。他说了那边的事：一样的屋，一样的门垫，门口一样的劈柴木桩。</p>
-  <p>我问他，那边有没有我。他说没有。</p>
+  <p data-ans="no">我问他，那边有没有我。他说没有。</p>
+  <p data-ans="yes">我问他，那边有没有我。他说有，桌上是我的字，屋里没有人。</p>
   <p>写“未发现异常”的时候，我的手没有抖。</p>
   <p>这屋子比报告里写的新。第一天夜里我就写过这句话，现在不想再往下想。</p>
   <p>今晚东北偏东的树梢上又有一柱烟。我没有叫他来看。</p>
@@ -2722,7 +2724,7 @@ const GAME_TEXT = {
   xLook: ['Day 3 · From the other porch', 'Standing under this porch and looking west-south-west, far off over the trees, there is smoke rising.', '站在这间屋的门廊下往西南偏西看，很远的树梢上升着一柱烟。'],
   endBack: ['Ending · Going Back', 'You back out of the door and go the way you came. Slowly the compass settles, and points north again. At the end of the fog the porch lamp is burning, the fire is lit, and the clerk is waiting in the rocking chair.\n\nShe hears you out, thinks a long while, and writes in the report: "No irregularity found. The Surveyor\'s whereabouts unknown." Then she puts his field log back on the shelf.', '你退出门，沿着来路走。罗盘慢慢停下来，指回北方。雾的尽头，门廊灯亮着，炉火在烧，书记员在摇椅上等你。\n\n她听你说完，想了很久，在报告上写：“未发现异常。测绘员下落不明。”然后把他的工作日志放回书架。'],
   endStay: ['Ending · Staying', 'You sit down under the porch of that house.\n\nBack in your own cabin, the clerk looks up from the Surveyor\'s papers, goes out under the porch, and looks to the east-north-east. Deep in the woods there is one more light.\n\nShe does not go out to look for you. She finishes that day\'s notes, and the last line reads: "The inspector stayed. Someone must watch it."', '你在那间屋的门廊下坐下。\n\n画面回到你们的小屋。书记员从遗稿上抬起头，走到门廊下，看向东北偏东。林子深处多了一盏灯。\n\n她没有出门找你。她把那天的调查记录写完，最后一行是：“稽查留下了。总得有人看着它。”'],
-  endHidden: ['Hidden Ending · only when all four differences are found', 'You come back to the cabin and stamp the snow from your boots. The clerk looks at you, and says:\n\n"You didn\'t take the lantern when you went out."\n\nYou look down. Your hand is empty. The lantern hangs on its peg of the coat rail, just as it did before you left.\n\nYet you remember carrying it into the fog.', '你回到小屋，跺掉靴子上的雪。书记员看着你，说：\n\n“你出门的时候没带提灯。”\n\n你低头看。手上是空的。提灯挂在衣帽架的钉子上，和你出门前一样。\n\n可你记得，你是提着它走进雾里的。'],
+  endHidden: ['Hidden Ending · only when all four differences are found', 'You come back to the cabin and stamp the snow from your boots. The clerk looks at you, and says:\n\n"You didn\'t take the lantern when you went out."\n\nYou look down. Your hand is empty. The lantern hangs on its peg of the coat rail, just as it did before you left.','你回到小屋，跺掉靴子上的雪。书记员看着你，说：\n\n“你出门的时候没带提灯。”\n\n你低头看。手上是空的。提灯挂在衣帽架的钉子上，和你出门前一样。'],
   endPage: ['Hidden Ending · only when all four differences are found', 'Next morning there is one page more on the clerk\'s desk. She did not write it. It is in the inspector\'s hand, dated the day before:\n\n"Day three. Came to the ✕ by the marks. The coat rail bare, the watch going, the fire lit, a page in her hand upon the desk. I have stayed. I have left the lamp burning."\n\nThe ink is not yet dry.', '第二天早上，书记员的桌上多了一页纸，不是她写的。是稽查的笔迹，日期是前一天：\n\n“第三天。照着记号走到 ✕。衣帽架空着，怀表在走，炉火烧着，书桌上有一页她的字。我留下了。灯我留着。”\n\n墨还没干。'], // 「留下」+ 四处齐（设计评审 #7）：和隐藏结局对等；✕ 那间桌上有她写的今天，这边桌上多一页他写的那边
 };
 const LIGHT_ROOMS = { living: 'Parlour', entry: 'Entry', toilet: 'Water Closet', loft_bed: 'Loft', loft_rocker: 'Loft' };
@@ -3312,6 +3314,7 @@ function renderJournal() { // 开场一直在；找到工作日志才有序章�
   const xw = [...f].find((k) => k.startsWith('xw:')); if (xw) xWatchSay(+xw.slice(3)); if (game.day >= 3) xNotesSay(); // ✕ 那间怀表：遗稿写第一次看到时的钟点
   for (const d of journal.querySelectorAll('[data-sec]')) d.hidden = !open[d.dataset.sec];
   for (const d of journal.querySelectorAll('[data-end]')) d.hidden = !(f.has('end_' + d.dataset.end) || (d.dataset.end === 'back' && !f.has('end_stay'))); // 终章按看过的结局分块（11-10）；旧存档没有 end_* 的当「回去」
+  for (const d of journal.querySelectorAll('[data-ans]')) d.hidden = d.dataset.ans !== (f.has('ans:yes') ? 'yes' : 'no'); // 「那边有没有我」照玩家答的写（叙事 r2 #2）；没答过（旧存档）当「没有」
   for (const box of journal.querySelectorAll('.jday')) {
     const zh = box.dataset.lang === 'zh', add = (tag, text, cls) => { const e = document.createElement(tag); e.textContent = text; if (cls) e.className = cls; box.append(e); };
     box.textContent = '';
@@ -4056,7 +4059,7 @@ HINT_Q.push('go3', 'x3');
 function quest3() {
   const f = game.found;
   if (f.has('ended')) return 'fin';
-  return f.has('xarrive') ? 'x3' : 'go3';
+  return x3.leaving || x3.sit ? 'fin' : f.has('xarrive') ? 'x3' : 'go3'; // 选了回去 / 留下：任务行空
 }
 function gameSeen3(name, title, add, got) {
   let over = null;
@@ -4300,7 +4303,7 @@ function enterX() { // 走到那间屋的门廊下：不压黑，记一笔、一
 }
 const endFree = () => [...game.found].filter((k) => !k.startsWith('end_') && k !== 'ended'); // 快照里不带结局标记：结局另外留着，看过几个照算
 function backToPorch() { // 通关后：回到 ✕ 门廊下那一刻（同刷新在 ✕ 那间），看过的结局留着
-  const ends = [...game.found].filter((k) => k.startsWith('end_'));
+  const ends = [...game.found].filter((k) => k.startsWith('end_') || k.startsWith('ans:')); // ans:：遗稿里「那边有没有我」的回答也留着
   game.found = new Set([...game.snap, ...ends]); saveGame();
   try { sessionStorage.setItem('cabin.nextDay', '1'); } catch (e) { /* 存不了就照常问「继续上次」 */ }
   location.reload();
@@ -4310,14 +4313,43 @@ function porchAsk() { // ✕ 那间屋的门廊下：回去 / 留下 / 再看看
   if (!game.found.has('xlook')) { game.found.add('xlook'); saveGame(); renderJournal(); }
   const log = game.found.has('log3') ? PORCH_ECHO.read : PORCH_ECHO.unread; // 叙事 r2 #3：还没读日志后段，引去书架（点「再看看」回屋就能读）
   dialog(['Under the Other Porch', '另一间屋的门廊下'], [GAME_TEXT.xLook[1] + '\n\n' + log[0], GAME_TEXT.xLook[2] + '\n\n' + log[1]],
-    [['Go Back', '回去', () => ending('back')], ['Stay', '留下', () => ending('stay')], ['Not Yet', '再看看']]);
+    [['Go Back', '回去', xLeaveStart], ['Stay', '留下', xSitStart], ['Not Yet', '再看看']]);
+}
+// 叙事 r2 #6：选完不立刻黑场。「回去」交还操作，提着亮着的灯自己走回雾里：离门廊灯 XL.far 米，或门廊灯连着 XL.away 秒不在画面里（离灯 XL.near 米外）才 ending('back')；走出 XL.turn 米又回到门廊 XL.back 米内、或进了屋，就当没走，回门廊照旧再问。
+// 「留下」镜头放低成坐在门廊下（眼睛降 XL.drop 米），转去看西南偏西那柱烟（自家的），XL.sit 秒后黑场。鸟瞰时选的照旧直接结束
+const XL = { far: 25, away: 3, near: 10, turn: 9, back: 5, fog: 0.4, drop: 0.55, rise: 1.6, sit: 4 };
+function xLeaveStart() {
+  if (!fp) { ending('back'); return; }
+  const g = layers.get('entry_porch_lamp');
+  x3.leaving = { snap: endFree(), lamp: g ? new THREE.Box3().setFromObject(g).getCenter(new THREE.Vector3()) : new THREE.Vector3(D2.door[0], 2.4, D2.door[1]), far: 0, away: 0 }; // snap：「回到另一间屋的门廊下」回到选之前这一刻
+  showQuest();
+}
+function xLeaveTick(r, dt) {
+  const L = x3.leaving, d = Math.hypot(r.x - L.lamp.x, r.z - L.lamp.z), out = outdoors(r); L.far = Math.max(L.far, d);
+  if (!out || (L.far > XL.turn && d < XL.back)) { x3.leaving = null; d2.fogGoal = 0; showQuest(); if (out) porchAsk(); else x3.wasIn = true; return; } // 掉头回来了：别卡在没有任务、没有按钮的门廊下
+  chgM.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse); chgFr.setFromProjectionMatrix(chgM);
+  L.away = d < XL.near || chgFr.containsPoint(L.lamp) ? 0 : L.away + dt;
+  d2.fogGoal = XL.fog * THREE.MathUtils.smoothstep(d, 12, XL.far); // 走远了雾浓一点，门廊灯慢慢没进雾里
+  if (d >= XL.far || L.away >= XL.away) ending('back');
+}
+function xSitStart() {
+  if (!fp) { ending('stay'); return; }
+  const r = fp.p.root.position, S = x3.light.position, eye = r.y + 1.62 * fp.p.root.scale.x - XL.drop;
+  x3.sit = { t: 0, k: 0, y0: fp.yaw, p0: fp.pitch, yaw: Math.atan2(S.x - r.x, S.z - r.z), pitch: THREE.MathUtils.clamp(Math.atan2(S.y + 22 - eye, Math.hypot(S.x - r.x, S.z - r.z)), 0, 0.3) }; // 看树梢上那段烟（远烟 uLow 16m 以下不画）
+  fp.go = null; fp.p.root.visible = false; shadowDirty = true; showQuest(); // 坐下：自己的身子藏起（眼睛降到胸口高，不藏会看见大衣里面）
+}
+function xSitTick(dt) {
+  const S = x3.sit; S.t += dt; fp.go = null;
+  S.k = RM.matches ? 1 : THREE.MathUtils.smoothstep(S.t, 0, XL.rise);
+  fp.yaw = S.y0 + angDiff(S.y0, S.yaw) * S.k; fp.pitch = S.p0 + (S.pitch - S.p0) * S.k;
+  if (S.t >= XL.rise + XL.sit) ending('stay');
 }
 function ending(kind) { LOG && LOG.ev('end', `结局 ${kind}`); LOG && LOG.ev('day', '第3天结束'); // 压黑、存 ended、重新载入回自己那间屋；结局文字在载入后压着画面放（endShotStart）。11-10 前是在这里黑底弹窗一张张放完才刷新
   const all = X_NEED.every((k) => game.found.has(k)), hidden = kind === 'back' && all, page = kind === 'stay' && all; // 四处齐：回去 = 提灯，留下 = 那页纸
-  if (fp) stopFP();
+  if (fp && !x3.leaving && !x3.sit) stopFP(); // 走回去、坐下：留在第一人称里淡黑（stopFP 会把镜头飞回鸟瞰）
   d2.veil = true; veilEl.style.transition = 'opacity 1.6s'; veilEl.style.zIndex = 30; veilEl.style.opacity = 1;
   setTimeout(() => {
-    game.snap = endFree(); game.found.add('end_' + kind); if (hidden) game.found.add('end_hidden'); if (page) game.found.add('end_page'); game.found.add('ended'); PAST.add(['end_' + kind, ...(hidden ? ['end_hidden'] : []), ...(page ? ['end_page'] : [])]); // 快照更新到选结局这一刻（进 ✕ 后又找到的也带上）；PAST：二周目记得看过的结局
+    game.snap = x3.leaving?.snap || endFree(); game.found.add('end_' + kind); if (hidden) game.found.add('end_hidden'); if (page) game.found.add('end_page'); game.found.add('ended'); PAST.add(['end_' + kind, ...(hidden ? ['end_hidden'] : []), ...(page ? ['end_page'] : [])]); // 快照更新到选结局这一刻（进 ✕ 后又找到的也带上）；PAST：二周目记得看过的结局
     game.found.add('endshow:' + (hidden ? 'hidden' : page ? 'page' : kind)); saveGame(); // 还没放的结局：记在存档里（不用 sessionStorage，存不进也读得到；中途关掉下次打开接着放），放完 endShotStart 里删
     location.reload();
   }, 1900);
@@ -4340,6 +4372,10 @@ function endShotStart(kind) {
   const next = (i) => {
     if (i >= pages.length) { d.classList.remove('end'); document.body.classList.remove('endshot'); roofWx.hold = null; game.found.delete('endshow:' + kind); saveGame(); if (END_IN.on) endInHold(E); else { fly = null; controls.enabled = true; } endAsk(kind); return; } // 镜头停在推到的地方，交还拖动（不停的话 fly 会和拖动抢相机）；屋里那个镜头等「遗稿齐了」关了再切回院子
     if (pages[i][2] === 'endHidden' && !END_IN.on) { endInside(() => next(i)); return; } // 念到提灯：切进屋
+    if (i === 1 && pages[0][2] === 'endBack' && !E.asked) { E.asked = true; // 「……书记员在摇椅上等你」之后她问一句，遗稿那页照玩家答的写（叙事 r2 #2）
+      const ans = (a) => () => { for (const k of [...game.found]) if (k.startsWith('ans:')) game.found.delete(k); game.found.add('ans:' + a); saveGame(); renderJournal(); next(1); };
+      dialog(['The clerk: "Was I there?"', '书记员：“那边……有没有我？”'], ['', ''], [['Yes. Your hand was on the desk.', '有。桌上是你的字。', ans('yes')], ['No.', '没有。', ans('no')]]); d.classList.add('end'); return;
+    }
     dialog(pages[i][0], pages[i][1], [[i < pages.length - 1 ? 'Continue' : 'The End', i < pages.length - 1 ? '继续' : '完', () => next(i + 1)]]); d.classList.add('end');
   };
   setTimeout(() => next(0), 3800); // 先让画面自己待一会儿
@@ -4415,6 +4451,8 @@ function updateDay3(dt) {
   if (x3.light.visible) updatePlume(x3.light, dt, 1);
   if (!fp || d2.veil) return;
   const r = fp.p.root.position;
+  if (x3.sit) { xSitTick(dt); return; }
+  if (x3.leaving) { xLeaveTick(r, dt); return; } // 不绕回门口（lostFog）
   if (Math.abs(r.x) < 1.5 && Math.abs(r.z) < 1.5) x3.wasIn = true;
   else if (x3.wasIn && outdoors(r) && Math.hypot(r.x, r.z) < 6 && $('dlg').hidden && card.hidden) { x3.wasIn = false; porchAsk(); }
   lostFog(Math.hypot(r.x, r.z) - D3.yard, dt); // 这边走远了也是雾，绕回门口
@@ -5554,11 +5592,11 @@ function stepPrint(r, moving, st = fp) { r = r.position; // 野外雪地上每�
 const NOKEYS = new Set();
 function fpStride(v) { return Math.min(1.2, Math.max(0.5, 0.35 + 0.25 * v)); } // 步长（米）：走得越快迈得越大，1 m/s ≈ 1.7 步/秒
 function updateFP(dt) {
-  const p = fp.p, r = p.root, s = r.scale.x, k = (!card.hidden || fp.paused) && !touchFP ? NOKEYS : fp.keys; // 卡片开着、锁放开（屏幕写着点画面继续）都不走（原来按 W 会偷偷走）
+  const p = fp.p, r = p.root, s = r.scale.x, k = ((!card.hidden || fp.paused) && !touchFP) || x3.sit ? NOKEYS : fp.keys; // 卡片开着、锁放开（屏幕写着点画面继续）都不走（原来按 W 会偷偷走）
   fpTouchTick(dt); sliceTick(dt); // 触屏点物件后转头 + 动手；切片按位置认房间、书记员跟进门
   if ((fp.solidT -= dt) < 0) { fp.solid = fpSolid(); fp.floors = fp.solid.concat(ground, ...(BROOK.bed || [])); fp.solidT = 0.5; fpNearMesh(r); }
   else if (r.position.distanceToSquared(fp.nearAt) > 1) fpNearMesh(r); // 走出 1m（屋外跑步约 0.2 秒）就重筛身边的网格 // 门开关、积雪会变，半秒刷新一次
-  const joy = touchFP && fpS.m > 0 ? fpS : null; // 触屏摇杆推着：当方向键用，推的幅度管走速
+  const joy = touchFP && fpS.m > 0 && !x3.sit ? fpS : null; // 触屏摇杆推着：当方向键用，推的幅度管走速
   const f = joy ? joy.f : (k.has('KeyW') || k.has('ArrowUp') ? 1 : 0) - (k.has('KeyS') || k.has('ArrowDown') ? 1 : 0);
   const st = joy ? joy.st : (k.has('KeyD') ? 1 : 0) - (k.has('KeyA') ? 1 : 0);
   if (!p.tasks.length) { fp.yaw += ((k.has('ArrowLeft') ? 1 : 0) - (k.has('ArrowRight') ? 1 : 0)) * 1.9 * dt; fp.pitch = THREE.MathUtils.clamp(fp.pitch + ((k.has('PageUp') ? 1 : 0) - (k.has('PageDown') ? 1 : 0)) * 1.2 * dt, -1.35, 1.25); } // 只用键盘：← → 转头（fp.yaw 变大 = 往左）、PageUp / PageDown 抬头低头；方向键不再平移（A D 平移）
@@ -5610,7 +5648,7 @@ function updateFP(dt) {
   fp.mv = moving; fp.bobA += ((moving ? 1 : 0) - fp.bobA) * Math.min(1, dt * 8); // 起伏幅度：停步时 0.1–0.2 秒平滑收到 0，相位不倒退
   audioStep(fp.bob, moving, run);
   const sk = fpStoop(r, s, seatedNow(p), dt), lean = fpLean(r, s); // 低头往前探，免得看见自己的衣领、肩膀（动画检查 #12）
-  let eyeY = r.position.y + eyeH - sk;
+  let eyeY = r.position.y + eyeH - sk - (x3.sit ? XL.drop * x3.sit.k : 0); // ✕ 门廊下「留下」：坐下
   if (lean > 0.13 * s && fp.near) { // 探出去的地方屋顶更矮（阁楼斜顶每米降 0.8m，探 28cm 就低 22cm）：眼睛跟着压低，不然相机钻进屋顶板，点梯子、点楼下都先打到屋顶、没反应（11-10 用户：手机上了阁楼下不来）。只查眼睛上下 0.3m，探到桌面上方不算
     fpRay.set(_lnO.set(r.position.x + Math.sin(fp.yaw) * lean, eyeY - 0.3, r.position.z + Math.cos(fp.yaw) * lean), _fpU); fpRay.far = 0.6;
     const h = fpRay.intersectObjects(fp.near, false)[0]; if (h) eyeY = Math.min(eyeY, h.point.y - 0.14);
@@ -6121,12 +6159,21 @@ function startDockIntro() {
   const pm = pathSide(D0, -0.25), pw = pathSide(D0 + 1.2, 0.5), nx = pathSide(D0 - 2.5, 0), yaw = Math.atan2(nx.x - pm.x, nx.z - pm.z); // 稽查中线偏左，书记员并排偏右、落后一步多
   placeMan(m, pm.x, pm.z, yaw); placeMan(w, pw.x, pw.z, yaw); m.root.position.y = floorAt(pm.x, pm.z); w.root.position.y = floorAt(pw.x, pw.z);
   m.tasks = [...along(D0, -0.25), ['walk', ...SL.man], ['face', SL.man[0], SL.man[1] - 5]]; w.tasks = [...along(D0 + 1.2, 0.5), ['walk', ...SL.woman], ['face', SL.woman[0], SL.woman[1] - 5]];
-  intro = { dock: true, slice: true, t0: performance.now(), guide, Lg, E, fw, P, S, TE, m, w, off0: null, d0: 0 };
+  intro = { dock: true, slice: true, t0: performance.now(), guide, Lg, E, fw, P, S, TE, m, w, off0: null, d0: 0, smoke: introSmoke() };
   window.__introMinD = 1e9; camera.fov = 60; camera.updateProjectionMatrix(); controls.enabled = false;
   updateDockIntro(intro.t0);
 }
+// 叙事 r2 #5：开场落地前，远处第 2 天那柱「方向不对」的烟（D2.lamp）先露几秒，不配字、不转镜头；小屋炉子这时是冷的，画面上唯一一柱烟在林子里。和第 2 天同一个 makePlume(75)（同一个着色器程序），开场第一帧就建好（uAmt 0 全丢弃），不在半路现编译
+const INTRO_SMOKE = { from: 17.5, to: 13, fade: 1 }; // 镜头停稳前 from 秒到 to 秒之间显示，首尾各淡 fade 秒。实测（introsmoke.py）只有这段镜头正朝着它（电脑、手机竖屏都在画面中上）；原定落地前 10 秒那时路拐向西，烟在画面外
+function introSmoke() { const g = makePlume(75); g.position.set(D2.lamp[0], ground.position.y + 6, D2.lamp[2]); g.remove(g.children[1]); scene.add(g); return g; } // 去掉点选柱：开场不能点
+function introSmokeTick(I) {
+  const g = I.smoke; if (!g) return;
+  const t = I.TE - I.t, sm = THREE.MathUtils.smoothstep, amt = sm(t, INTRO_SMOKE.to, INTRO_SMOKE.to + INTRO_SMOKE.fade) * (1 - sm(t, INTRO_SMOKE.from - INTRO_SMOKE.fade, INTRO_SMOKE.from));
+  updatePlume(g, Math.max(0, I.t - (I.smT ?? I.t)), amt); I.smT = I.t;
+  if (t < INTRO_SMOKE.to - 1) { scene.remove(g); g.children[0].geometry.dispose(); g.children[0].material.dispose(); I.smoke = null; } // 飞完就拆
+}
 function updateDockIntro(now) {
-  const I = intro; I.t = (I.t || 0) + Math.min(0.1, Math.max(0, (now - (I.last || now)) / 1000)); I.last = now; // 按帧累加（每帧最多 0.1s，同人物走路），页面卡住或在后台时镜头和人一起停，不会错位
+  const I = intro; I.t = (I.t || 0) + Math.min(0.1, Math.max(0, (now - (I.last || now)) / 1000)); I.last = now; introSmokeTick(I); // 按帧累加（每帧最多 0.1s，同人物走路），页面卡住或在后台时镜头和人一起停，不会错位
   const t = Math.min(I.t, I.TE), gy = ground.position.y, { m, P, S, Lg } = I, sm = THREE.MathUtils.smoothstep;
   // 沿引导线飞：时间表里二分查位置；视线看前方（高处远、低处近），低处几乎平视
   let lo = 0, hi = S.length - 1; while (hi - lo > 1) { const k = (lo + hi) >> 1; if (S[k] <= t) lo = k; else hi = k; }
@@ -6231,6 +6278,7 @@ function endIntro(skip) {
   if (!intro) return;
   if (!opening) enterBtn.classList.remove('wait'); // 开场字幕先播完了：endOpening 那时还在飞，没放出「进屋」
   const { homePos, homeTgt } = intro;
+  if (intro.smoke) scene.remove(intro.smoke); // 跳过开场：远烟一起拆
   if (intro.slice) { if (intro.m) intro.m.root.visible = true; intro = null; if (skip) openingCard(); sliceStart(); if (!skip && fp && game.day === 1 && !game.entered) SL.auto = {}; return; } // SL.auto：飞完没跳过，接着被带进屋（sliceTick） // 切片：直接交给玩家（跳过也一样，镜头跳到门廊）
   intro = null; if (skip) openingCard(); controls.enabled = true; spin = true; spinK = skip ? 0 : 1; // 开场结束就绕小屋转着展示
   camera.fov = FOV1; camera.updateProjectionMatrix();
