@@ -3784,7 +3784,7 @@ function smokeCue(r) { // 烟升起、书记员说「你看，有烟」：她转
   // 11-10 用户（iPhone）：第二天树梢上的东西不好找——在林子里时烟在 37° 以上的仰角，平视看不到；方向只有「东北偏东」一句，林子里分不清
   const L = d2.lamp.position, ax = L.x + 5, ay = L.y + 30, az = L.z, w = people.get('person_woman');
   if (w && !w.player) { w.look = [ax, ay, az]; w.lookT = 5; if (!w.tasks.length && w.S == null && w.mode !== 'sit') w.tasks = [['face', ax, az], ['look', ax, ay, az, 5], ['idle', 3]]; } // 闲着就整个人转过去（同提示句那里）
-  if (!fp || fp.go || fp.climb || fp.turn || !card.hidden) return;
+  if (!fp || fp.go || fp.cut || fp.turn || !card.hidden) return;
   const e = fp.eye || camera.position;
   fp.turn = { yaw: Math.atan2(ax - e.x, az - e.z), pitch: THREE.MathUtils.clamp(Math.atan2(ay - e.y, Math.hypot(ax - e.x, az - e.z)), -0.3, 0.75), t: 0, name: null, rate: 0.8 };
 }
@@ -4755,7 +4755,7 @@ const seatedNow = (p) => !!p.seat || p.mode === 'sit' || (climbs(p) && p.S != nu
 const STOOP = { mouth: [1.455, -1.19], look: [1.42, 0.55, -1.27], near: 0.95, far: 1.25, drop: 0.6, T: 0.6 };
 function fpStoop(r, s, seated, dt) {
   const P = r.position, [mx, mz] = STOOP.mouth, dx = mx - P.x, dz = mz - P.z, d = Math.hypot(dx, dz), off = Math.abs(angDiff(fp.yaw, Math.atan2(dx, dz)));
-  const open = (toggles.get('stove_door')?.k ?? 1) < 0.5, ok = open && !seated && !fp.climb && P.z > mz + 0.15 && P.y < 0.6;
+  const open = (toggles.get('stove_door')?.k ?? 1) < 0.5, ok = open && !seated && !fp.cut && P.z > mz + 0.15 && P.y < 0.6;
   if (!ok || d > STOOP.far || off > 0.9 || fp.pitch > 0.1) fp.stoopOn = false;
   else if (d < STOOP.near && off < 0.6 && fp.pitch < -0.55) fp.stoopOn = true;
   const k = fp.stoop = THREE.MathUtils.clamp((fp.stoop || 0) + (fp.stoopOn ? 1 : -1) * (RM.matches ? 1 : dt / STOOP.T), 0, 1);
