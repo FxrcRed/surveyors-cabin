@@ -194,7 +194,7 @@ function routeTasks(x, y, z, to) { // 从 (x,y,z) 走到节点 to；不在同一
     t.push(['turn', shared.LADDER.yaw], ['mount'], ['climb', CLIMB.top], ['top'], ['face', 0.6, 1.5], ['gate', true]);
     return [...t, ...goTasks(null, ...NAV.L_land, to)];
   }
-  return [...goTasks(null, x, z, 'L_land'), ['walk', ...NAV.L_land], ['face', 0.6, 1.5], ['gate', false], ['turn', shared.LADDER.yaw], ['topDown'], ['climb', 0], ['dismount'], ...goTasks(null, ...NAV.ladder, to)];
+  return [...goTasks(null, x, z, 'L_land'), ['walk', ...NAV.L_land], ['face', 0.6, 1.5], ['gate', false], ['turn', shared.LADDER.yaw], ['topDown'], ['climb', 0], ['dismount'], ['stow'], ...goTasks(null, ...NAV.ladder, to)];
 }
 const STOVE_AT = [1.27, -0.91]; // 拨火站的地方：NAV.stove 往炉门挪 0.2m，原来离炉子 0.62m，Interact 是平举手臂往前指，站近也离炉子 32cm，改弯腰的 PickUp_Table（动画检查 #10）
 // 老人的日常：坐在沙发上，隔 1–2.5 分钟（或被点一下）起来去做一件事再回沙发：拨火暖手、去书桌坐一会儿、上厕所
@@ -338,6 +338,9 @@ const CLIMB_TASKS = {
   wcDoor: { // 卫生间折叠门：关着就先拉开再走（门 0.9 秒收完才过），开着就跳过
     start: (p, T) => { const d = toggles.get('toilet_door_A'); T.skip = !d || !d.on; if (!T.skip) p.play('Interact', 0.3); },
     step: (p, T) => { const d = toggles.get('toilet_door_A'); if (T.skip) return true; if (!T.g && T.t > 0.5) { T.g = true; d.on = false; } return T.g && d.k < 0.05; } },
+  stow: { // 下完梯子把它滑回沙发边，不挡玄关进屋的过道（11-10 用户）；要上去时 mount.fix 会再推过来。玩家正在梯子上就留着
+    start: () => { const d = toggles.get('loft_ladder'); if (d && d.on && !shared.ladderBusy()) { shared.sfxToggle?.('loft_ladder', false); d.on = false; } },
+    step: () => true },
   gate: { // 拦杆：['gate', true] 放下、false 抬起；已经是那样就跳过
     start: (p, T) => { const g = toggles.get('loft_gate'); T.skip = !g || g.on === T[1]; if (!T.skip) p.play('Interact', 0.3); },
     step: (p, T) => { if (T.skip) return true; if (!T.g && T.t > 0.7) { T.g = true; toggles.get('loft_gate').on = T[1]; } return T.g && p.cur.time >= p.cur.getClip().duration - 0.05; } },
