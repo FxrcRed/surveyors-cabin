@@ -3834,8 +3834,8 @@ function day2Setup() {
       const up = new THREE.Vector3(0, 0, -1).addScaledVector(n, n.z).normalize(), rt = up.clone().cross(n), lift = Math.max(...P.map((p) => p.clone().sub(P[0]).dot(n))) + 0.003;
       const c = document.createElement('canvas'); c.width = 512; c.height = 340; const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4;
       const paint = () => { const x = c.getContext('2d'), R = rng(29), ink = '24,22,20'; x.clearRect(0, 0, 512, 340); x.strokeStyle = `rgba(${ink},.92)`; x.lineCap = 'round'; x.lineWidth = 11;
-        x.beginPath(); x.moveTo(52, 70); x.lineTo(118, 150); x.moveTo(122, 66); x.lineTo(50, 152); x.moveTo(150, 112); x.bezierCurveTo(190, 106, 220, 114, 262, 108); x.moveTo(236, 84); x.lineTo(266, 108); x.lineTo(234, 134); x.stroke(); // ✕ 和箭头
-        handwrite(x, ['4 mi.'], { x0: 282, y0: 146, size: 84, pitch: 0, ink, R, slant: 0.05, bleed: 0.02 });
+        x.beginPath(); x.moveTo(82, 74); x.lineTo(144, 150); x.moveTo(148, 70); x.lineTo(80, 152); x.moveTo(172, 112); x.bezierCurveTo(208, 106, 236, 114, 276, 108); x.moveTo(250, 86); x.lineTo(280, 108); x.lineTo(248, 132); x.stroke(); // ✕ 和箭头
+        handwrite(x, ['4 mi.'], { x0: 300, y0: 146, size: 76, pitch: 0, ink, R, slant: 0.05, bleed: 0.02 });
         sigDraw(x, { x0: 170, y0: 168, w: 330, ink, lw: 0.024 });
         x.globalCompositeOperation = 'destination-out'; for (let i = 0; i < 2600; i++) { x.fillStyle = `rgba(0,0,0,${0.25 + R() * 0.6})`; x.fillRect(R() * 512, R() * 340, 1 + R() * 3, 1 + R() * 2); } x.globalCompositeOperation = 'source-over'; // 炭笔在粗石面上：断断续续
         t.needsUpdate = true; };
