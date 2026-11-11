@@ -219,7 +219,7 @@ function updatePrecip(dt) { // 渲染循环里，雾算完之后
 
 // 屋顶积雪 → 积厚了整片滑下来、从檐口落成墙边的雪堆；下雨时檐口滴水；有雪时开大门把门前的雪扫开。
 // 屋顶是沿 z 的双坡、檐口在 x≈±2.6：加载后按瓦顶最高点拟合坡面 y = top − slope·|x|（setupRoofWeather），渲染循环里 updateRoofWeather
-const roofWx = { sides: [], piles: [], fit: null, door: null };
+const roofWx = { sides: [], piles: [], fit: null, door: null, hold: null };
 const snowMat = new THREE.MeshStandardMaterial({ color: 0xe4e8ee, roughness: 0.85 });
 function moundGeo() { // 雪堆：沿 z 的半圆柱（长 1、半径 1），两头收尖、顶上起伏，缩放成实际大小
   const g = new THREE.CylinderGeometry(1, 1, 1, 14, 30, true, Math.PI / 2, Math.PI).rotateX(Math.PI / 2), p = g.attributes.position;
@@ -492,7 +492,7 @@ function updateRoofWeather(dt) {
   const c = wx.cur, snowing = c.snow > 0.05, gy = shared.ground.position.y, melt = c.rain > 0.05 ? 1 / 12 : 1 / 30;
   for (const S of roofWx.sides) {
     if (S.s < 0) { // 积着：下雪就涨，积满后随时可能整片滑下
-      S.d = THREE.MathUtils.clamp(S.d + dt * (snowing ? c.snow / 14 : -melt), 0, 1.2);
+      S.d = roofWx.hold ?? THREE.MathUtils.clamp(S.d + dt * (snowing ? c.snow / 14 : -melt), 0, 1.2); // hold：结局画面把积雪钉在成片的量（刷新后从 0 长，前 15 秒是黑斑）
       if (S.d > 1 && Math.random() < dt * 0.35) slideSnow(S.sg);
       else {
         S.slab.visible = S.d > 0.02; S.slab.position.x = 0; S.slab.scale.set(1, 1, 1); if (S.slab.visible) fitSlab(S, thickOf(S.d));
