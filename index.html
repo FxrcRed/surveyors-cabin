@@ -6084,7 +6084,7 @@ addEventListener('keydown', (e) => { if (e.key === 'Escape') select(null); });
 function updateHover() {
   if (!hoverDirty || !home) return;
   hoverDirty = false;
-  const n = fly || intro || spotHot || (fp && (fp.cut || !card.hidden || (fp.paused && !touchFP))) ? null : fp ? fpAimPick() : pick(pointer.lastEvent); // 锁放开（点画面继续）、上下梯子的过场里不留描边和名字
+  const n = fly || intro || spotHot || (fp && (fp.cut || x3.sit || !card.hidden || (fp.paused && !touchFP))) ? null : fp ? fpAimPick() : pick(pointer.lastEvent); // 锁放开（点画面继续）、上下梯子的过场里不留描边和名字
   if (fp) fpHover(n); else setHovered(n);
 }
 const aimAt = { pos: new THREE.Vector3(), q: new THREE.Quaternion(), t: -1e9, n: null, hd: Infinity };
