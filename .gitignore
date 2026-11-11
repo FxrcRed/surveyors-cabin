@@ -11,3 +11,4 @@ publish/
 fonts/src/
 # 本机开网页的批处理（只在本机用）
 开网页.bat
+NOTES-*.md
