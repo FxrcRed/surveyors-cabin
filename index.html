@@ -1301,7 +1301,7 @@ async function pathSidePoints(rand, n, gap, taken) {
 let forestCenter;
 // 树高 ×2.35（2026-10-29：原 1.3 时云杉中位 9m、第一人称眼高 1.52m，人像巨人；现中位约 17m、最高约 23m，接近真实云杉）
 // 树冠宽只 ×1.35（TREE_W）：云杉本来就细长，全按高度放大的话树冠半径 4m+，林子里挤成一团
-const TREE_K = 2.35, TREE_W = 0.75;
+const TREE_K = 2.35, TREE_W = 0.75, AR_MIN = 0.26; // AR_MIN：树 宽/高 下限（自然随机最细约 0.26）
 const TREE_XZ = []; // 小屋 120m 内高于 2m 的树：x, z 交替
 const PITS = []; // 走得到的地方的树：x, z, 树冠半径 交替（地面画树根雪坑）
 const CROWN_KEEP = []; // 先占位的树冠 [x, z, 半径]：标记树
@@ -1340,6 +1340,7 @@ function plant(parts, pts, rand, hMin, hMax, y, coll) { // coll：不管离小�
   const tint = new THREE.Color(), m = new THREE.Matrix4(), q = new THREE.Quaternion(), s = new THREE.Vector3(), p = new THREE.Vector3(), up = new THREE.Vector3(0, 1, 0);
   const ims = parts.map(({ geometry, material }) => new THREE.InstancedMesh(geometry, material, pts.length));
   if (!crownGrid.size) for (const k of CROWN_KEEP) crownAdd(...k);
+  const ext = parts.reduce((e, { geometry: g }) => { if (!g.boundingBox) g.computeBoundingBox(); const b = g.boundingBox; return [Math.max(e[0], b.max.x - b.min.x, b.max.z - b.min.z), Math.max(e[1], b.max.y - b.min.y)]; }, [0, 0]), ARm = ext[0] / (ext[1] || 1); // 模型本身 宽/高
   const R = parts.radius || 0.3, mutual = !!parts.radius; // 远处简化版（雾里）只避路和视线，彼此可以交叠，不然远山就稀了
   pts.forEach(([x, z], i) => {
     const ck = canopyK(x, z); // 单棵随机只占原范围的中间 60%，高低主要看成片的系数；宽只随系数开方变（矮林不显得扁、冒尖的树细高），路边照旧由 crownRoom 收窄
@@ -1351,6 +1352,8 @@ function plant(parts, pts, rand, hMin, hMax, y, coll) { // coll：不管离小�
     // 路、踪迹、视线通道、旁边的树冠：只收窄不降高，收到一半还不够就不种（开场贴路 2.4m 高飞过、第一人称走在踪迹上，都不钻树冠）
     // 10-31 第二轮（用户：路边树还离路远、小屋边全是小树）：离路 6m 内可以收窄到 35%（细高云杉，树干贴路）；还不够的，离小屋 30m 外才缩成幼树，30m 内不种
     if (w) { const k = crownRoom(x, z, mutual, h) / (R * w), np = nearD(pathClear, x, z) < 6; if (k < (np ? 0.35 : 0.5)) { if (np && k > 0 && h * k >= 3 && room > 23) { h *= k; w *= k; } else h = w = 0; } else if (k < 1) w *= k; }
+    // 11-12 用户：门口路边有树被拉得又细又高。上面「只收窄不降高」把路边树宽收到 35%、宽高比 0.11（自然树 0.26–0.5）：宽高比低于下限就把高度降下来，不再拉细
+    if (w && h * AR_MIN > ARm * w) { h = ARm * w / AR_MIN; if (h < 3) h = w = 0; }
     if (w && mutual) crownAdd(x, z, R * w);
     m.compose(p.set(x, y + terrainH(x, z) - 0.2, z), q.setFromAxisAngle(up, rand() * Math.PI * 2), s.set(w, h, w)); // 坡上脚下沉 20cm，地面是折线网格
     if (h > 2 && (room < 115 || coll)) TREE_XZ.push(x, z); // 第一人称在屋外撞树干用（fpTrees）
@@ -1686,6 +1689,8 @@ const STEEP = 0.5; // 坡度（m/m）超过这个走不上去（洼地的壁）
 function plantUnder(parts, pts, rand, hMin, hMax, sink, block, pal = BUSHES) { // 灌木/草：保持模型原有长宽比（只有 ±12% 的胖瘦），不拉高
   const tint = new THREE.Color(), m = new THREE.Matrix4(), q = new THREE.Quaternion(), s = new THREE.Vector3(), p = new THREE.Vector3(), up = new THREE.Vector3(0, 1, 0);
   const ims = parts.map(({ geometry, material }) => new THREE.InstancedMesh(geometry, material, pts.length)), asp = (parts.radius || 0.5) * 2; // 宽 / 高
+  const sh = window.__shrub || (window.__shrub = { n: 0, tris: 0 }); sh.n += pts.length; sh.tris += pts.length * parts.reduce((t, { geometry: g }) => t + (g.index ? g.index.count : g.attributes.position.count) / 3, 0); // 调试：灌木实例数、总三角面
+  (sh.xz ||= []).push(...pts.flat());
   pts.forEach(([x, z], i) => {
     const h = hMin + (hMax - hMin) * rand(), w = h * (0.88 + 0.24 * rand());
     m.compose(p.set(x, terrainH(x, z) - sink, z), q.setFromAxisAngle(up, rand() * Math.PI * 2), s.set(w, h, w));
@@ -1751,6 +1756,33 @@ async function plantUnderstory(center) {
     plantUnder(b1, await scatterPoints(rb, 40 * f, 10, 34, 2.2, X, taken), rb, 0.7, 1.6, 0.25, true);
     plantUnder(b3, await scatterPoints(rb, 30 * f, 10, 34, 2.2, X, taken), rb, 0.6, 1.4, 0.25, true); }
   await maybeYield(); await plantShore(rand, f, b1, b3, grass, taken, gtaken);
+}
+// 11-12 用户试玩：第 2 天活动范围（踪迹 s 5–108m）和第 1 天开场沿路（卵石路 s 6–140m）灌木偏少 → 林缘成丛加密：每丛 3–7 棵、间距 ≥0.95m，丛心离路 3.2–12m（偏近）、按 14m 级噪声成片；
+// 路中心 ≥2.9m（navmap 要路通）、标桩 / 刻记云杉 / 石堆 4.5m、岔口林间空地（s 35）7m、小溪 s 11 和兔子 s 27 的小景 3.5m 内不种，个头 ≤1.4m（眼高 1.65m，不挡记号视线）。另用随机数 rng(211)，在 plantFloor 和 r5 补种之后、chunkForest 之前种，原有物件不挪
+async function plantEdgeShrubs() {
+  const [b1, b3] = await Promise.all(BUSH_URLS.map(loadPlant)); lastYield = performance.now();
+  const r = rng(211), f = lite ? 0.6 : 1, tl = trailCurve.getLength(), pl = pathCurve.getLength(), nt = [], P1 = [], P3 = [], at = (c, L, s) => c.getPointAt(Math.min(1, s / L));
+  const marks = [[8, 4.5], [31, 4.5], [46, 4.5], [11, 3.5], [27, 3.5], [35, 7]].map(([s, rr]) => { const p = at(trailCurve, tl, s); return [p.x, p.z, rr]; });
+  const ok = (x, z) => {
+    if (!underOk(x, z, 3.0) || nearD(trailClear, x, z) < 2.9 || nearAny(nt, x, z, 0.95)) return false;
+    if (marks.some(([mx, mz, mr]) => Math.hypot(x - mx, z - mz) < mr) || THICKETS.some(([tx, tz, tr]) => Math.hypot(x - tx, z - tz) < tr + 1)) return false;
+    for (let i = 0; i < TREE_XZ.length; i += 2) if ((TREE_XZ[i] - x) ** 2 + (TREE_XZ[i + 1] - z) ** 2 < 1.4) return false; // 离树干、倒木 1.2m
+    for (let i = 0; i < SHRUB_XZ.length; i += 3) if (Math.hypot(SHRUB_XZ[i] - x, SHRUB_XZ[i + 1] - z) < SHRUB_XZ[i + 2] + 0.4) return false;
+    return true; };
+  const run = async (curve, L, s0, s1, nClump, dMax) => { let got = 0;
+    for (let t = 0; got < nClump && t < nClump * 60; t++) {
+      if (!(t & 15)) await maybeYield();
+      const s = s0 + (s1 - s0) * r(), p = at(curve, L, s), q = at(curve, L, s + 0.6), tx = q.x - p.x, tz = q.z - p.z, l = Math.hypot(tx, tz) || 1;
+      const d = (r() < 0.5 ? -1 : 1) * (3.2 + (dMax - 3.2) * r() ** 1.7), cx = p.x + (tz / l) * d, cz = p.z - (tx / l) * d;
+      if (vnoise(cx / 14 + 2.7, cz / 14 - 6.1) < 0.42) continue; // 成片：噪声低的地方整块空着
+      const k = 3 + Math.floor(r() * 5); let n = 0;
+      for (let u = 0; u < k * 4 && n < k; u++) { const a = r() * 6.283, rr = 0.7 + 1.9 * Math.sqrt(r()), x = cx + Math.cos(a) * rr, z = cz + Math.sin(a) * rr;
+        if (ok(x, z)) { (n & 1 ? P3 : P1).push([x, z]); takeAt(nt, x, z); n++; } }
+      if (n >= 2) got++; } };
+  await run(trailCurve, tl, 5, 108, Math.round(38 * f), 12);
+  await run(pathCurve, pl, 6, 140, Math.round(26 * f), 12);
+  plantUnder(b1, P1, r, 0.55, 1.4, 0.25, true); plantUnder(b3, P3, r, 0.5, 1.25, 0.25, true);
+  window.__edgeShrubs = [...P1, ...P3].flat(); // 调试
 }
 // 湖岸（2026-10-31）：芦苇、石头用代码生成（平面着色低多边形，同树和码头；网上没找到授权明确、风格一致的），灌木和草用 plants/ 里的 Quaternius CC0。
 // 只种开场看得到的一段岸（introSees），离卵石路/码头 3m 外。s = 沿那个方向「离湖心 / 岸线」的倍数：<1 在水里
@@ -1931,6 +1963,7 @@ async function plantForest(center, y) {
     D.push(...await walkPoints(r5, 8 * f, 3, 18, 2.5, dt, (x, z) => treeOk(x, z) && snag(x, z)), ...await ringPoints(r5, 4 * f, 9, 22, 2.5, center, dt, (x, z) => nearDoor(x, z) && snag(x, z)), ...await ringPoints(r5, 4 * f, 12, 20, 2.5, X, dt, snag)); // 枯立木（同幼树，不进 taken）
     await maybeYield(); Y.push(...await ringPoints(r5, 28 * f, 9, 26, 1.6, center, yt, (x, z) => nearDoor(x, z) && free(x, z)), ...await ringPoints(r5, 14 * f, 12, 20, 1.6, X, yt, free)); // 幼树（同上面，不进 taken）；门口树冠已排满，大树多半种不下（plant 里按树冠缩成 0）
     plant(pine, P, r5, 3.5, 9, y, true); plant([...dead], D, r5, 3, 6, y, true); /* 枯立木没有树冠：拷一份不带 radius 的，不和旁边的树冠互相避让（原来走廊 45 棵大多被缩成 0） */ plant(lodP, Y, r5, 0.9, 2.1, y, true); window.__plant5 = [P.length, D.length, Y.length]; } // 调试
+  await plantEdgeShrubs(); // 11-12：第 2 天踪迹两侧、第 1 天开场沿路的灌木加密（成丛）；放在 brookClear 前，溪里的会一起清掉
   brookClear();
   await chunkForest();
   for (const o of scene.children) if (o.isInstancedMesh && /^(forest|floor)$/.test(o.name) && !FAR_DETAIL.includes(o) && !NEAR_CONES.includes(o)) WALK_CULL.push(o); // 第一人称在雾里时按距离藏（见渲染循环）
