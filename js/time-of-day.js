@@ -101,9 +101,9 @@ function applySky() {
     const dir = day ? dirOf(new THREE.Vector3(), Math.max(sunElev, 3), sunAz) : dirOf(new THREE.Vector3(), Math.max(moonElev, 8), moonAz);
     sun.position.copy(sunRig.center).addScaledVector(dir, sunRig.r * 2.5);
   }
-  // 天黑自动开灯、天亮自动关（只在跨过时切换，用户手动开关的不会被每帧覆盖）
+  // 天黑自动开灯、天亮自动关（只在跨过时切换，用户手动开关的不会被每帧覆盖）。只给通关后的自由 / 看模型：剧情里灯是书记员走过时一盏盏开的，没人去的阁楼、卫生间不亮（11-11 world #1）
   const dark = h >= 18.8 || h < 6.2;
-  if (sky.dark !== null && dark !== sky.dark) for (const name of Object.keys(shared.LAMPS)) { const t = shared.toggles.get(name); if (t && name !== 'entry_porch_lamp') t.on = dark; } // 门廊灯一直亮（故事：他走时留着灯）
+  if (sky.dark !== null && dark !== sky.dark && shared.game?.found.has('ended')) for (const name of Object.keys(shared.LAMPS)) { const t = shared.toggles.get(name); if (t && name !== 'entry_porch_lamp') t.on = dark; } // 门廊灯一直亮（故事：他走时留着灯）
   sky.dark = dark;
 }
 // 屋里的间接光：半球光和环境光（RoomEnvironment）不受阴影遮挡，会穿墙把屋里照亮，夜里关灯后窗户里还发亮。

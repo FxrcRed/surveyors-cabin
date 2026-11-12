@@ -537,11 +537,11 @@ import { LOG } from './js/playlog.js';
 import { volfog, volDraw, volTick, FOG_LAYER } from './js/volfog.js';
 import { snowLamp, applyWeather, wsPos, WS, groundCover, cover, precipHole, setupRoofWeather, wx, roofWx, setWeather, setMist, wxTimer, slideSnow, updatePrecip, updateRoofWeather } from './js/weather.js';
 import { LAMPS, toggles, DOORS, swapSoftProps, splitParts, setupToggles, setupFire, setupWaterFx, toggle, fire, rocker, toggleOf, updateToggles, updateFire, updateLantern, updateRocker, updateWaterFx, updateHalos } from './js/interact.js';
-import { setOutfit, people, SEATS, wakePerson, loadPeople, seatTaken, goHome, SPOTS, routeTasks, NAV, MOODS, fpRise, sitTasks, CLIMB, moodOf, WALK_SPEED, ladderRoot, floorBelow, goTasks, nearNode, navPath, updatePeople } from './js/characters.js';
+import { setOutfit, people, SEATS, wakePerson, loadPeople, seatTaken, goHome, SPOTS, routeTasks, NAV, MOODS, fpRise, sitTasks, CLIMB, moodOf, WALK_SPEED, ladderRoot, floorBelow, goTasks, nearNode, navPath, updatePeople, riseTasks, trimBack, wcDoorTasks } from './js/characters.js';
 // 模块（js/*.js）要用的主页面变量：模块里写 shared.名字，读写都直通这里（写过的才给 setter）
 share({
   ground: () => ground, layers: () => layers, loader: () => loader, INFO: () => INFO, meshes: () => meshes, isShown: () => isShown,
-  shadowDirty: [() => shadowDirty, (v) => { shadowDirty = v; }], x3: () => x3, _fpU: () => _fpU, chgTouch: () => chgTouch, game: () => game,
+  shadowDirty: [() => shadowDirty, (v) => { shadowDirty = v; }], x3: () => x3, _fpU: () => _fpU, chgTouch: () => chgTouch, worldBy: () => worldBy, game: () => game,
   HELD_LAYER: () => HELD_LAYER, LADDER: () => LADDER, ladderZ: () => ladderZ, ladderReady: () => ladderReady, gateOpen: () => gateOpen, ladderBusy: () => ladderBusy, _fpDn: () => _fpDn,
   angDiff: () => angDiff, planWander: () => planWander, brookWheel: () => BROOK.wheel
 });
@@ -2028,7 +2028,7 @@ loader.load('cabin.glb', async (gltf) => {
   const peopleReady = loadPeople().catch(console.error); // 和种树一起加载，预热前要到齐（材质一起编译）
   await yieldFrame();
   // 树种好再揭开加载页、开始开场动画，免得飞行中树一棵棵冒出来
-  plantForest(center, ground.position.y).catch(console.error).then(clearOrbitView).then(() => { brookWire(); FLOOR_U.uFloor.value = floorMap(); makeFogWalls(); if (x3.pending) { x3.pending = false; applyX(); } gearRestore(); }).then(() => Promise.all([peopleReady, bedReady])).finally(async () => { // 地面雪坑图等树都定下来（删掉挡视线的）再画
+  plantForest(center, ground.position.y).catch(console.error).then(clearOrbitView).then(() => { brookWire(); FLOOR_U.uFloor.value = floorMap(); makeFogWalls(); if (x3.pending) { x3.pending = false; worldSetup(); applyX(); } gearRestore(); }).then(() => Promise.all([peopleReady, bedReady])).finally(async () => { // 地面雪坑图等树都定下来（删掉挡视线的）再画
     T('forest'); audioPreload(); // 模型下完了、网络闲着：趁编译着色器把声音文件先下好
     await prewarm(); const w0 = performance.now(); await Promise.all(bvhJobs); window.__bvhWait = performance.now() - w0; sceneReady = true; // __bvhWait 调试用：后台 BVH 没赶上时多等了多久
     T('prewarm');
@@ -2330,9 +2330,9 @@ for (const ev of ['pointerdown', 'keydown', 'touchend', 'click']) addEventListen
 let noteTimer = 0, pumpT = 0, noteQ = [], noteEnd = 0, noteCur = null;
 const roomNoteStale = (it) => !!it && !!it.room && (!inside || inside.name !== it.room);
 function endRoomNote() { clearTimeout(noteTimer); $('roomNote').classList.remove('on'); stopVoice('room'); noteEnd = 0; noteCur = null; }
-function showRoomNote(text, room, hintKey, jump) { // hintKey：这句是找某样线索的提示，找到了就不再念（评审④ #8）；jump：插队马上念，正在念的剧情句没念到一半就排到它后面从头再念，念过一半就算念过了（出门取大衣提灯那句不能晚，叙事 r4 #6）；被顶掉的也是插队句就不再念（连着拿大衣、提灯）
+function showRoomNote(text, room, hintKey, jump, chk) { // hintKey：这句是找某样线索的提示，找到了就不再念（评审④ #8）；jump：插队马上念，正在念的剧情句没念到一半就排到它后面从头再念，念过一半就算念过了（出门取大衣提灯那句不能晚，叙事 r4 #6）；被顶掉的也是插队句就不再念（连着拿大衣、提灯）
   if (!text) { clearTimeout(pumpT); noteQ = []; endRoomNote(); return; }
-  const it = { text, room: room || null, t: performance.now(), hint: hintKey, jump: !!jump };
+  const it = { text, room: room || null, t: performance.now(), hint: hintKey, jump: !!jump, chk }; // chk：轮到时再核一遍（clerkSay：她还在场、看得见、你听得见），不成立就不念
   if (jump) { const c = noteCur; if (c && !c.room && !c.jump && !(c.at && it.t - c.at >= (noteEnd - c.at) / 2)) noteQ.unshift(c); noteQ.unshift(it); endRoomNote(); } else noteQ.push(it);
   if (roomNoteStale(noteCur)) endRoomNote(); // 正在念的那句人已经走开了：不念完，让位
   pumpNote();
@@ -2352,7 +2352,7 @@ function pumpNote() {
   const busy = Math.max(noteEnd, VOICE.a ? VOICE.until : 0); // 别的声音（物件说明、开场字幕）在念也等
   if (now < busy) { pumpT = setTimeout(pumpNote, busy - now + 300); return; }
   let it;
-  while ((it = noteQ.shift())) { if (!roomNoteStale(it) && !(it.room && now - it.t > 15000) && !(it.hint && game.found.has(it.hint))) break; it = null; }
+  while ((it = noteQ.shift())) { if (!roomNoteStale(it) && !(it.room && now - it.t > 15000) && !(it.hint && game.found.has(it.hint))) { if (!it.chk?.can || it.held || it.chk.can()) break; worldAudit('drop', it.text[0], { why: 'no longer holds when its turn came' }); it.chk.miss?.(); } it = null; }
   if (!it) return;
   if (it.room && now - it.t < 1200) { noteQ.unshift(it); pumpT = setTimeout(pumpNote, 1250 - (now - it.t)); return; } // 在这间屋站满 1.2 秒才念：路过的房间不闪一下
   if (!it.jump && now - it.t < 400) { noteQ.unshift(it); pumpT = setTimeout(pumpNote, 420 - (now - it.t)); return; } // 剧情句晚 0.4 秒开口：同一刻触发的插队句（取大衣提灯）先念，不再刚张嘴就被截、从头重念（11-07 声8）
@@ -2360,7 +2360,7 @@ function pumpNote() {
   const el = $('roomNote'), text = it.text;
   el.innerHTML = lbl(text[0], text[1]);
   el.classList.add('on');
-  noteCur = it; (window.__noteLog ||= []).push(text[0]); // __noteLog：无头测试数同时出现的旁白
+  noteCur = it; (window.__noteLog ||= []).push(text[0]); if (!it.held) auditSay(it); // __noteLog：无头测试数同时出现的旁白
   const h = it.held; delete it.held; if (h && h.a) h.a.held = false;
   if (h && h.a) { VOICE.a = h.a; Object.assign(VOICE, { src: 'room', keep: !it.room, dur: Math.max(0, h.left - 700), until: now + h.left }); h.a.play().catch(() => { VOICE.wait = h.a; }); } // 卡片关了：从停下的地方接着念
   if (!h) it.at = performance.now();
@@ -2815,7 +2815,7 @@ const PAGE_TRACE = { stay: ['The inspector stayed.', '稽查留下了。'], hidd
 const pageTrace = (() => { for (const k of PAST.get().reverse()) { const t = Object.keys(PAGE_TRACE).find((t) => k.slice(4).startsWith(t)); if (t) return PAGE_TRACE[t]; } return null; })();
 if (pageTrace) { PAGE_CARD[3] += '\n\n' + pageTrace[0]; PAGE_CARD[4] += '\n\n' + pageTrace[1]; } // 原地改：isPaper 按数组本身认
 const PAGE_SAYS = ['The clerk reads it twice. "That is my hand. But I have not written it yet."', '书记员看了两遍：“是我的字。可我还没写呢。”'];
-const LETTER_SAYS = ['The clerk looks from the letter to the page in her hand, and says nothing.', '书记员看看信，又看看手里那页纸，没说话。'];
+const LETTER_SAYS = ['The clerk looks from the letter to the page on the desk, and says nothing.', '书记员看看信，又看看桌上那页纸，没说话。']; // 11-11 world #6：那页纸一直在书桌上，原来写「手里那页纸」
 const LETTER_CARD = ['Unburnt Letter', 'Kitchen', '没烧完的信', '"Inspector —"\n\n"…east-north-east, about four miles. Beneath an old spruce the ground has split… Marked ✕. This place is not fit…"\n\nThe rest is burnt away.', '“稽查先生：”\n\n“……东北偏东，约四英里。老云杉根下地面开裂……已标 ✕。此处不宜……”\n\n后面烧没了。'];
 const MAP_CARD = ['The ✕ on the Map', 'Parlour', '地图上的 ✕', DAY1_TEXT.map[2], DAY1_TEXT.map[3]];
 const BASIN_CARD = ['Washstand', 'Water Closet', '洗脸架', 'Half a basin of water, frozen into one solid block.', '盆里还有半盆水，冻成了一整块冰。'];
@@ -2866,7 +2866,7 @@ function showQuest() {
 }
 // —— 居中小弹窗（解锁遗稿、继续 / 重来）：样式同线索卡片；btns = [[英, 中, 点了做什么], …]，点哪个都先关窗 ——
 function dialog(title, text, btns) {
-  const d = $('dlg'), box = d.querySelector('.box');
+  const d = $('dlg'), box = d.querySelector('.box'); if (/^The clerk[: ]/.test(title[0])) auditSay({ text: title, chk: { who: 'clerk' } }); // 她开口的弹窗（指烟后回她、结局问话）也审
   box.innerHTML = `<h2>${lbl(...title)}</h2>${text[0] ? `<p>${lbl(...text)}</p>` : ''}<div class="row"></div>`; // 没有正文就只留标题和按钮
   for (const [en, zh, fn] of btns) { const b = document.createElement('button'); b.innerHTML = lbl(en, zh); b.onclick = () => { d.hidden = true; if (fn) fn(); if (d.hidden && fp && !touchFP && !document.pointerLockElement) canvas.requestPointerLock?.()?.catch?.(() => {}); }; box.lastChild.append(b); } // 第一人称点完按钮接着锁回鼠标，不用再点一下画面（UX7）；按钮里又开了下一个弹窗就不锁
   if (document.pointerLockElement) document.exitPointerLock(); // 第一人称：放出鼠标才点得到按钮
@@ -2975,8 +2975,8 @@ function gameSeen(name) { // select 里调：这次点的东西算不算线索�
   if (!got.length) return over;
   saveGame(); renderJournal();
   if (got.includes('took')) showRoomNote([DAY1_TEXT.took[2], DAY1_TEXT.took[3]]);
-  if (got.includes('page')) showRoomNote(PAGE_SAYS); // 卡片关了才出（showRoomNote 会排队）
-  if (got.includes('letter') && f.has('page')) showRoomNote(LETTER_SAYS);
+  if (got.includes('page')) clerkSay(PAGE_SAYS, { about: 'desk_page' }); // 卡片关了才出（showRoomNote 会排队）
+  if (got.includes('letter') && f.has('page')) clerkSay(LETTER_SAYS, { about: [() => ({ at: earOf(), r: 0.4 }), 'desk_page'] }); // 她看得见你手里的信和桌上那页纸（看不见先走到看得见的地方）
   if (!game.night && day1Done()) startNight(got.includes('took'));
   if (got.includes('notes1')) setTimeout(endDay, 500); // 读完第 1 夜的调查记录：卡片关了弹「第一天结束」→ 第二天早上
   showQuest();
@@ -3029,8 +3029,10 @@ function hintFire() { // 升一级并显示
   const via = hint.lvl === 3 && g0 && layers.get('entry_noren') && hintInEntry() && !HINT_ROOMS0.includes(roomAt(new THREE.Box3().setFromObject(g0).getCenter(new THREE.Vector3()))); // 人还在玄关、东西在屋里：三级先描门帘那道门洞（11-07 新手评审 #3：照「在你右边」转过去是墙）
   const t3 = hint.lvl < 3 ? null : via ? PAGE_WAY : hintThere(key);
   LOG && LOG.ev('hint', `第${hint.lvl}级 ${key}：${(t3 || h[hint.lvl - 1]).join(' / ')}`);
-  if (hint.lvl === 1 && game.day === 2 && DAY2_MARKS.includes(key) && d2.chgQ && d2.chgQ.length) { hint.lvl = 0; showRoomNote(D2_SAYS['change' + d2.chgQ.shift()], null, key); return; } // 雾里绕回后小屋的变化（门口脚印、烟囱）先不说，卡住后第一次提示才说；不占级数，下一次提示还是第 1 级
+  if (hint.lvl === 1 && game.day === 2 && DAY2_MARKS.includes(key) && d2.chgQ && d2.chgQ.length && d2Change(d2.chgQ[0])) { const k = d2.chgQ.shift(); hint.lvl = 0; showRoomNote(D2_SAYS['change' + k], null, key, false, { ref: D2_CHG_AT[k], can: () => d2Change(k) }); return; } // 你看得见门口那行脚印 / 烟囱口、事情还成立时才说（11-11 world #10），不然留着等下次 // 雾里绕回后小屋的变化（门口脚印、烟囱）先不说，卡住后第一次提示才说；不占级数，下一次提示还是第 1 级
   if (hint.lvl === 1 && game.day === 2 && DAY2_MARKS.includes(key) && d2.over &&d2.over.n === DAY2_MARKS.filter((k) => game.found.has(k)).length) { showRoomNote(D2_SAYS.passed, null, key); return; } // 已经走过那样记号：别再催往前走（评审④ v2 #6）
+  if (key === 'night' && hint.lvl === 1) { const w = clerkHere(), at = w && w.seat === 'loft_chair' && w.mode === 'sit'; // 「她从书桌前抬起头」：她坐在书桌前、你在屋里听得见才这么说，不然用没有主语的那句（11-11 world #13）
+    if (at && fp && roomAt(fp.p.root.position) && hears(w)) showRoomNote(h[0], null, key, false, { who: 'clerk', can: () => { const x = clerkHere(); return !!x && x.seat === 'loft_chair' && hears(x); } }); else showRoomNote(h[1], null, key); return; }
   if (hint.lvl < 3) { showRoomNote(h[hint.lvl - 1] || PAGE_WAY, null, key); return; } // 还在玄关：第一句先说往哪走（评审④ v2 #2）
   showRoomNote(t3);
   const gn = via ? 'entry_noren' : h[2], g = layers.get(gn);
@@ -3072,13 +3074,199 @@ setInterval(() => {
   if (hintActive() && ++hint.idle >= (HINT_WAIT[hintKey()] || HINT_IDLE)) hintFire();
 }, 1000);
 window.cabinHint = { hint, fire: hintFire, click: hintClick, HINTS, glow: () => hintGlow };
+// —— 世界自洽（11-11 world）：四个通用机制，台词、灯、物件变化、她的动作都走它们（总原则见 CLAUDE.md「世界自洽」，审计报告 tools/review/reports/2026-11-11-world.md）——
+// ① sees(谁, 目标)：谁 = 'player'（此刻的真相机：第一人称、鸟瞰都一样，「看模型」揭了屋顶时屋顶图层藏着，自然看得见）、人物（头的位置；不限朝向、只查遮挡：她会转头）或一个点。
+//    目标 = [x,y,z] / Vector3 / 图层名 / { at, r } / { light: 灯名 } / 返回这些的函数。玩家先过视锥，再从眼睛往目标打射线（图层取包围盒中心 + 8 个角往里收 20%）：
+//    第一个碰到的是目标本身、或碰到的地方离目标不到 r 就算看见（东西藏着时看的是那个位置）。只按雾远截断，没有别的距离门槛。
+//    灯：同一间（厨房和起居室是通的，算一间）、在 range+1 内、或看得见被它照着的面（命中点离灯 < range）就算看见：光照变化不用看见灯本身。遮挡物 1 秒重取一次，射线走 BVH，只在判的时候打。
+// ② whenUnseen(目标或目标列, fn, { hold 秒, clerk 她也要看不见（true 同目标，或另给目标列）, cond 前提（不成立就重新计时）, abort / onAbort }) ：每 0.5 秒判一次，连续看不见满 hold 秒才做。whenSeen 反过来（回来看见）。
+// ③ clerkSay(句子, { about 她说的东西（都要看得见）, hear 米（默认屋里 8、屋外 15） }) ：她在场、看得见 about、你听得见（隔着关着的大门、卫生间门不算）才说；
+//    看不见就先走过去看到再说（clerkSpot 挑看得见的站点），走不到、你走开了就不说。排队等念的句子轮到时再核一遍（pumpNote），不成立就不念。
+// ④ 她做的事由她的动作触发：characters.js 的 ['call', fn]、['toggle', 名字, on]、['wait', 条件]；clerkDo 打断她手头能打断的事去做（爬梯子、坐下站起做完那段再来）。
+// 审计 window.__audit（只在无头 / ?audit 时记，平时不跑）：每条台词、每次「没看时变了」、她每次瞬移，按此刻真相机和她的位置判；变化还对玩家可能站的地方 × 8 个朝向再判一遍（防瞬移的测试脚本掩盖）。
+const WORLD = { ray: new THREE.Raycaster(), fr: new THREE.Frustum(), m4: new THREE.Matrix4(), occ: null, occT: 0, w: [], by: new Map(), on: !!navigator.webdriver || /[?&]audit\b/.test(location.search) };
+WORLD.ray.firstHitOnly = true;
+const AUDIT = WORLD.on ? (window.__audit = []) : null;
+const ZONE = (r) => (r === 'Kitchen & Dining' ? 'Parlour' : r);
+const _ws = new THREE.Sphere(), _wd = new THREE.Vector3(), _wq = new THREE.Vector3();
+function worldOcc() { const now = performance.now(); if (!WORLD.occ || now - WORLD.occT > 1000) { const hits = new Set([...people.values()].map((q) => q.hit)); const M = window.cabin && window.cabin.model, shown = (o) => { for (; o; o = o.parent) { if (o === M) return true; if (!o.visible) return false; } return true; }; WORLD.occ = meshes.filter((m) => !hits.has(m) && m.material?.visible !== false && shown(m)); WORLD.occT = now; } return WORLD.occ; } // 人物碰撞块、点选垫块（材质不画）不挡；人在雾外时整栋小屋不画（fogCullHouse 藏的是模型根节点），墙照样挡
+function headOf(p) { return p.root.position.clone().setY(p.root.position.y + 1.5 * p.root.scale.x); }
+function earOf() { const m = fp ? fp.p : people.get('person_man'); return m ? headOf(m) : camera.position.clone(); } // 玩家的耳朵是稽查的头（鸟瞰时相机在天上，人还在原处）
+function clerkHere() { const w = people.get('person_woman'); return w && !w.player && w.root.visible ? w : null; }
+function tgtList(t) { return t == null ? [] : Array.isArray(t) && typeof t[0] !== 'number' ? t : [t]; }
+function worldTgt(t, strict) {
+  if (typeof t === 'function') t = t();
+  if (!t) return null;
+  if (t.any) return worldTgt(t.any.find((x) => worldTgt(x)) || t.any[0], strict);
+  if (t.light) { const L = typeof t.light === 'string' ? LAMPS[t.light] : null, at = L ? new THREE.Vector3(...L.pos) : t.at.isVector3 ? t.at : new THREE.Vector3(...t.at); return { pts: [at], r: L ? L.range : t.r, light: true }; }
+  if (typeof t === 'string') { const g = layers.get(t); if (!g || !isShown(g)) return null; /* 图层 = 那样东西本身：藏着（拿走了）就看不见它；要看「那个位置」用 { at, r } */ const b = new THREE.Box3().setFromObject(g); if (b.isEmpty()) return null; const c = b.getCenter(new THREE.Vector3()), pts = [c];
+    for (let i = 0; i < 8; i++) pts.push(new THREE.Vector3(i & 1 ? b.max.x : b.min.x, i & 2 ? b.max.y : b.min.y, i & 4 ? b.max.z : b.min.z).lerp(c, strict ? 0.1 : 0.2));
+    return { pts, r: 0.04, g }; }
+  const at = t.isVector3 ? t : Array.isArray(t) ? new THREE.Vector3(...t) : t.at.isVector3 ? t.at : new THREE.Vector3(...t.at), r = t.isVector3 || Array.isArray(t) ? 0.15 : t.r ?? 0.15;
+  return { pts: strict ? [at, ...[[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]].map((v) => at.clone().addScaledVector(new THREE.Vector3(...v), r * 0.7))] : [at], r, sky: !!t.sky, g: t.layer ? layers.get(t.layer) : undefined }; // sky：树梢上的烟，雾层盖不住（同画面），不按雾远截断
+}
+function worldFrustum(cam = camera) { cam.updateMatrixWorld(); WORLD.m4.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse); return WORLD.fr.setFromProjectionMatrix(WORLD.m4); }
+function sees(who, target, o = {}) { if (target?.any) return target.any.some((t) => sees(who, t, o)); // { any: [...] }：其中一个看得见就算 // o：eye / fr / body 给审计换个假想的玩家位置用；strict：审计的严判（视锥放宽、多打几条射线）
+  const T = worldTgt(target, o.strict); if (!T) return false;
+  const P = who === 'player', eye = o.eye || (P ? camera.position : who.isVector3 ? who : headOf(who)), fr = P ? o.fr || worldFrustum() : null;
+  if (T.light) { const L = T.pts[0], b = o.body || (P ? fp && fp.p.root.position : who.isVector3 ? who : who.root.position);
+    if (eye.distanceTo(L) < T.r + 1) return true;
+    if (b) { const ra = roomAt(b); if (ra && ZONE(ra) === ZONE(roomAt(new THREE.Vector3(L.x, L.y > 3 ? 3 : 0.5, L.z)))) return true; } }
+  const far = (scene.fog ? scene.fog.far : 1e9) + T.r, occ = worldOcc(), pad = o.strict ? 0.15 : 0;
+  for (const p of T.pts) {
+    const d = eye.distanceTo(p); if (d > far && !T.sky) continue;
+    if (fr) { if (o.strict) { const c = o.cam || camera, q = _wq.copy(p).applyMatrix4(c.matrixWorldInverse); if (q.z > -c.near * 0.5) continue; q.applyMatrix4(c.projectionMatrix); if (Math.abs(q.x) > 1 + pad || Math.abs(q.y) > 1 + pad) continue; } // 严判：点本身投到画面里（边上放宽 pad）；球和视锥六个面逐个比在镜头附近会误报
+      else if (!fr.intersectsSphere(_ws.set(p, Math.max(T.r, 0.1)))) continue; }
+    if (d < 1e-3) return true;
+    WORLD.ray.set(eye, _wd.subVectors(p, eye).divideScalar(d)); WORLD.ray.far = d + 0.05;
+    const h = WORLD.ray.intersectObjects(occ, false)[0];
+    if (!h || h.distance >= d - T.r || (T.g && T.g.getObjectById(h.object.id)) || (T.light && h.point.distanceTo(p) < T.r)) return true;
+  }
+  return false;
+}
+function hears(p, maxD) { // 玩家听不听得见她：同屋 8m、屋外 15m；一个在屋里一个在屋外且大门关着、一个在卫生间且门关着都听不见（阁楼和楼下是通的）
+  const a = headOf(p), b = earOf(), ra = roomAt(p.root.position), pb = fp ? fp.p.root.position : people.get('person_man')?.root.position, rb = pb ? roomAt(pb) : null;
+  if (a.distanceTo(b) > (maxD ?? (ra || rb ? 8 : 15))) return false;
+  if (!!ra !== !!rb && toggles.get('door_wood')?.on) return false; // on = 关着
+  if ((ra === 'Water Closet') !== (rb === 'Water Closet') && toggles.get('toilet_door_A')?.on) return false;
+  return true;
+}
+const clerkCan = (w, o) => hears(w, o.hear) && tgtList(o.about).every((t) => sees(w, t));
+function whenUnseen(target, fn, o = {}) { const w = { target, fn, o, t: 0 }; WORLD.w.push(w); return w; }
+function whenSeen(target, fn, o = {}) { return whenUnseen(target, fn, { ...o, seen: true }); }
+function worldGone(w) { const i = WORLD.w.indexOf(w); if (i >= 0) WORLD.w.splice(i, 1); }
+function unseenNow(w) {
+  const L = tgtList(typeof w.target === 'function' ? w.target() : w.target);
+  if (L.some((t) => sees('player', t, { strict: true }))) return false; // 严判：画面边上放宽 15%、多打几条射线，留出余量（审计也按这个判）
+  const c = w.o.clerk && clerkHere(); if (c && tgtList(w.o.clerk === true ? L : w.o.clerk).some((t) => sees(c, t))) return false;
+  return true;
+}
+setInterval(() => {
+  if (!sceneReady) return;
+  for (const w of [...WORLD.w]) {
+    if (w.o.abort?.()) { worldGone(w); w.o.onAbort?.(); continue; }
+    if (w.o.cond && !w.o.cond()) { w.t = 0; continue; }
+    const ok = w.o.seen ? L_seen(w) : unseenNow(w);
+    w.t = ok ? w.t + 0.5 : 0;
+    if (w.t >= (typeof w.o.hold === 'function' ? w.o.hold() : w.o.hold ?? 0)) { worldGone(w); if (!w.o.seen) auditChange(w); w.fn(); }
+  }
+}, 500);
+function L_seen(w) { return tgtList(typeof w.target === 'function' ? w.target() : w.target).some((t) => sees('player', t)); }
+const SOFT_TASKS = ['walk', 'idle', 'face', 'turn', 'look', 'pose'];
+function clerkDo(build) { // 让她去做一件事（build(她) 返回任务）：手头在走路、待着、坐着就打断；爬梯子、拉椅子、动作做到一半，做完那段再来
+  const w = clerkHere(); if (!w) return false; const T = w.tasks[0];
+  const go = () => { w.claim = null; w.roam = 1e9; w.tasks = build(w); return true; };
+  if (!T || (SOFT_TASKS.includes(T[0]) && w.S == null)) { w.tasks = []; go(); } else w.after = go;
+  return true;
+}
+function walkTo(p, node) { // 从她现在的地方（坐着先起来）走到 NAV 节点；不同层走梯子
+  const S = p.seat && SEATS[p.seat], r = p.root.position, x = S && S.out ? S.out[0] : r.x, z = S && S.out ? S.out[1] : r.z;
+  return wcDoorTasks(trimBack([...riseTasks(p), ['walk', ...NAV[nearNode(x, z, r.y > 1.5)]], ...routeTasks(x, r.y, z, node), ['walk', ...NAV[node]]]));
+}
+const LAMP_NODES = { entry: 'ceiling_light_entry', hall3: 'hall_pendant_south', hall2: 'hall_pendant_south', hall: 'hall_pendant_north', ne: 'ceiling_light_living', sofaF: 'ceiling_light_living', sw: 'ceiling_light_living' };
+function withLamps(t) { // 她走过的地方灯没亮就顺手开（11-11 world #1：原来天黑整屋的灯一起自己亮）
+  const done = new Set(), out = [];
+  for (const T of t) { out.push(T); if (T[0] !== 'walk') continue;
+    const n = Object.keys(LAMP_NODES).find((k) => NAV[k][0] === T[1] && NAV[k][1] === T[2]), l = n && LAMP_NODES[n], d = l && toggles.get(l);
+    if (d && !d.on && !done.has(l)) { done.add(l); out.push(...lampTasks(l)); } }
+  return out;
+}
+function clerkSpot(w, about) { // 她站到哪个节点看得见 about（全部）：离 about 最近的 8 个节点里，按离她的路（换层 +6m）挑最近的
+  const L = tgtList(about), T0 = worldTgt(L[0]); if (!T0) return null; const c = T0.pts[0], here = w.root.position, hh = 1.5 * w.root.scale.x; let best = null;
+  const cand = Object.keys(NAV).filter((n) => n !== 'push0').map((n) => { const [x, z] = NAV[n], y = n.startsWith('L_') ? 2.29 : 0.2; return { n, x, y, z, d: Math.hypot(x - c.x, y + hh - c.y, z - c.z) }; }).sort((a, b) => a.d - b.d).slice(0, 8);
+  for (const k of cand) { const e = new THREE.Vector3(k.x, k.y + hh, k.z); /* 同 headOf 的眼高 */ if (!L.every((t) => sees(e, t))) continue; const cost = Math.hypot(k.x - here.x, k.z - here.z) + (Math.abs(k.y - here.y) > 1 ? 6 : 0); if (!best || cost < best.cost) best = { ...k, cost }; }
+  return best;
+}
+function clerkSay(text, o = {}) { // o：about、hear、walk（false = 看不见就不说，不走过去）、jump（插队）、hint（提示键）、miss（最后没说）
+  const t0 = performance.now(), can = () => { const x = clerkHere(); return !!x && clerkCan(x, o); };
+  const say = () => { const w = clerkHere(), c = o.about && worldTgt(tgtList(o.about)[0]); if (w && c && !facesCam(w, c.pts[0].x, c.pts[0].z)) { const v = c.pts[0]; w.look = [v.x, v.y, v.z]; w.lookT = 4; } // 说她看着的东西：转头看一眼
+    showRoomNote(text, null, o.hint || null, o.jump, { who: 'clerk', can, miss: o.miss, about: o.about, hear: o.hear }); };
+  const w = clerkHere();
+  if (!w) { worldAudit('drop', text[0], { why: 'clerk absent' }); o.miss?.(); return false; }
+  if (clerkCan(w, o)) { say(); return true; }
+  const spot = o.walk !== false && o.about && clerkSpot(w, o.about);
+  if (!spot) { worldAudit('drop', text[0], { why: 'cannot see or hear' }); o.miss?.(); return false; }
+  const c = worldTgt(tgtList(o.about)[0]).pts[0];
+  clerkDo((p) => [...walkTo(p, spot.n), ['face', c.x, c.z], ['look', c.x, c.y, c.z, 3], ['call', () => { if (performance.now() - t0 < 45000 && can()) say(); else { worldAudit('drop', text[0], { why: 'walked over, no longer holds' }); o.miss?.(); } }], ['call', (q) => { q.roam = 20 + Math.random() * 20; }]]);
+  return true;
+}
+window.cabinWorld = { sees, hears, whenUnseen, clerkSay, clerkDo, clerkSpot, W: WORLD, floorAt: (x, z) => floorAt(x, z), headOf, roomAt: (P) => roomAt(P), LAMPS }; // 调试 / 无头测试
+// —— 审计 ——
+function worldAudit(kind, text, info = {}) {
+  if (!AUDIT) return;
+  const w = people.get('person_woman'), e = earOf(), f = (v) => v && [+v.x.toFixed(2), +v.y.toFixed(2), +v.z.toFixed(2)];
+  AUDIT.push({ t: +(performance.now() / 1000).toFixed(1), day: game.day, kind, text, ok: info.ok ?? true, cam: f(camera.position), ear: f(e), clerk: w && f(w.root.position), ...info });
+}
+function auditSay(it) { // 一句台词真念出来的这一刻：说话人在不在、听不听得见、看不看得见她说的东西
+  if (!AUDIT || document.body.classList.contains('endshot')) return;
+  const text = it.text[0], c = it.chk || {}, clerk = c.who === 'clerk' || /^The clerk[: ]/.test(text);
+  if (clerk) { const w = clerkHere(), ok = !!w && hears(w, c.hear) && tgtList(c.about).every((t) => sees(w, t)); worldAudit('say', text, { ok, present: !!w, hears: !!w && hears(w, c.hear), seesAbout: !!w && tgtList(c.about).every((t) => sees(w, t)), room: w && roomAt(w.root.position), playerRoom: roomAt(fp ? fp.p.root.position : camera.position) }); }
+  else if (c.ref) { const ok = tgtList(c.ref).some((t) => sees('player', t)); worldAudit('say', text, { ok, ref: true }); }
+}
+const AUD_YAW = [0, 1, 2, 3, 4, 5, 6, 7].map((i) => (i * Math.PI) / 4);
+function auditPoses() { // 玩家可能站的地方：屋里 NAV 节点（两层），屋外院子两圈 + 踪迹每 2m、左右 3m
+  const P = [], gy = (x, z) => ground.position.y + terrainH(x, z) + 1.55;
+  for (const [n, [x, z]] of Object.entries(NAV)) if (n !== 'push0') P.push(new THREE.Vector3(x, (n.startsWith('L_') ? 2.29 : 0.2) + 1.52, z));
+  for (const R of [5, 9]) for (let i = 0; i < 8; i++) { const a = (i * Math.PI) / 4, x = Math.sin(a) * R, z = Math.cos(a) * R; P.push(new THREE.Vector3(x, gy(x, z), z)); }
+  if (d2.samples && game.day >= 2) { const n = (d2.samples.length - 1) * d2.samples.ds; for (let s = 0; s < n; s += 2) { const [p, rt] = pathAt(s); for (const k of [-3, 0, 3]) { const q = p.clone().addScaledVector(rt, k); q.y = gy(q.x, q.z); P.push(q); } } }
+  return P;
+}
+function auditChange(w) { // 「没看时变了」那一刻：此刻真相机看不看得见、她看不看得见；再对所有假想位置 × 8 个朝向严判一遍，机制前提（excl）排除了的位置不算
+  if (!AUDIT) return;
+  const L = tgtList(typeof w.target === 'function' ? w.target() : w.target), now = L.some((t) => sees('player', t, { strict: true })), c = w.o.clerk && clerkHere(), wit = !!c && tgtList(w.o.clerk === true ? L : w.o.clerk).some((t) => sees(c, t));
+  const vc = WORLD.vc ||= new THREE.PerspectiveCamera(); vc.fov = camera.fov; vc.aspect = camera.aspect; vc.near = camera.near; vc.far = camera.far; vc.updateProjectionMatrix();
+  let bad = 0, n = 0, ex = null;
+  for (const pos of auditPoses()) {
+    if (w.o.excl?.(pos)) continue;
+    for (const yaw of AUD_YAW) { n++; vc.position.copy(pos); vc.rotation.set(-0.2, yaw, 0, 'YXZ'); const fr = worldFrustum(vc).clone();
+      if (L.some((t) => sees('player', t, { eye: pos, fr, cam: vc, body: pos.clone().setY(pos.y - 1.5), strict: true }))) { bad++; ex ||= [+pos.x.toFixed(1), +pos.y.toFixed(1), +pos.z.toFixed(1), yaw.toFixed(2)]; } }
+  }
+  worldFrustum();
+  // 假想位置看得见不算违规（玩家不在那儿）：违规是此刻真相机严判看得见、或她看得见（clerk 选项）。bad 只当参考：机制该排除却没排除的位置有多少
+  worldAudit('change', w.o.name || '', { ok: !now && !wit, seenNow: now, witness: wit, poses: n, couldSee: bad, example: ex });
+}
+function auditMove(p, from, to) { // 她瞬移：原处、目的地此刻都不该被看见
+  if (!AUDIT || p !== people.get('person_woman') || !sceneReady || intro || morn || fly) return;
+  const a = sees('player', { at: from.clone().setY(from.y + 1), r: 0.5 }, { strict: true }), b = sees('player', { at: to.clone().setY(to.y + 1), r: 0.5 }, { strict: true });
+  worldAudit('move', 'clerk', { ok: !a && !b, fromSeen: a, toSeen: b, from: [+from.x.toFixed(2), +from.z.toFixed(2)], to: [+to.x.toFixed(2), +to.z.toFixed(2)] });
+}
+if (AUDIT) { let last = null, lt = ''; const LAD = ['mount', 'climb', 'top', 'topDown', 'dismount']; setInterval(() => { const w = people.get('person_woman'); if (!w || !sceneReady) return; const p = w.root.position.clone(), t = w.tasks[0]?.[0] || ''; if (last && w.root.visible && p.distanceTo(last) > 0.6 && !intro && !morn && !fly && !w.moved && !LAD.includes(t) && !LAD.includes(lt)) auditMove(w, last, p); w.moved = false; last = p; lt = t; }, 100); } // 爬梯子上到顶那一下根节点挪 1.3m（动作本身接得上，不是瞬移） // 每 0.1 秒比一次：走路一步不到 0.15m；placeMan 自己记过的（moved）不重记
+// 审计 · 世界状态对账（不看代码走哪条路：只审走了上面机制的事件，等于机制自己查自己，以后有人绕开机制直接改状态就查不出来）。
+// 每 0.1 秒把全部开关（门、抽屉、灯、火、梯子）和图层显隐比一遍，变了就问「谁干的」：你点的（toggle() 记一笔）/ 有人就在跟前（她 1.8m 内，灯算同一间或 3.2m 内；图层另算你自己 3.2m 内：拿起、翻看）/
+// 你此刻看不见（严判）/ 正在摆场景。都不是 = 当着你的面、没人碰，它自己变了。鸟瞰和镜头飞行时图层显隐是界面在揭屋顶，不比；通关后的自由模式不审。
+function worldBy(t) { if (AUDIT) WORLD.by.set(t, performance.now()); }
+function worldSetup() { WORLD.setup = true; WORLD.setupT = performance.now(); setTimeout(() => { WORLD.setup = false; WORLD.setupT = performance.now(); }); } // 摆场景（开场、早晨、结局画面、在 ✕ 刷新）：这一拍里的瞬移和状态变化不审
+function auditState(kind, name, on, t) {
+  const lamp = LAMPS[name], g = layers.get(name); if (FAR_LOOK.has(name)) return; // 两柱烟是慢慢显出来的，显隐那一下看不出
+  const b = g && new THREE.Box3().setFromObject(g), c = lamp ? new THREE.Vector3(...lamp.pos) : b && !b.isEmpty() ? b.getCenter(new THREE.Vector3()) : null, what = `${name} ${kind === 'layer' ? (on ? 'shown' : 'hidden') : on ? 'on' : 'off'}`;
+  if (!c) { worldAudit('state', what, { by: 'unlocated' }); return; }
+  const at = (p, R) => Math.hypot(p.x - c.x, p.z - c.z) < R && Math.abs(p.y + 1 - c.y) < 2, zone = (p) => ZONE(roomAt(p)), w = clerkHere(), me = fp ? fp.p.root.position : null;
+  const by = performance.now() - (WORLD.by.get(t) ?? -1e9) < 600 ? 'player' : w && (at(w.root.position, lamp ? 3.2 : 1.8) || (lamp && zone(w.root.position) && zone(w.root.position) === zone(new THREE.Vector3(c.x, c.y > 3 ? 3 : 0.5, c.z)))) ? 'clerk at hand' : kind === 'layer' && me && at(me, 3.2) ? 'player at hand' : null;
+  const tgt = name === 'stove_fire' ? { any: [FIREBOX, ...CHIMNEY, FIRE_LIGHT] } : lamp ? { light: name } : { any: [name, { at: c, r: 0.05, layer: name }] }, pv = WORLD.pv;
+  const seen = !by && sees('player', tgt, { strict: true }) && (!pv || sees('player', tgt, { eye: pv.position, fr: worldFrustum(pv).clone(), cam: pv, body: pv.userData.body, strict: true }));
+  worldAudit('state', what, { ok: !!by || !seen, by: by || (seen ? 'nobody, in plain view' : 'unseen') });
+}
+if (AUDIT) { const sT = new Map(), sL = new Map(); let pt = 0, sQ = ''; setInterval(() => {
+  if (!sceneReady) return;
+  const rebase = !pt || WORLD.setup || (WORLD.setupT || 0) >= pt || game.found.has('ended') || document.body.classList.contains('endshot'), lv = !!fp && !fly && !intro, done = new Set();
+  for (const [n, t] of toggles) { if (done.has(t)) continue; done.add(t); const on = !!t.on, was = sT.get(t); if (was !== undefined && was !== on && !rebase) auditState('toggle', n, on, t); sT.set(t, on); }
+  if (!lv) sL.clear(); else for (const [n, g] of layers) { const was = sL.get(n); if (was !== undefined && was !== g.visible && !rebase) auditState('layer', n, g.visible); sL.set(n, g.visible); }
+  // 屏幕上的任务行换成「书记员在书桌前写」的那一刻，她真坐在那儿（读的是画面上的字，不管谁调的）
+  const qt = $('quest').textContent; if (qt !== sQ) { sQ = qt; if (!rebase && qt.startsWith(QUEST.night[0])) { const w = clerkHere(); worldAudit('fact', QUEST.night[0], { ok: !!w && w.seat === 'loft_chair' && w.mode === 'sit', seat: w && w.seat, mode: w && w.mode }); } }
+  const pv = WORLD.pv ||= new THREE.PerspectiveCamera(); pv.copy(camera, false); pv.userData.body = fp ? fp.p.root.position.clone() : null;
+  pt = performance.now(); }, 100); }
+window.__auditText = () => { const v = (AUDIT || []).filter((a) => !a.ok); return `audit: ${v.length} violations (${(AUDIT || []).length} events)` + v.map((a) => `\n  ✗ ${a.kind} d${a.day} t${a.t} "${String(a.text).slice(0, 70)}" ${JSON.stringify(Object.fromEntries(Object.entries(a).filter(([k]) => !['kind', 'text', 't', 'day', 'ok'].includes(k))))}`).join(''); };
+window.__auditAll = () => (AUDIT || []).map((a) => `${a.ok ? '✓' : '✗'} ${a.kind} d${a.day} t${a.t} "${String(a.text).slice(0, 60)}"${a.couldSee != null ? ` couldSee=${a.couldSee}/${a.poses}` : ''}${a.why ? ' ' + a.why : ''}`).join('\n');
 function startNight(late) { // 线索找齐：书记员说一句 → 天色转到夜里、她走去书桌 → 壁灯亮起（late：刚弹出「他什么都没带」，等它读完）
   game.night = game.dusk = true;
   if (![...game.found].some((k) => k.startsWith('nm:'))) { game.found.add('nm:' + noteMe()); saveGame(); notes1Text(); } // F3：记录里那句就按此刻挑定（炉门开没开看这时候）
   const t0 = late ? 6000 : 1500;
-  setTimeout(() => showRoomNote(CLERK_SAYS), t0);
-  setTimeout(() => { clerkToDesk(); sky.play = false; sky.goal = 18.3; sky.goalRate = 0.15; }, t0 + 3500); // 灯在进屋时就一盏盏开了；天色从下午 15:30 约 19 秒慢慢转到黄昏 18:20（太阳刚落）
-  setTimeout(() => { game.dusk = false; const w = toggles.get('wall_lamp'); if (w) w.on = true; const pg = layers.get('desk_page'); if (pg) pg.visible = false; makeNotes(); showQuest(); unlockJournal(); }, t0 + 10500); // 她坐下写：下午那页纸不见了
+  setTimeout(() => clerkSay(CLERK_SAYS, { walk: false }), t0);
+  setTimeout(() => { clerkToDesk(nightSeated); sky.play = false; sky.goal = 18.3; sky.goalRate = 0.15; }, t0 + 3500); // 灯在进屋时就一盏盏开了；天色从下午 15:30 约 19 秒慢慢转到黄昏 18:20（太阳刚落）
+}
+function nightSeated() { // 她点了壁灯、在书桌前坐下的那一刻（11-11 world #3 #13 #15：原来第 1 天固定 10.5 秒、第 2 天 9 秒，她还在拉椅子 / 在厨房）：任务行「书记员在写」、提示从这时起算；
+  // 第 1 夜桌上那页换成她写的记录（同一张纸、同一个位置，多出几行：她就坐在它跟前，不再当面消失）
+  game.dusk = false; if (game.day === 1) { makeNotes(); unlockJournal(); } hintReset(); showQuest(); worldAudit('act', 'clerk seated at the desk');
 }
 // —— 房间变化（v2，第 1 天）：玩家亲手关 / 开过的灯、炉门、抽屉，等他离开那里（看不见、或走远）4 秒后悄悄变回去；
 // 回来看见时书记员问一句，夜里的调查记录写成「稽查又把…打开了」。只动玩家碰过的东西（会动的摇椅、怀表不算，怕被当成环境动画）。一天一次。
@@ -3106,24 +3294,31 @@ function chgTouch(name) { // toggle 里调：玩家刚开 / 关了一样东西
   if (game.day !== 1 || game.night || !game.found.has('page') || !key || !chgNoun(key) || HOUSE_LAMPS.includes(key)) return; // 她领路时开的四盏灯不算（11-10 iPhone 试玩：轻触误关了灯，过一会儿自己亮回来、记录写「稽查把关掉的灯又打开了」，读成「她开过，老头又开一次」）；壁灯照旧
   if ([...game.found].filter((k) => k.startsWith('chg:')).length >= CHG_MAX || chg.pend?.flipped) return;
   const g = layers.get(key); if (!g) return;
-  chg.pend = { key, t: toggles.get(key), on: toggles.get(key).on, pos: new THREE.Box3().setFromObject(g).getCenter(new THREE.Vector3()), away: 0, back: 0 };
+  if (chg.pend?.w) worldGone(chg.pend.w);
+  const p = chg.pend = { key, t: toggles.get(key), on: toggles.get(key).on, tgt: chgNoun(key)[3] ? { light: key } : { any: [key, { at: new THREE.Box3().setFromObject(g).getCenter(new THREE.Vector3()), r: 0.05 }] } }; // 抽屉推上后包围盒中心和角都在柜子里：再看包围盒中心那一点（容差 5cm，比隔墙薄，不会隔墙算看见）
+  // 你看不见、她也看不见满 4 秒才变回去（11-11 world #5：原来「离开 4.5m 或中心点不在视锥」，4.5m 外正对着、隔着阁楼地板仰头都算看不见）；灯看的是它照着的那一片，不是灯本身
+  p.w = whenUnseen(p.tgt, () => { p.t.on = !p.t.on; p.flipped = true; game.found.add(`chg:${p.key}:${p.t.on ? 1 : 0}`); saveGame(); notes1Text(); chgBack(p); },
+    { hold: 4, clerk: true, name: 'chg:' + key, cond: () => !lbOwed(), abort: () => game.night || p.t.on !== p.on, onAbort: () => { if (chg.pend === p) chg.pend = null; } }); // lbOwed：炉膛里的信回来了还没被看见，先别再变（每次只变一件）；你自己又改回去了就算了
+}
+function chgBack(p) { // 你回来看见变回去的那样东西满 1 秒：她问一句（看不见就先走过去看），夜里记录照写
+  whenSeen(p.tgt, () => { if (chg.pend === p) chg.pend = null; clerkSay(chgSay(p.key, p.t.on), { about: p.tgt }); }, { hold: 1, name: 'chg back', cond: () => card.hidden, abort: () => game.night, onAbort: () => { if (chg.pend === p) chg.pend = null; } });
 }
 const chgFr = new THREE.Frustum(), chgM = new THREE.Matrix4();
-setInterval(() => {
-  const p = chg.pend; if (!p || game.night) return;
-  chgM.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse); chgFr.setFromProjectionMatrix(chgM);
-  const seen = camera.position.distanceTo(p.pos) < 4.5 && chgFr.containsPoint(p.pos);
-  if (!p.flipped) {
-    if (p.t.on !== p.on) { chg.pend = null; return; } // 玩家自己又改回去了
-    p.away = seen ? 0 : p.away + 0.5;
-    if (p.away >= 4 && !lbOwed()) { p.t.on = !p.t.on; p.flipped = true; game.found.add(`chg:${p.key}:${p.t.on ? 1 : 0}`); saveGame(); notes1Text(); } // lbOwed：炉膛里的信回来了还没被看见，先别再变（每次只变一件）
-  } else if (seen && card.hidden && ++p.back >= 2) { showRoomNote(chgSay(p.key, p.t.on)); chg.pend = null; }
-}, 500);
 window.cabinChg = { chg, toggle: (n) => toggle(n) }; // 调试 / 无头测试
-function clerkToDesk() { // 天黑：书记员走到书桌坐下写（正在走的那一段走完再去；书桌被人占着就等）
-  const p = people.get('person_woman'); if (!p) return;
+function clerkToDesk(onSeat) { // 天黑：书记员走到书桌（路上没亮的灯顺手开）、点壁灯、坐下写，坐下那一刻调 onSeat（正在走的那一段走完再去；书桌被人占着就等）
+  const p = people.get('person_woman'); if (!p) { onSeat?.(); return; }
   p.home = 'loft_chair'; INFO.person_woman[1] = 'Parlour'; INFO.person_woman[2] = 'Writing up the day at the desk.';
-  p.after = () => { if (seatTaken('loft_chair', p)) return false; goHome(p, 'person_woman'); return true; };
+  const go = () => { if (seatTaken('loft_chair', p)) return false; p.tasks = deskTasks(p, onSeat); p.deskT = performance.now(); return true; };
+  p.after = go;
+  const dog = setInterval(() => { // 兜底：路被挡、被别的事打断，90 秒还没坐下就再走一遍（仍由她走过去坐下触发）
+    if (!game.dusk || p.player) { clearInterval(dog); return; }
+    if (p.deskT && performance.now() - p.deskT > 90000 && !(p.seat === 'loft_chair' && p.mode === 'sit') && !p.tasks.some((t) => t[0] === 'mount' || t[0] === 'climb' || t[0] === 'topDown')) { p.tasks = []; p.after = go; }
+  }, 5000);
+}
+function deskTasks(p, onSeat) {
+  const lamp = toggles.get('wall_lamp')?.on ? [] : lampTasks('wall_lamp'), done = ['call', () => { onSeat?.(); }];
+  if (p.seat === 'loft_chair' && p.mode === 'sit') return [['lamp', 'wall_lamp'], done]; // 本来就坐在书桌前：伸手点上
+  return [...withLamps(walkTo(p, 'desk')), ...lamp, ...sitTasks(p, 'loft_chair'), done];
 }
 const WANDER = ['books', 'map', 'stove']; // 第 1 天白天她只在楼下转（书桌留到夜里）；不去碗架 dish：那点 (0.2,−1.25) 正堵在厨房到书桌的窄过道（11-01 评审）
 function planWander(p) {
@@ -3173,27 +3368,24 @@ function letterHome() { const f = game.found; return !f.has('letter') || (game.d
 function letterBack() { const f = game.found; return game.day === 1 && f.has('lback0') && !f.has('lbackT') && !!layers.get('stove_letter')?.visible && (toggles.get('stove_door')?.k ?? 1) < 0.5; } // 放回去的信还在炉膛里、炉门开着（k=1 是关上）
 function lbSeen() { // 看见了（或没等看见就点了）：记一笔，书记员问一句、看一眼炉子；天黑原来在等它就开始
   const f = game.found; if (f.has('lback')) return; f.add('lback'); saveGame(); renderJournal(); LOG && LOG.ev('clue', '信回到炉膛：看见');
-  showRoomNote(LBACK_SAYS);
-  const w = people.get('person_woman'); if (w && !w.player) { w.look = LETTER.at.slice(); w.lookT = 4; }
+  clerkSay(LBACK_SAYS, { about: 'stove_letter' }); // 她看得见炉膛里那封信才问（看不见先走过去；你先走开、信又拿出来了就不问，夜里记录照写）
   if (hint.key === 'lback') { hint.key = null; hint.lvl = 0; if (hintGlow) { const n = hintGlow; hintGlow = null; paint(n); } } hintReset();
   if (!game.night && day1Done()) startNight(false);
   showQuest();
 }
+const LB_SPOT = { at: LB_AT, r: 0.08 }; // 炉膛里放信的那块灰：信还没回来时看的是这个位置
 setInterval(() => {
   const f = game.found, g = layers.get('stove_letter');
   if (game.day !== 1 || game.night || !f.has('letter') || f.has('lback') || !g) return;
   if (!LB.since) LB.since = performance.now();
-  camera.updateMatrixWorld(); chgM.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse); chgFr.setFromProjectionMatrix(chgM);
-  const d = camera.position.distanceTo(LB_AT), inView = chgFr.containsPoint(LB_AT);
-  if (!f.has('lback0')) { // 还没放：人不在厨房、看不见炉子满 8 秒
-    const rn = fp ? roomAt(fp.p.root.position) : inside && inside.name;
-    LB.away = rn !== 'Kitchen & Dining' && (d > 4.5 || !inView) && !inspecting() ? LB.away + 0.5 : 0;
-    if (LB.away < LB.T.away || performance.now() - LB.since < LB.T.since * 1000 || chg.pend) return;
-    f.add('lback0'); g.position.copy(LB_AT); g.visible = true; shadowDirty = true; saveGame(); notes1Text(); LOG && LOG.ev('clue', '信回到炉膛：放回');
+  if (!f.has('lback0')) { // 还没放：你不在厨房、你和她都看不见炉膛里那块灰满 8 秒才放（11-11 world #7：原来不管她在哪，信常当着她的面躺回去）
+    LB.w ||= whenUnseen(LB_SPOT, () => { f.add('lback0'); g.position.copy(LB_AT); g.visible = true; shadowDirty = true; saveGame(); notes1Text(); LOG && LOG.ev('clue', '信回到炉膛：放回'); },
+      { hold: () => LB.T.away, clerk: true, name: 'letter back in the stove', abort: () => game.night || game.day !== 1, onAbort: () => { LB.w = null; },
+        cond: () => { const rn = fp ? roomAt(fp.p.root.position) : inside && inside.name; return rn !== 'Kitchen & Dining' && !inspecting() && performance.now() - LB.since >= LB.T.since * 1000 && !chg.pend; },
+        excl: (pos) => roomAt(pos.clone().setY(pos.y - 1.5)) === 'Kitchen & Dining' });
     return;
   }
-  let see = d < 3.2 && inView && card.hidden && g.visible;
-  if (see) { const h = new THREE.Raycaster(camera.position.clone(), LB_AT.clone().sub(camera.position).normalize(), 0, d + 0.1).intersectObjects(meshes.filter(isShown), false)[0]; see = !!h && !!g.getObjectById(h.object.id); }
+  const see = camera.position.distanceTo(LB_AT) < 3.2 && card.hidden && g.visible && sees('player', 'stove_letter'); // 回炉前看见（3.2m 内、中间没东西挡；炉门关着就看不见）
   LB.look = see ? LB.look + 0.5 : 0;
   if (LB.look >= 1) lbSeen();
 }, 500);
@@ -3202,20 +3394,19 @@ window.cabinLB = LB; // 调试 / 无头测试（day1_flow.js 把 T 改小）
 // 回到炉前看见（4.5m 内、在画面里）满 1 秒才记 fire（不然人还在阁楼，任务行就跳成「他往哪儿去了」）；夜里记录照写「稽查生了火」。卡关提示照旧走 fire 那条。
 // 一次只变一件：房间变化在等（chg.pend）、信回到炉膛那件还没完（拿了信、没看见放回来的）时先不烧；信那件不等炉子，所以卡不死。
 const FIRE = { since: 0, away: 0, look: 0, T: { since: 60, away: 12 } }; // T：无头测试改小
+const FIREBOX = { at: LB_AT, r: 0.1 }, CHIMNEY = [{ at: [2.42, 3.6, -1.52], r: 0.6 }, { at: [2.42, 5.2, -1.52], r: 1.5 }], FIRE_LIGHT = { light: true, at: [1.42, 0.6, -1.3], r: 3.5 }; // 炉膛、烟囱口和上面那段烟、炉火照亮的一片
 setInterval(() => {
   const f = game.found, t = toggles.get('stove_fire');
   if (game.day !== 1 || game.night || !f.has('page') || f.has('fire') || !t) return;
   if (!FIRE.since) FIRE.since = performance.now();
-  camera.updateMatrixWorld(); chgM.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse); chgFr.setFromProjectionMatrix(chgM);
-  const d = camera.position.distanceTo(LB_AT), inView = chgFr.containsPoint(LB_AT);
-  if (!f.has('fire0')) {
-    const rn = fp ? roomAt(fp.p.root.position) : inside && inside.name;
-    FIRE.away = !['Kitchen & Dining', 'Parlour'].includes(rn) && (d > 4.5 || !inView) && !inspecting() ? FIRE.away + 0.5 : 0;
-    if (t.on || FIRE.away < FIRE.T.away || performance.now() - FIRE.since < FIRE.T.since * 1000 || chg.pend || (f.has('letter') && !f.has('lback'))) return;
-    f.add('fire0'); t.on = true; saveGame(); LOG && LOG.ev('clue', '炉子自己烧着'); // 只设 on：k 和烟由 updateToggles / updateFire 慢慢跟上
+  if (!f.has('fire0')) { // 你看不见炉膛、烟囱、炉火照着的那片，她也看不见炉膛，满 12 秒才自己烧起来（11-11 world #8：保留怪事，但不当着她的面）
+    FIRE.w ||= whenUnseen([FIREBOX, ...CHIMNEY, FIRE_LIGHT], () => { f.add('fire0'); t.on = true; saveGame(); LOG && LOG.ev('clue', '炉子自己烧着'); }, // 只设 on：k 和烟由 updateToggles / updateFire 慢慢跟上
+      { hold: () => FIRE.T.away, clerk: [FIREBOX], name: 'stove lights itself', abort: () => game.night || game.day !== 1 || t.on || f.has('fire0'), onAbort: () => { FIRE.w = null; },
+        cond: () => { const rn = fp ? roomAt(fp.p.root.position) : inside && inside.name; return !['Kitchen & Dining', 'Parlour'].includes(rn) && !inspecting() && performance.now() - FIRE.since >= FIRE.T.since * 1000 && !chg.pend && !(f.has('letter') && !f.has('lback')); },
+        excl: (pos) => ['Kitchen & Dining', 'Parlour'].includes(roomAt(pos.clone().setY(pos.y - 1.5))) });
     return;
   }
-  FIRE.look = d < 4.5 && inView && card.hidden ? FIRE.look + 0.5 : 0;
+  FIRE.look = camera.position.distanceTo(LB_AT) < 4.5 && card.hidden && sees('player', { at: LB_AT, r: 0.6 }) ? FIRE.look + 0.5 : 0; // 回到炉前看见炉子（炉身 0.6m 内）满 1 秒
   if (FIRE.look < 1) return;
   f.add('fire'); saveGame(); renderJournal(); LOG && LOG.ev('clue', '炉子自己烧着：看见');
   if (hint.key === 'fire') { hint.key = null; hint.lvl = 0; if (hintGlow) { const n = hintGlow; hintGlow = null; paint(n); } } hintReset();
@@ -3517,17 +3708,33 @@ function endDay() { LOG && LOG.ev('day', '第1天结束'); // 第一天读完调
 }
 function dayStartNote() { // 第二天早上：两句开场（第 1 天的旧存档读完了也走这里）
   if (game.day < 2 || game.night) return;
-  if (game.day >= 3) { if (game.found.has('xarrive')) return; setTimeout(() => showRoomNote(D3_SAYS.go), 3000); return; }
+  if (game.day >= 3) { if (game.found.has('xarrive')) return; setTimeout(() => clerkSay(D3_SAYS.go, { walk: false }), 3000); return; }
   // 第 2 天早上不再放 D2_SAYS.clerk：任务行已说「留了记号、出去找找」，15 秒内同一个意思说三遍（文字经济 11-07 #5）
 }
 function startDusk2() { // 四样找齐：天慢慢转到傍晚，灯在 updateDay2 里按时刻亮
   setTimeout(() => { sky.play = false; sky.goal = 17.5; sky.goalRate = 0.8; }, 4000);
 }
-function startNight2() { // 回屋读到日志中段：天黑、书记员走去书桌、壁灯亮
+function startNight2() { // 她在书架前把日志翻到中段、卡片弹出：天黑，她走去书桌、点壁灯，坐下那一刻才是「书记员在写」（11-11 world #3）
   game.night = game.dusk = true; showQuest();
-  const w = people.get('person_woman'); if (w && !w.player && outdoors(w.root.position)) { const dwP = toggles.get('door_wood'); w.roam = 25; w.next = 8; w.tasks = [...(dwP && dwP.on ? [['walk', ...SL.pull], ['face', 0.3, 1.9], ['anim', 'Interact']] : []), ['walk', ...SL.door[0]], ['walk', ...SL.door[1]], ...goTasks(w, ...SL.door[1], 'entry')]; } // 她还在门廊上看烟：跟着你进屋（走法同开场领路进门）
-  setTimeout(() => { sky.play = false; sky.goal = 21; sky.goalRate = 1; clerkToDesk(); }, 2500);
-  setTimeout(() => { game.dusk = false; const w = toggles.get('wall_lamp'); if (w) w.on = true; showQuest(); }, 9000);
+  setTimeout(() => { sky.play = false; sky.goal = 21; sky.goalRate = 1; clerkToDesk(nightSeated); }, 2500);
+}
+const DOOR_IN = () => [['toggle', 'door_wood', false, SL.pull, [0.3, 1.9]], ['walk', ...SL.door[0]], ['toggle', 'door_wood', false, SL.door[0], [-0.05, 1.9]], ['walk', ...SL.door[1]], ['walk', ...NAV.entry]]; // 第二个：走到门口时门又被关上了（你进门顺手关的），就在门口再推开，不穿门 // 从门廊进屋：门关着先站到门闩一侧开门（同第 1 天领路，大门往外开）
+const DOOR_OUT = () => [['walk', ...SL.door[1]], ['toggle', 'door_wood', false, SL.door[1], [-0.05, 2.2]], ['walk', ...SL.door[0]]]; // 从屋里出门：门关着在门里推开
+function clerkLog2() { // 傍晚你回到屋里：她（还在门廊就跟进来）走到书架前，把日志翻到中段，这时才弹那张卡片（11-11 world #2 #11）
+  const ok = clerkDo((p) => [...(outdoors(p.root.position) ? withLamps([...DOOR_IN(), ...goTasks(null, ...NAV.entry, 'books')]) : withLamps(walkTo(p, 'books'))), ['walk', ...NAV.books],
+    ['face', -0.55, -1.72], ['look', -0.9, 1.0, -1.6, 3], ['anim', 'PickUp_Table'], ['call', () => { d2.logReady = true; }]]);
+  if (!ok) d2.logReady = true; // 她不在（不该发生）：不卡流程
+  d2.logT = performance.now();
+}
+const PORCH_W = [1.5, 2.9]; // 她在门廊上看烟站的地方（同结局画面）
+function clerkPorch(w) { // 烟起来了，她出门站到门廊上看（11-11 用户）：你在 24m 内就自己走出去（门关着先开门）；更远时，她原处和门廊你都看不见才直接站过去（world #12）
+  const L = d2.lamp.position, yaw = Math.atan2(L.x - PORCH_W[0], L.z - PORCH_W[1]), porch = new THREE.Vector3(PORCH_W[0], floorAt(...PORCH_W) + 1.2, PORCH_W[1]);
+  const arrive = (p) => { p.roam = p.next = 1e9; d2.clerkOut = true; };
+  const walk = () => clerkDo((p) => [...(outdoors(p.root.position) ? [] : [...walkTo(p, 'entry'), ...DOOR_OUT()]), ['walk', ...PORCH_W], ['turn', yaw], ['call', arrive]]);
+  const near = () => camera.position.distanceTo(porch) < 24;
+  if (near()) { walk(); return; }
+  whenUnseen([() => ({ at: headOf(w), r: 0.3 }), () => ({ at: w.root.position.clone().setY(w.root.position.y + 0.9), r: 0.4 }), { at: porch, r: 0.6 }], () => { placeMan(w, ...PORCH_W, yaw); w.root.position.y = floorAt(...PORCH_W); arrive(w); },
+    { hold: 1, name: 'clerk to the porch', abort: () => near() || game.night || game.found.has('log2'), onAbort: () => { if (!game.night && !game.found.has('log2')) walk(); } });
 }
 function pathAt(s) { // 小路上离院子边 s 米处：[位置, 右手方向]
   const S = d2.samples, i = Math.max(0, Math.min(S.length - 2, Math.round(s / S.ds)));
@@ -3885,6 +4092,7 @@ function pathNear(x, z) { // 离小路最近的采样点：{ d 离路中心, s �
   return { d: Math.sqrt(best), s: bi * d2.samples.ds };
 }
 function placeMan(p, x, z, yaw) { // 第 2 天：老稽查直接站到某处（不走路线）
+  if (AUDIT && p === people.get('person_woman')) { p.moved = true; if (!WORLD.setup) auditMove(p, p.root.position.clone(), new THREE.Vector3(x, p.root.position.y, z)); } // 审计：她瞬移（原处、目的地都不该被看见）
   p.tasks = []; p.seat = null; p.ride = null; p.claim = null; p.after = null; p.setMode('stand'); p.play(MOODS.stand.idle, 0.2);
   p.root.position.set(x, ground.position.y + 0.05, z); p.root.rotation.set(0, yaw, 0);
 }
@@ -3910,6 +4118,11 @@ function loopBack() { // 走进雾里太远：雾浓到看不见（不黑屏）�
     d2.fogGoal = 0; showRoomNote(!x3.shifted ? (d2.passed ? (d2.over.k > 1 ? D2_SAYS.lost2 : D2_SAYS.lost) : D2_SAYS.lost0) : x3.on ? D3_SAYS.lostX : D3_SAYS.lost); hint.clicks++; // 第 2 次起换一句，别让人当成惩罚（评审④ v2 #6）
     setTimeout(() => { d2.veil = false; }, 1500);
   }, 1100);
+}
+const D2_CHG_AT = { 1: { at: [0.4, 0.3, 3.6], r: 1 }, 2: { at: [2.42, 3.6, -1.52], r: 0.6 } }; // 门口那行进门脚印、烟囱口
+function d2Change(k) { // 雾里绕回后的那处变化此刻还成立、你看得见：1 = 门口多一行脚印（门口 12m 内），2 = 烟囱不冒烟（炉子还灭着）
+  if (k === 1) return Math.hypot(camera.position.x - D2.door[0], camera.position.z - D2.door[1]) < 12 && sees('player', D2_CHG_AT[1]);
+  return !toggles.get('stove_fire')?.on && sees('player', D2_CHG_AT[2]);
 }
 function loopChange() { // 雾里绕回来，小屋有一处变了（只第 2 天、白天）：第 1 次门口多一行进门的脚印，第 2 次烟囱不冒烟了（出门时大门本来就开着，不能用门）
   d2.loops = (d2.loops || 0) + 1;
@@ -3941,6 +4154,8 @@ function smokeAsk() { // 11-11 Fable 评审 F1：她指烟，你回一句。选�
   dialog(D2_SAYS.lamp, ['', ''], [['I see it.', '我看见了。', pick('yes')], ['You are mistaken.', '你看错了。', pick('no')]]); d.classList.add('end'); // 压在画面下三分之一（同结局文字），不挡树梢上那柱烟
   showRoomNote(null);
 }
+const D2_ALL_AT_LOAD = DAY2_NEED.every((k) => game.found.has(k)); // 刷新前就找齐了：石堆那行回程脚印直接在（刷新本身就是「没看」）
+const SMOKE_SEE = () => { const L = d2.lamp.position; return { at: [L.x + 5, L.y + 18, L.z], r: 6, sky: true }; }; // 她看那柱烟：树梢上那段（烟柱粗，命中点在 6m 内就算看见）
 function updateDay2(dt) {
   if (!d2.samples) return;
   const f = game.found, t = performance.now() / 1000;
@@ -3951,23 +4166,26 @@ function updateDay2(dt) {
   // 傍晚林子那头冒烟：四样找齐、天色到傍晚才有；人在屋里看不到
   const lampOn = DAY2_NEED.every((k) => f.has(k)) && !game.night && sky.hour > 17.2 && outdoors(camera.position) && !x3.shifted; // 挪世界后（✕ 那边）不画：它就在 ✕ 门廊望自家烟的方向上 40m，根部的火光成了树梢上一块橙色（11-04 r4 #5）
   d2.lamp.visible = lampOn;
-  if (game.day === 2 && !d2.backPrints && DAY2_NEED.every((k) => f.has(k))) { // 四样找齐：你那行脚印旁边多出一行一样大的，从石堆往屋里走（你还没往回走）
+  if (game.day === 2 && !d2.backPrints && DAY2_NEED.every((k) => f.has(k))) { // 四样找齐：你那行脚印旁边多出一行一样大的，从石堆往屋里走（你还没往回走）；整段连续 3 秒你看不见才出（11-11 world #9，同第 3 天并排脚印），刷新时直接在
     const via = []; for (let s = D2_SPOTS.d2_cairn.s - 0.5; s > 3; s -= 3) { const [, rt] = pathAt(s); via.push(logDetour(s, D2_LOGS).addScaledVector(rt, 0.55)); }
-    d2.backPrints = makePrints('d2_back', [...via, new THREE.Vector3(0.45, 0, 4.3), new THREE.Vector3(0.3, 0, 3.0)]); }
+    const pts = [...via, new THREE.Vector3(0.45, 0, 4.3), new THREE.Vector3(0.3, 0, 3.0)], make = () => { d2.backPrints = makePrints('d2_back', pts); };
+    if (D2_ALL_AT_LOAD) make(); else { d2.backPrints = 'wait'; whenUnseen(pts.map((p) => ({ at: p.clone().setY(ground.position.y + terrainH(p.x, p.z) + 0.3), r: 1 })), make, { hold: 3, name: 'second line of prints from the cairn' }); } }
   if (lampOn) updatePlume(d2.lamp, dt, THREE.MathUtils.smoothstep(sky.hour, 17.2, 17.5));
   if (!fp || game.night) return;
   const r = fp.p.root.position;
   const w2 = people.get('person_woman'), saw = f.has('saw:yes') || f.has('saw:no');
-  if (game.day === 2 && lampOn && !d2.clerkOut && w2 && !w2.player && !f.has('log2')) { // 烟起来了，她出门站到门廊上看（11-11 用户：第 2 天她一直在屋里，没窗看不见烟，你在林子里也听不见她）；趁你看不见那里时挪过去
-    const v = new THREE.Vector3(1.5, floorAt(1.5, 2.9) + 1, 2.9), far = camera.position.distanceTo(v) > 24; v.project(camera);
-    if (far || Math.abs(v.x) > 1.1 || Math.abs(v.y) > 1.1 || v.z > 1) { const L = d2.lamp.position; placeMan(w2, 1.5, 2.9, Math.atan2(L.x - 1.5, L.z - 2.9)); w2.root.position.y = floorAt(1.5, 2.9); w2.roam = w2.next = 1e9; d2.clerkOut = true; } // 同结局画面里她站的门廊位置
-  }
-  if (lampOn && d2.clerkOut && !d2.lampSaid && !saw && sky.hour > 17.4 && Math.hypot(w2.root.position.x - r.x, w2.root.position.z - r.z) < 18) { d2.lampSaid = true; showRoomNote(D2_SAYS.lamp, null, null, true); smokeCue(r); } // 你走回到门廊附近（她看得见你、你听得见她）她才指给你看；你在林子里自己看见烟也照说，后面要你回她一句
-  if (lampOn && d2.lampSaid && sky.hour > 17.4 && !f.has('saw:yes') && !f.has('saw:no') && !f.has('log2') && !fp.turn && !fp.cut && card.hidden && $('dlg').hidden) { if ((d2.askT = (d2.askT || 0) + dt) > 6.5) smokeAsk(); } // 她说完、镜头转过去看了一阵，才轮到你回话
-  if (f.has('d2light') && !f.has('log2') && !outdoors(r) && Math.abs(r.x) < 1.7 && Math.abs(r.z) < 1.7) { // 进了屋
-    f.add('log2'); saveGame(); renderJournal(); select(null);
-    cardData = { t: LOG2_CARD[0], a: LOG2_CARD[1], zt: LOG2_CARD[2], story: LOG2_CARD[3], zs: LOG2_CARD[4], lead: LOG2_CARD[5] };
-    showNote(null); cardOpen(); startNight2(); return;
+  if (game.day === 2 && lampOn && !d2.clerkOut && w2 && !w2.player && !f.has('log2')) { d2.clerkOut = 'going'; clerkPorch(w2); } // 烟起来了，她出门站到门廊上看（11-11 用户：第 2 天她一直在屋里，没窗看不见烟，你在林子里也听不见她）
+  if (lampOn && d2.clerkOut === true && !d2.lampSaid && !saw && sky.hour > 17.4 && (d2.sayT = (d2.sayT || 0) + dt) > 0.25) { d2.sayT = 0; // 她站在门廊上、看得见那柱烟、你在 12m 内（屋外正常说话的距离，11-11 world #14：原来 18m）才指给你看；你在林子里自己看见烟也照说，后面要你回她一句
+    if (clerkCan(w2, { hear: 12, about: SMOKE_SEE })) { d2.lampSaid = true; clerkSay(D2_SAYS.lamp, { hear: 12, about: SMOKE_SEE, jump: true, walk: false }); smokeCue(r); } }
+  if (lampOn && d2.lampSaid && sky.hour > 17.4 && !f.has('saw:yes') && !f.has('saw:no') && !f.has('log2') && !fp.turn && !fp.cut && card.hidden && $('dlg').hidden && hears(w2, 12)) { if ((d2.askT = (d2.askT || 0) + dt) > 6.5) smokeAsk(); } // 她说完、镜头转过去看了一阵，才轮到你回话（你还在她跟前）
+  if (f.has('d2light') && !f.has('log2') && !outdoors(r) && Math.abs(r.x) < 1.7 && Math.abs(r.z) < 1.7) { // 进了屋：她走到书架前翻开日志，卡片这才弹（11-11 world #2：原来你一进门就弹「回到屋里，书记员把日志翻到了中间」，她还在门廊上）
+    if (!d2.logT || (!d2.logReady && performance.now() - d2.logT > 90000)) clerkLog2(); // 90 秒还没到（被挡住、被打断）：再走一遍，仍由她走到书架触发
+    if (d2.logReady) {
+      if (AUDIT) { const w = clerkHere(); worldAudit('fact', LOG2_CARD[3].slice(0, 60), { ok: !!w && Math.hypot(w.root.position.x - NAV.books[0], w.root.position.z - NAV.books[1]) < 1.2, clerkRoom: w && roomAt(w.root.position) }); } // 审计：卡片说「回到屋里，书记员把日志翻到了中间」，这一刻她真在书架前
+      f.add('log2'); saveGame(); renderJournal(); select(null);
+      cardData = { t: LOG2_CARD[0], a: LOG2_CARD[1], zt: LOG2_CARD[2], story: LOG2_CARD[3], zs: LOG2_CARD[4], lead: LOG2_CARD[5] };
+      showNote(null); cardOpen(); startNight2(); return;
+    }
   }
   if (d2.veil || x3.on) return; // ✕ 那间屋的院子在 updateDay3 里管
   const n = DAY2_MARKS.filter((k) => f.has(k)).length, q = pathNear(r.x, r.z);
@@ -4256,8 +4474,9 @@ function day3Setup() { // 小路尽头的老云杉 + 裂口 + 焦黑松针；✕
 }
 function xLook() { // 换成 ✕ 那间屋的样子（同一个模型，不另外渲染一间）
   for (const n of X_HIDE) { const g = layers.get(n); if (g && !(n === 'entry_lantern' && gear.lantern)) g.visible = false; } // 提在手里的那盏不藏
-  const f = toggles.get('stove_fire'); if (f && !f.on) { f.on = true; f.k = 1; for (const q of f.parts) q(1); fire.smoke = 1; }
-  const w = people.get('person_woman'); if (w) { w.root.visible = false; w.hit.visible = false; } // 这边屋里没有人
+  const f = toggles.get('stove_fire'); if (f && !f.on && !x3.fireW) { const lit = () => { f.on = true; f.k = 1; for (const q of f.parts) q(1); fire.smoke = 1; }; // 炉火一下烧满：你和她都看不见炉子、烟囱时才换（挪世界时你在 40m 外雾里；刷新时直接换；11-11 world #16）
+    if (x3.pending === false) lit(); else x3.fireW = whenUnseen([FIREBOX, ...CHIMNEY, FIRE_LIGHT], lit, { name: 'x house fire', clerk: [FIREBOX] }); }
+  const w = people.get('person_woman'); if (w) { if (AUDIT && w.root.visible) auditChange({ target: [() => ({ at: headOf(w), r: 0.4 })], o: { name: 'clerk not in the x house' } }); w.root.visible = false; w.hit.visible = false; } // 这边屋里没有人
   shadowDirty = true;
 }
 function shiftWorld() { // 第 3 天离家够远（家已被雾盖住）：屋外的东西和人一起挪 -X，原点那间屋从此就是 ✕ 那间，人接着往前走、不黑场
@@ -4281,15 +4500,11 @@ function twinPrints(s0) { // 从踪迹 s0 米处并排走到老云杉（同 d2.p
   const via = []; for (let s = s0; s < D3.end - 4; s += 2.5) { const lg = D3_LOGS.find(([ls]) => Math.abs(ls - s) < 4), [, rt] = pathAt(s); via.push(logDetour(s, D3_LOGS).addScaledVector(rt, (lg ? -lg[1] : TWIN.side) * TWIN.off)); }
   x3.twin = via.length > 1 ? makePrints('d3_twin', via) : true; // 挪世界前建的随 OUTDOOR 一起挪；挪过之后 pathAt 已是挪过的坐标
 }
-setInterval(() => {
-  if (game.day < 3 || x3.twin || !fp || !D3.end || d2.veil || x3.on || game.found.has('xarrive') || game.found.has('ended')) return;
-  const r = fp.p.root.position, { d, s } = pathNear(r.x, r.z);
-  if (d > D2.width || s < D3.fork + 8 || s > D3.end - 20) { TWIN.away = 0; return; } // 拐上岔路以后、离老云杉 20m 以前
-  chgM.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse); chgFr.setFromProjectionMatrix(chgM);
-  let seen = false; for (let a = s + 2; a < s + 28 && !seen; a += 1.5) { TWIN.sph.center.copy(pathAt(a)[0]).setY(ground.position.y + 0.3); seen = chgFr.intersectsSphere(TWIN.sph); } // 球半径盖住两行和倒木绕行；28m 外在雾里
-  TWIN.away = seen ? 0 : TWIN.away + 0.5;
-  if (TWIN.away >= 3) { const s0 = Math.round(s + 3); twinPrints(s0); game.found.add('twin:' + s0); saveGame(); }
-}, 500);
+const twinAt = () => { const r = fp.p.root.position; return pathNear(r.x, r.z); };
+if (game.day >= 3 && !game.found.has('ended') && ![...game.found].some((k) => k.startsWith('twin:'))) whenUnseen(() => { const { s } = twinAt(), o = []; for (let a = s + 2; a < s + 28; a += 1.5) o.push({ at: pathAt(a)[0].setY(ground.position.y + 0.3), r: 1.2 }); return o; }, // 前方 2–28m 的踪迹（球半径盖住两行和倒木绕行；28m 外在雾里）连续 3 秒你看不见（11-11 world：改走 whenUnseen，同第 2 天石堆那行）
+  () => { const s0 = Math.round(twinAt().s + 3); twinPrints(s0); game.found.add('twin:' + s0); saveGame(); },
+  { hold: 3, name: 'twin prints', abort: () => !!x3.twin || game.found.has('xarrive') || game.found.has('ended'),
+    cond: () => { if (!fp || !D3.end || d2.veil || x3.on) return false; const { d, s } = twinAt(); return d <= D2.width && s >= D3.fork + 8 && s <= D3.end - 20; } }); // 拐上岔路以后、离老云杉 20m 以前
 function xEcho() { // 回声（动机评审 #12）：第 1 天看过的人才会注意到的不同，只换同一模型的状态。梯子架在阁楼口、横杆竖着（第 1 天他滑回去、放下了）；第 1 天被「变回去」的那件（chg:），这边是玩家当时弄成的样子。水壶在 updateDay3 里一直烧
   const snap = (n, on) => { const d = toggles.get(n); if (d) { d.on = on; d.k = on ? 1 : 0; for (const p of d.parts) p(d.k); } };
   snap('loft_ladder', true); snap('loft_gate', false);
@@ -4371,6 +4586,7 @@ function endShotStart(kind) {
   camera.fov = E.fov; camera.updateProjectionMatrix(); camera.position.copy(V(E.from)); controls.target.copy(V(E.tgt));
   fly = { t: 0, dur: E.dur, fromPos: V(E.from), toPos: V(E.to), fromTgt: V(E.tgt), toTgt: V(E.tgt), ease: (t) => t * (2 - t) }; // 越推越慢，停在 to
   const stand = () => { const w = people.get('person_woman'); if (!w) { setTimeout(stand, 300); return; } // 人物还没载完
+    worldSetup(); // 结局画面一开场就摆好
     placeMan(w, ...E.woman, Math.atan2(D2.lamp[0] - E.woman[0], D2.lamp[2] - E.woman[1])); w.root.position.y = floorAt(...E.woman); w.roam = w.next = 1e9; }; // 脸朝那柱烟
   if (kind === 'stay' || kind === 'page') stand();
   const smoke = () => { const u = d2.lamp?.userData.plume; if (!u) { setTimeout(smoke, 300); return; } u.uK.value.set(...END_SHOT.smoke); }; smoke(); // 那柱烟加浓压暗、不放大：远看的那柱平时 uK (2.2, 1)，黄昏天上偏淡；颜色还是去了饱和的灰，不会变褐、变红
@@ -5711,6 +5927,7 @@ const WALK_IN = [-0.6, -0.3, null, false, [Math.atan2(-0.81, -0.81), -0.6]]; // 
 function sliceStart() {
   const m = people.get('person_man'), w = people.get('person_woman');
   if (!m) { setTimeout(sliceStart, 200); return; } // 人物还没载完
+  worldSetup(); // 摆开场的人：加载页刚揭开、镜头还没到，审计不算瞬移
   placeMan(m, ...SL.man, Math.PI); m.root.position.y = floorAt(...SL.man); m.roam = m.next = 1e9;
   if (w && game.entered) { placeMan(w, ...NAV.books, 0); w.root.position.y = floorAt(...NAV.books); w.tasks = [['face', -1.4, -1.15]]; w.roam = 25; w.next = 8; SL.w = 'in'; } // 刷新页面：进过屋了，她不再从门口领路开灯，直接站在书架前（领路走完也停在这里），之后照白天的样子转
   else if (w) { placeMan(w, ...SL.woman, Math.PI - 0.5); w.root.position.y = floorAt(...SL.woman); w.roam = w.next = 1e9; SL.w = 'porch'; }
@@ -5732,6 +5949,7 @@ function mornOn() {
 function mornStart() {
   const m = people.get('person_man'), w = people.get('person_woman');
   if (!m || !w) { setTimeout(mornStart, 200); return; } // 人物还没载完
+  worldSetup();
   const d = toggles.get('loft_ladder'), g = toggles.get('loft_gate'); // 梯子推到阁楼口下、拦杆抬起：她要下来
   if (d) { d.on = true; d.k = 1; for (const q of d.parts) q(1); }
   if (g) { g.on = false; g.k = 0; for (const q of g.parts) q(0); }
@@ -5845,7 +6063,7 @@ function sliceTick(dt) {
   const dw0 = toggles.get('door_wood'), nr0 = toggles.get('entry_noren'); // 门被推开（on = false 是开）：先把门口帘子拉起来，再进屋
   if (dw0 && nr0 && !dw0.on && !SL.norenUp) { SL.norenUp = true; nr0.on = true; }
   const w0 = people.get('person_woman');
-  if (dw0 && dw0.on && SL.w === 'in' && w0 && (Math.hypot(w0.root.position.x - SL.door[0][0], w0.root.position.z - SL.door[0][1]) < 0.6 || (w0.cur && w0.cur.getClip().name === 'Interact' && Math.hypot(w0.root.position.x - SL.pull[0], w0.root.position.z - SL.pull[1]) < 0.4))) { dw0.on = false; dw0.ajar = 0; sfxToggle('door_wood', false); } // 她领路走到门前：推开虚掩的门（不然玩家按 W 贴着门扇滑到门轴卡住）；大门往外开（门扇扫到 z 2.88）：她先站到扫过范围外的门闩一侧 SL.pull，抬手时门开，转完再进（11-10 iPhone 试玩：原来走到门外 0.55m 才推，门扇从她身上扫过去）；门前 0.6m 那个条件是兜底
+  if (dw0 && dw0.on && SL.w === 'in' && w0 && Math.hypot(w0.root.position.x - SL.door[0][0], w0.root.position.z - SL.door[0][1]) < 0.6) { dw0.on = false; dw0.ajar = 0; sfxToggle('door_wood', false, w0.root.position); } // 11-11 world #11：开门改成她的任务 ['toggle', 'door_wood', false, SL.pull]（每天通用），这里只剩门前 0.6m 兜底（走到门口门又被关上了）。原注：她领路走到门前：推开虚掩的门（不然玩家按 W 贴着门扇滑到门轴卡住）；大门往外开（门扇扫到 z 2.88）：她先站到扫过范围外的门闩一侧 SL.pull，抬手时门开，转完再进（11-10 iPhone 试玩：原来走到门外 0.55m 才推，门扇从她身上扫过去）；门前 0.6m 那个条件是兜底
   if (rn !== SL.room) { // 原来 goRoom 里做的那几件，改成走进去时做
     SL.room = rn; inside = rn ? ROOMS.find((r) => r.name === rn) : null;
     if (rn) game.entered = true;
@@ -5861,7 +6079,7 @@ function sliceTick(dt) {
   if (SL.auto && !SL.auto.go && w && SL.w === 'in' && fp.p.root.position.z - w.root.position.z > 2) { fpGo(...WALK_IN); fp.go.follow = w; SL.auto.go = fp.go; SL.walked = true; } // 让她先走出 2m 再跟上；walked：被带着穿过玄关了，之后自己第一次回玄关不再替他转头找过道口
   if (w && SL.w === 'porch' && (SL.liveT > 1.5 || rn || SL.auto)) { // 玩家一拿到操作她就先进屋领路：进门往右穿过帘子、一路开灯，站到书架前看着书桌（评审④ v2 #2：原来等他进门 6 秒才跟，玄关成了死角；不站路点 sw，挡稽查的路；之后照白天的样子在楼下转）
     const A = SL.auto, lt = (n) => (A ? [['lamp', n]] : lampTasks(n)); // 带玩家进屋（SL.auto）：屋里三盏灯路过就亮，不停下抬手（原来她在过道口停 7 秒，玩家贴着她后背等）；门口那盏照旧抬手开，玩家在门外 2m 看着亮起来
-    SL.w = 'in'; const dwP = toggles.get('door_wood'); w.tasks = [...(dwP && dwP.on ? [['walk', ...SL.pull], ['face', 0.3, 1.9], ['anim', 'Interact']] : []), ['walk', ...SL.door[0]], ['walk', ...SL.door[1]], ...goTasks(w, ...SL.door[1], 'entry'), ...lampTasks('ceiling_light_entry'), ...goTasks(w, ...NAV.entry, 'hall'), ...lt('hall_pendant_south'), ...lt('hall_pendant_north'), ...goTasks(w, ...NAV.hall, 'ne'), ...lt('ceiling_light_living'), ...(A ? [...goTasks(w, ...NAV.ne, 'dish'), ['walk', ...NAV.dish], ['face', NAV.dish[0], -1.9]] : [...goTasks(w, ...NAV.ne, 'books'), ['walk', ...NAV.books], ['face', -1.4, -1.15]])]; w.roam = A ? 60 : 25; w.next = 8; // 带玩家进屋时她停在东边柜子前 NAV.dish：停在书架前 NAV.books 会贴着画面右边露半个身子（人物近景不好看）。站满 60 秒再开始转：领路只用 18 秒，按原来的 25 秒她正好在玩家读完纸去生火时晃到炉子前（fpslice.py 生火那步点到水壶）
+    SL.w = 'in'; w.tasks = [['toggle', 'door_wood', false, SL.pull, [0.3, 1.9]], ['walk', ...SL.door[0]], ['walk', ...SL.door[1]], ...goTasks(w, ...SL.door[1], 'entry'), ...lampTasks('ceiling_light_entry'), ...goTasks(w, ...NAV.entry, 'hall'), ...lt('hall_pendant_south'), ...lt('hall_pendant_north'), ...goTasks(w, ...NAV.hall, 'ne'), ...lt('ceiling_light_living'), ...(A ? [...goTasks(w, ...NAV.ne, 'dish'), ['walk', ...NAV.dish], ['face', NAV.dish[0], -1.9]] : [...goTasks(w, ...NAV.ne, 'books'), ['walk', ...NAV.books], ['face', -1.4, -1.15]])]; w.roam = A ? 60 : 25; w.next = 8; // 带玩家进屋时她停在东边柜子前 NAV.dish：停在书架前 NAV.books 会贴着画面右边露半个身子（人物近景不好看）。站满 60 秒再开始转：领路只用 18 秒，按原来的 25 秒她正好在玩家读完纸去生火时晃到炉子前（fpslice.py 生火那步点到水壶）
   }
 }
 // 触屏：左下半区按下 = 浮动摇杆（按住 0.16 秒或推开才出圆盘，松手淡出；推的幅度 = 走速），别处单指拖动转头，两只手指可同时用；轻点（<600ms、移动 <10px）= 走过去

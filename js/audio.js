@@ -166,18 +166,19 @@ export function audioCaw(dist, delay = 0) {
 // 开关：interact.js 的 toggle() 调（shared.sfxToggle）；on = 切换后的 t.on。大门、卫生间门、炉门的 on = 关上（k=1 关），其余 on = 开
 // 关的「咔」落在合上那一刻（延迟 = 动画时长 − 声音里最响处）；快速反向时停掉还没响的上一声
 const CLOSED_ON = /^(door_wood|toilet_door_|stove_door)/, pendClose = new Map();
-export function sfxToggle(name, on) {
+export function sfxToggle(name, on, from) { // from：不是你动的（她开门、开灯、收梯子）就给声源的位置，按离你多远减音量：门 14m、别的 8m 外听不见（11-11 world：原来多远都是满音量）
   if (!ctx) return;
+  const far = from ? Math.max(0, 1 - camera.position.distanceTo(from) / (/^door_/.test(name) ? 14 : 8)) : 1; if (far < 0.03) return;
   const prev = pendClose.get(name); if (prev && ctx.currentTime < prev.t) { try { prev.s.stop(); } catch { /* 已停 */ } } pendClose.delete(name);
   const open = CLOSED_ON.test(name) ? !on : on, r = 0.94 + Math.random() * 0.12;
-  const sh = (n, v, d) => { const dl = open ? 0 : d, s = play(n, v, { rate: r, delay: dl }); if (s && dl) pendClose.set(name, { s, t: ctx.currentTime + dl }); };
+  const sh = (n, v, d) => { const dl = open ? 0 : d, s = play(n, v * far, { rate: r, delay: dl }); if (s && dl) pendClose.set(name, { s, t: ctx.currentTime + dl }); };
   if (/^(door_|toilet_door_|loft_gate)/.test(name)) sh(open ? 'door-open' : 'door-close', 0.7, 0.78);
   else if (/drawer|dining_leaf/.test(name)) sh(open ? 'drawer-open' : 'drawer-close', 0.6, 0.4);
   else if (name === 'stove_door') sh(open ? 'stove-open' : 'stove-close', 0.5, 0.5);
-  else if (name === 'stove_fire') { if (on) play('fire-light', 0.7); }
-  else if (/light|lamp|lantern|pendant/.test(name)) play('click', 0.5, { rate: r });
-  else if (/lid|tap|bail|faucet|kettle/.test(name)) play('latch', 0.5, { rate: r });
-  else if (/ladder|rocking/.test(name)) play('creak', 0.6, { rate: r });
+  else if (name === 'stove_fire') { if (on) play('fire-light', 0.7 * far); }
+  else if (/light|lamp|lantern|pendant/.test(name)) play('click', 0.5 * far, { rate: r });
+  else if (/lid|tap|bail|faucet|kettle/.test(name)) play('latch', 0.5 * far, { rate: r });
+  else if (/ladder|rocking/.test(name)) play('creak', 0.6 * far, { rate: r });
 }
 // 其它短音：paper 翻纸、book 开书、pick 拿起、place 放下
 export function sfx(n, vol = 0.6) { play(n, vol, { rate: 0.95 + Math.random() * 0.1 }); }
