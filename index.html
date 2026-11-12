@@ -531,19 +531,19 @@ import { shared, share } from './js/state.js';
 import { terrain, terrainH, terrainSlope, sstep, makeGroundGeometry, applyTerrain, setBrook, brookAt, brookCutD, groundSpan, BROOK_WL, BROOK_BANK } from './js/terrain.js';
 import { paperMesh, agedPaper, handwrite, makeBook, inspectTick, inspecting, inspectBusy, inspectKind, inspectStart, inspectRelease, inspectDuo, sigDraw, inspectWatch, watchModel } from './js/props3d.js';
 import { WX_ZH, sky, skyEl, skyU, indoorU, indoorShade, PANELS, wallU, updateSky, sunPace } from './js/time-of-day.js';
-import { audioTick, audioPreload, audioStep, audioRung, setIce, sfx, sfxToggle } from './js/audio.js';
+import { audioTick, audioPreload, audioStep, audioRung, setIce, sfx, sfxToggle, wheelGroan } from './js/audio.js';
 import { updateBirds } from './js/birds.js';
 import { LOG } from './js/playlog.js';
 import { volfog, volDraw, volTick, FOG_LAYER } from './js/volfog.js';
 import { snowLamp, applyWeather, wsPos, WS, groundCover, cover, precipHole, setupRoofWeather, wx, roofWx, setWeather, setMist, wxTimer, slideSnow, updatePrecip, updateRoofWeather } from './js/weather.js';
-import { LAMPS, toggles, DOORS, swapSoftProps, splitParts, setupToggles, setupFire, setupWaterFx, toggle, fire, rocker, toggleOf, updateToggles, updateFire, updateLantern, updateRocker, updateWaterFx, updateHalos } from './js/interact.js';
+import { LAMPS, POWER, toggles, DOORS, swapSoftProps, splitParts, setupToggles, setupFire, setupWaterFx, toggle, fire, rocker, toggleOf, updateToggles, updateFire, updateLantern, updateRocker, updateWaterFx, updateHalos } from './js/interact.js';
 import { setOutfit, people, SEATS, wakePerson, loadPeople, seatTaken, goHome, SPOTS, routeTasks, NAV, MOODS, fpRise, sitTasks, CLIMB, moodOf, WALK_SPEED, ladderRoot, floorBelow, goTasks, nearNode, navPath, updatePeople, riseTasks, trimBack, wcDoorTasks } from './js/characters.js';
 // 模块（js/*.js）要用的主页面变量：模块里写 shared.名字，读写都直通这里（写过的才给 setter）
 share({
   ground: () => ground, layers: () => layers, loader: () => loader, INFO: () => INFO, meshes: () => meshes, isShown: () => isShown,
   shadowDirty: [() => shadowDirty, (v) => { shadowDirty = v; }], x3: () => x3, _fpU: () => _fpU, chgTouch: () => chgTouch, worldBy: () => worldBy, game: () => game,
   HELD_LAYER: () => HELD_LAYER, LADDER: () => LADDER, ladderZ: () => ladderZ, ladderReady: () => ladderReady, gateOpen: () => gateOpen, ladderBusy: () => ladderBusy, _fpDn: () => _fpDn,
-  angDiff: () => angDiff, planWander: () => planWander, brookWheel: () => BROOK.wheel
+  angDiff: () => angDiff, planWander: () => planWander, brookWheel: () => BROOK.wheel, brookSpin: () => BROOK.spin
 });
 // ===== 公共底座：渲染器、场景、相机、视角控制、太阳光 → js/core.js =====
 let shadowDirty = true, shadowRoof = 0, shadowAt = 0; const shadowSun = new THREE.Vector3();
@@ -681,7 +681,7 @@ function grassTexture() { // 程序生成的草地贴图（可平铺，8m 一块
 // 小路从院子边沿 +z 方向弯弯曲曲伸进林子，同一卵石贴图；返回路中心线上的点，种树时避开
 let pathHalf = 0.8; // 卵石路半宽（extendPath 按 path_core 定）
 const pathClear = [], trailClear = [], WATER ={ lake: null, river: [], brook: [] }; // WATER.lake = [x, z, 半径]；river = 河中心线点（种树避开）；brook = 屋旁小溪中心线（小地图画）
-const BROOK = { curve: null, pts: null, sc: 0, sEnd: 0, bed: null, wheel: null, group: null, wireA: null, snow: { value: 0 } }; // 屋旁小溪（extendPath 定线、makeBrook 建网格）：bed = 岸的两块细网格（第一人称脚下射线要打它）
+const BROOK = { curve: null, pts: null, sc: 0, sEnd: 0, bed: null, wheel: null, group: null, wireA: null, snow: { value: 0 }, ang: 0, spin: 1, run: null, wirePts: null }; // 屋旁小溪（extendPath 定线、makeBrook 建网格）：bed = 岸的两块细网格（第一人称脚下射线要打它）
 const WIRE_WALL = [2.3, 2.1, 1.2]; // 电线进小屋的点：相对 home.target 的 x、离地高、z（东墙 x = 2.2，屋檐在它上面 ~2.4m）
 const lakeD = (x, z) => WATER.lake ? Math.hypot((x - WATER.lake[0]) / 1.35, (z - WATER.lake[1]) / 0.85) : 1e9; // 到湖心的「椭圆距离」，和半径 WATER.lake[2] 同单位；湖岸起伏 ±19%，留空按 1.2r + 余量算（原来 1.6r 是小湖时定的，大湖会空出 50m 一圈）
 // 岸线：角度 a 方向「岸 / 名义半径」的倍数。两层低频大起伏 + 两层高频小湾小岬（10-31 加，原来只有前两项，岸是光滑大弧）；GLSL 版给水面、地面着色器用
@@ -1580,6 +1580,10 @@ float bF(vec2 p) { return 0.6 * bN(p) + 0.4 * bN(p * 2.7 + 5.2); }
       for (const e of [-0.16, 0.16]) wp.push(new THREE.BoxGeometry(0.04, r - 0.08, 0.04).translate(e, (r - 0.08) / 2, 0).rotateX(a + Math.PI / 8)); } // 辐条
     wp.push(new THREE.CylinderGeometry(0.09, 0.09, 0.44, 8).rotateZ(Math.PI / 2));
     const wheel = BROOK.wheel = new THREE.Mesh(mergeGeometries(wp), W.planks); wheel.position.y = ay; wheel.receiveShadow = true; g.add(wheel); // 会转：不投影（阴影不每帧重画）
+    { const rag = new THREE.Group(), y0 = r - 0.12; rag.name = 'd2_rag'; // 第 2 天夜里缠在一片叶子上的红布（同标桩的布，wheelJam 挑哪片、显出来）：本地 +y = 叶片朝外
+      const wrap = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.2, 0.07).translate(0.03, y0 + 0.02, 0), RAG.mat), tail = new THREE.Mesh(new THREE.PlaneGeometry(0.07, 0.75, 1, 4).translate(0, -0.375, 0), RAG.tail);
+      tail.position.set(0.12, y0 + 0.1, 0); tail.rotation.set(-WHEEL.stopA, Math.PI / 2, 0); // 叶片停在 stopA 时布尾正好竖直挂进水里、面朝岸
+      rag.add(wrap, tail); rag.visible = false; wheel.add(rag); layers.set('d2_rag', rag); meshes.push(wrap, tail); BROOK.rag = rag; }
     const sp = [new THREE.CylinderGeometry(0.035, 0.035, 2 * (w + 0.35), 6).rotateZ(Math.PI / 2).translate(0, ay, 0)], sx = hs * (w + 1.5), sy = gy + terrainH(x + tz * sx, z - tx * sx);
     for (const e of [-1, 1]) { const y0 = top - 0.3, y1 = ay + 0.08; sp.push(new THREE.BoxGeometry(0.12, y1 - y0, 0.12).translate(e * (w + 0.35), (y0 + y1) / 2, 0)); } // 两根桩，埋进岸里
     sp.push(new THREE.BoxGeometry(0.7, 0.62, 0.62).translate(sx, sy + 0.28, 0), new THREE.BoxGeometry(0.62, 0.05, 0.86).rotateZ(hs * 0.32).translate(sx, sy + 0.66, 0)); // 小木棚 + 斜顶（朝溪那边低）
@@ -1588,9 +1592,51 @@ float bF(vec2 p) { return 0.6 * bN(p) + 0.4 * bN(p * 2.7 + 5.2); }
     for (const d of [-(w + 0.35), w + 0.35, sx]) { const v = new THREE.Vector3(d, 0, 0).applyMatrix4(g.matrixWorld); TREE_XZ.push(v.x, v.z); }
   }
   G.traverse((o) => { if (o.isMesh) o.layers.set(OUT_LAYER); });
+  BROOK.rag?.traverse((o) => o.layers.set(0)); // 红布要点得到：点选射线只认图层 0
   window.__brook = BROOK; // 调试
   terrain.ox = ox; terrain.oz = oz; if (x3.shifted) G.position.set(-XSHIFT.x, 0, -XSHIFT.y); // 刷新时已在 ✕ 那边（applyX 先跑了）：照别的屋外物件挪过去
   scene.add(G); OUTDOOR.push(G);
+}
+// 第 2 天夜里水轮停转（2026-11-12 用户定，story/design.md「水轮与装备」）：她在书桌前坐下以后，你和她都看不见水轮时，上游冲下来一条红布缠上叶片（whenUnseen），
+// 水轮匀减速停住，发电机跟着没了电压，门廊灯和屋里的电灯（开关不动，POWER.k）闪几下灭掉；你提着灯顺电线走到溪边点那块布（wheel2），水轮慢慢转回来、灯渐亮
+const WHEEL = { w: 0.9, stopA: -0.9, slow: 2, start: 4, hold: 2, lane: 5, dark: 6 }; // w：转速 rad/s（约 7 秒一圈）；stopA：缠布那片叶子停在哪（绕轴，0 = 正上方，负 = 偏上游，露出水面）；slow：卡住后至少再转多少弧度（约 4.5 秒停住）；start：清了布几秒转回全速；hold：你和她都看不见水轮几秒布才缠上；lane：夜里电线两侧能走几米；dark：出了能走的地方再走几米雾里绕回
+const wheelDown = () => game.day === 2 && game.found.has('wheel0') && !game.found.has('wheel2'); // 水轮缠着布、还没清
+function wheelAt() { return BROOK.wheel.getWorldPosition(new THREE.Vector3()); }
+function wheelJam() { // 挑一片叶子：从此刻起再转 slow ~ slow+π/4 弧度正好停在 stopA，布缠在它上面
+  const f = game.found; if (f.has('wheel0') || !BROOK.rag) return;
+  f.add('wheel0'); saveGame();
+  const a0 = BROOK.ang, P = Math.PI * 2; let best = null;
+  for (let j = 0; j < 8; j++) { const aj = j / 8 * P; let d = aj - WHEEL.stopA - a0; d -= Math.floor((d - WHEEL.slow) / P) * P; if (!best || d < best.d) best = { aj, d }; } // d 落在 [slow, slow + 2π)，取最小
+  BROOK.rag.rotation.x = best.aj; BROOK.rag.visible = true;
+  BROOK.run = { stop: true, a0, d: best.d, T: 2 * best.d / WHEEL.w, t: 0 }; wheelGroan(false);
+}
+function wheelFree() { if (BROOK.rag) BROOK.rag.visible = false; BROOK.run = { stop: false, a0: BROOK.ang, T: WHEEL.start, t: 0 }; wheelGroan(true); } // 清了布：从静止匀加速转回全速
+function updateWheel(dt) {
+  const W = BROOK.wheel, f = game.found;
+  if (BROOK.init === undefined) { BROOK.init = true; if (wheelDown()) { BROOK.ang = -WHEEL.stopA; BROOK.spin = 0; BROOK.rag.rotation.x = 0; BROOK.rag.visible = true; BROOK.dark = true; showQuest(); mmDirty = true; } } // 刷新：停着、缠着布、电灯暗着
+  const R = BROOK.run;
+  if (R) { R.t += dt; const u = Math.min(1, R.t / R.T);
+    if (R.stop) { BROOK.ang = R.a0 + R.d * (1 - (1 - u) * (1 - u)); BROOK.spin = 1 - u; } // 匀减速
+    else { BROOK.ang = R.a0 + WHEEL.w * R.T * u * u / 2; BROOK.spin = u; } // 匀加速
+    if (u >= 1) BROOK.run = null; }
+  else if (BROOK.spin > 0) BROOK.ang += WHEEL.w * dt;
+  W.rotation.x = -BROOK.ang; // 底下的叶片顺流走
+  const s = BROOK.spin, now = performance.now(), fl = s > 0.08 && s < 0.9 ? 0.75 + 0.25 * Math.sin(now * 0.023) * Math.sin(now * 0.0071) : 1; // 转速掉下来时电压不稳，灯一跳一跳
+  POWER.k = THREE.MathUtils.smoothstep(s, 0.12, 0.7) * fl;
+  if (game.day === 2 && game.night && !game.dusk && f.has('log2') && !f.has('wheel0') && !BROOK.wait && sceneReady) // 她坐下写了：等你和她都看不见水轮
+    BROOK.wait = whenUnseen(() => ({ at: wheelAt(), r: 1 }), wheelJam, { hold: WHEEL.hold, clerk: true, name: 'red rag caught on the water wheel' });
+  if (wheelDown() && !BROOK.dark && POWER.k < 0.05) { BROOK.dark = true; showQuest(); hintReset(); mmDirty = true; // 灯灭了：她就在跟前、看得见开着的电灯灭了才说
+    const lit = [...toggles].filter(([n, t]) => /^(hall_pendant_|ceiling_light_)/.test(n) && t.on).map(([n]) => ({ light: n }));
+    if (lit.length) clerkSay(D2_SAYS.wheel, { about: { any: lit }, walk: false }); } // 她坐着写：看不见就不说，不起身
+  if (AUDIT && s < 0.1 && !BROOK.audit) { const lit = Object.keys(LAMPS).filter((n) => /^(entry_porch_lamp|hall_pendant_|ceiling_light_)/.test(n) && (layers.get(n)?.children.find((o) => o.isPointLight)?.intensity || 0) > 0.02); // 审计：水轮停着，电灯不能还亮着
+    if (lit.length) { BROOK.audit = true; worldAudit('fact', 'water wheel stopped but electric lamps lit', { ok: false, lit }); } }
+}
+function nightDev(r) { // 第 2 天夜里出门：院子里随便走；提着灯能顺着电线走到水轮（两侧 lane 米内）；别处、没提灯出了院子，再走 dark 米就是雾里绕回门口
+  const out = Math.hypot(r.x, r.z) - D2.yard; if (out <= 0) return 0;
+  let d = out; const P = BROOK.wirePts;
+  if (gear.lantern && P && game.found.has('wheel0')) { const w = wheelAt(); d = Math.min(d, Math.hypot(r.x - w.x, r.z - w.z) - WHEEL.lane);
+    for (let i = 1; i < P.length; i++) { const [ax, az] = P[i - 1], [bx, bz] = P[i], vx = bx - ax, vz = bz - az, t = THREE.MathUtils.clamp(((r.x - ax) * vx + (r.z - az) * vz) / (vx * vx + vz * vz || 1), 0, 1); d = Math.min(d, Math.hypot(r.x - ax - vx * t, r.z - az - vz * t) - WHEEL.lane); } }
+  return Math.max(0, d) * D2.lostAt / WHEEL.dark;
 }
 // 溪里、岸上不留树和林下物件：实例缩成 0（不动随机序列、别的树不挪），碰撞点、灌木、树坑一起去掉。种完树、cullHidden 之后调
 function brookClear() {
@@ -1676,6 +1722,7 @@ function brookWire() {
   const dark = new THREE.MeshStandardMaterial({ color: '#1b1815', roughness: 0.7 }), add = (gs, mat) => { if (!gs.length) return; const o = new THREE.Mesh(mergeGeometries(gs), mat); o.layers.set(OUT_LAYER); o.name = 'brook_wire'; G.add(o); return o; };
   add([...wire, ...br], dark); add(ins, new THREE.MeshStandardMaterial({ color: '#e9e3d6', roughness: 0.3 }));
   const pl = add(poles, woodMats().pale); if (pl) pl.castShadow = true;
+  BROOK.wirePts = pts.map((p) => [p.x, p.z]); // 家的坐标：第 2 天夜里提着灯能顺着走的走廊（nightDev）
   window.__brookWire = { spans: pts.length - 1, trees: route.length - 2, poles: poles.length, clips: pts.filter((p, i) => i && clips(pts[i - 1], p)).length, pts, nodes: N - 2, bad: bad.size }; // 调试（clips：穿树冠的段数；nodes：有空当能钉的树；bad：试过穿冠的边）
 }
 function fpShrubs(o) { // 灌木也是 InstancedMesh：和 fpTrees 一样按位置往外推
@@ -3043,14 +3090,14 @@ const HINTS = {
 };
 const HINT_ORDER = ['page', 'fire', 'letter', 'map', 'watch', 'basin']; // v2：只提示过关要的；日志、大衣靴子提灯是选看
 const HINT_IDLE = 90, HINT_IDLE_NIGHT = 20, HINT_IDLE_PAGE = 30, HINT_CLICKS = 6; // 天黑只差点书记员 / 书桌：20 秒就提示，每 20 秒升一级；第一条（书桌上的纸）30 秒：玄关像死角，新玩家进门不知往哪走（11-01 评审）
-const HINT_WAIT = { night: HINT_IDLE_NIGHT, page: HINT_IDLE_PAGE, fire: HINT_IDLE_PAGE, letter: HINT_IDLE_PAGE, map: HINT_IDLE_PAGE }; // 按要找的线索定等多久；第 1 天生火、信、地图也 30 秒：原来 90 秒，新手读完信干站 3 分钟才见第 2 级（11-07 新手评审 #2）
+const HINT_WAIT = { wheel2: HINT_IDLE_PAGE, night: HINT_IDLE_NIGHT, page: HINT_IDLE_PAGE, fire: HINT_IDLE_PAGE, letter: HINT_IDLE_PAGE, map: HINT_IDLE_PAGE }; // 按要找的线索定等多久；第 1 天生火、信、地图也 30 秒：原来 90 秒，新手读完信干站 3 分钟才见第 2 级（11-07 新手评审 #2）
 const HINT_ROOMS0 = ['Entry', 'Water Closet']; // 玄关这两间看着四面是墙，进屋的口子是门帘那道门洞
 const hint = { idle: 0, clicks: 0, key: null, lvl: 0 };
 let hintGlow = null; // 三级提示时描边的图层（drawHighlight 当悬停画）
 function hintReset() { hint.idle = 0; hint.clicks = 0; }
-const HINT_Q = ['page', 'fire', 'look', 'out', 'out1', 'dusk2', 'night']; // 这几步任务里才提示
+const HINT_Q = ['page', 'fire', 'look', 'out', 'out1', 'dusk2', 'night', 'wheel']; // 这几步任务里才提示
 function hintActive() { const q = questNow(); return game.entered && (inside || fp) && HINT_Q.includes(q) &&!opening && card.hidden && journal.hidden && $('dlg').hidden && document.visibilityState === 'visible'; }
-function hintKey() { return questNow() === 'night' ? 'night' : (game.day >= 3 ? HINT_ORDER3.filter((k) => x3.on ? X_NEED.includes(k) : !X_NEED.includes(k)) : game.day >= 2 ? HINT_ORDER2 : HINT_ORDER).find((k) => !game.found.has(k) && (game.day < 2 || k !== 'd2light' || d2.lamp) && (k !== 'lback' || game.found.has('lback0'))); } // 下一条该提示的线索；lback 放回去了才提示
+function hintKey() { return questNow() === 'night' ? 'night' : questNow() === 'wheel' ? 'wheel2' : (game.day >= 3 ? HINT_ORDER3.filter((k) => x3.on ? X_NEED.includes(k) : !X_NEED.includes(k)) : game.day >= 2 ? HINT_ORDER2 : HINT_ORDER).find((k) => !game.found.has(k) && (game.day < 2 || k !== 'd2light' || d2.lamp) && (k !== 'lback' || game.found.has('lback0'))); } // 下一条该提示的线索；lback 放回去了才提示
 const hintInEntry = () => !!fp && HINT_ROOMS0.includes(roomAt(fp.p.root.position));
 function hintFire() { // 升一级并显示
   const key = hintKey();
@@ -3082,7 +3129,7 @@ const LOOK_THERE = ['Look — there.', '看——就在那儿。'], WHERE = { lo
 const WHERE_N = { loft: ['{} is up in the loft.', '{}在阁楼上。'], down: ['{} is downstairs.', '{}在楼下。'], below: ['{} is below. Look down.', '{}在下面，低头看。'], above: ['{} is above. Look up.', '{}在上面，抬头看。'],
   left: ['{} is to your left.', '{}在你左边。'], right: ['{} is to your right.', '{}在你右边。'], backL: ['{} is behind you, to the left.', '{}在你左后方。'], backR: ['{} is behind you, to the right.', '{}在你右后方。'], back: ['{} is behind you.', '{}在你身后。'] };
 const HINT_NOUN = { page: ['The writing desk', '书桌'], fire: ['The stove', '炉子'], letter: ['The stove door', '炉门'], map: ['The map', '地图'], watch: ['The night table', '床头柜'], basin: ['The washstand', '洗脸架'], night: ['The writing desk', '书桌'],
-  d2block: ['The chopping block', '劈柴木桩'], d2stake: ['The stake', '标桩'], d2blaze: ['The marked tree', '刻了记号的树'], d2cairn: ['The heap of stones', '石堆'], d2light: ['The light', '灯光'],
+  d2block: ['The chopping block', '劈柴木桩'], d2stake: ['The stake', '标桩'], d2blaze: ['The marked tree', '刻了记号的树'], d2cairn: ['The heap of stones', '石堆'], d2light: ['The light', '灯光'], wheel2: ['The water wheel', '水轮'],
   xarrive: ['The old spruce', '老云杉'], xcoat: ['The coat rail', '衣帽架'], xnotes: ['The writing desk', '书桌'], xfire: ['The rocking chair', '摇椅'], xwatch: ['The night table', '床头柜'] }; // 只给 HINT_ORDER* 和 night 里会提示到的；没名字的退回 WHERE
 const whereSay = (d, n) => n ? [WHERE_N[d][0].replace('{}', n[0]), WHERE_N[d][1].replace('{}', n[1])] : WHERE[d];
 function hintThere(key) { // 3 级提示的话：东西在画面里说「看——就在那儿」（配描边）；不在画面里说在哪个方向（11-05 评审 #4：原来东西在背后、墙后时只剩这一句）
@@ -3658,9 +3705,10 @@ const D2_CARDS = { // 图层 → [标题, 区域, 中文标题, 英, 中, 说明
   d2_stake: ['Survey Stake', 'Exterior', '测量标桩', 'A survey stake beside the path, waist-high. Near the top, one slanting cut, pale wood showing.\n\nBelow the cut, a bearing burnt into the wood. The path holds on, past the next bend.', '路边一根测量标桩，齐腰高。靠上有一道斜刀口，露出白木头。\n\n刀口下面烙着一行方位：沿路再走，过下一道弯。', 'A stake by the path, a rag of red cloth at its head.'],
   d2_blaze: ['Blazed Spruce', 'Exterior', '刻了记号的云杉', 'An old spruce with a blaze cut into the bark at eye height: an arrow, and beneath it one slanting cut. The bark has grown back round the edges; it was cut a great many years ago.', '一棵老云杉，齐眼高的树皮上削出一块记号：一个箭头，下面一道斜刀口。削口边上的树皮已经长回来了——是很多年前刻的。', 'A mark cut in the bark.'],
   d2_cairn: ['Cairn', 'Exterior', '石堆', 'Stones heaped knee-high where the path bends. On the topmost, in charcoal: ✕ → 4 mi.\n\nThe hand is your own. You have never stood here.\n\nBeyond it the fog lies so thick the path cannot be seen at all.', '小路拐弯的地方堆着齐膝高的石头。最上面那块用炭笔写着：✕ → 四英里。\n\n是你的笔迹。你没来过这里。\n\n再往前，雾浓得连路都看不见了。', 'Stones heaped where the path bends.'],
+  d2_rag: ['Red Rag', 'Exterior', '红布', 'The same red cloth as the rag at the head of the stake in the woods. The brook brought it down. You pull it free of the paddle.', '和林子里标桩顶上系的是同一种红布，是溪水从上游冲下来的。你把它从叶片上解了下来。', 'A rag of red cloth round a paddle.'],
   d2_lamp: ['Smoke over the Trees', 'Exterior', '树梢上的烟', 'Smoke rising over the trees, east-north-east, as from a chimney. There is no house that way.', '东北偏东的树梢上升着一柱烟，像是烟囱里冒的。那边没有人家。', 'Smoke, far off over the trees.'],
 };
-const D2_KEY = { d2_block: 'd2block', d2_stake: 'd2stake', d2_blaze: 'd2blaze', d2_cairn: 'd2cairn', d2_lamp: 'd2light' };
+const D2_KEY = { d2_block: 'd2block', d2_stake: 'd2stake', d2_blaze: 'd2blaze', d2_cairn: 'd2cairn', d2_lamp: 'd2light', d2_rag: 'wheel2' };
 const LOG2_CARD = ['Field Log', 'Parlour', '工作日志', 'Back indoors, the clerk turns the field log on to its middle pages.\n\n' + GAME_TEXT.log2[1], '回到屋里，书记员把工作日志翻到了中间。\n\n' + GAME_TEXT.log2[2], 'The middle pages.'];
 const NOTES2_CARD = ['Inquiry Notes', 'Parlour', '调查记录', GAME_TEXT.notes2[1], GAME_TEXT.notes2[2], 'In the clerk\'s hand, the ink still wet.'];
 const DAY2_TEXT = { // Journal「第二天」：键 → [英标题, 中标题, 英, 中]
@@ -3670,6 +3718,7 @@ const DAY2_TEXT = { // Journal「第二天」：键 → [英标题, 中标题, �
   d2cairn: ['The Cairn', '石堆', D2_CARDS.d2_cairn[3], D2_CARDS.d2_cairn[4]],
   d2light: ['Smoke over the Trees', '树梢上的烟', D2_CARDS.d2_lamp[3], D2_CARDS.d2_lamp[4]],
   log2: ['Field Log, Middle Part', '工作日志 · 中段', GAME_TEXT.log2[1], GAME_TEXT.log2[2]],
+  wheel2: ['The Red Rag', '红布', D2_CARDS.d2_rag[3], D2_CARDS.d2_rag[4]],
   notes2: ['Inquiry Notes, Night of Day 2', '调查记录 · 第 2 天夜里', GAME_TEXT.notes2[1], GAME_TEXT.notes2[2]],
 };
 Object.assign(QUEST, {
@@ -3677,6 +3726,7 @@ Object.assign(QUEST, {
   out1: ['There are more marks along the path. Keep on.', '路上还有记号，接着往前走。'], // 找到第一样之后（评审④ #8：原来四样找齐前一直是「出去找找」）
   dusk2: ['Look about you — is anything rising over the trees?', '四下看看，树梢上有没有什么。'], // 原来写「往小屋走吧」，玩家进了屋就看不到灯（11-01 评审 #4）
   home2: ['Go back inside.', '回屋里去。'],
+  wheel: ['Follow the wire down to the water wheel.', '顺着电线去溪边看看水轮。'], // 第 2 天夜里断电（updateWheel）
   end2: ['', ''],
 });
 const D2_SAYS = {
@@ -3688,6 +3738,8 @@ const D2_SAYS = {
   change1: ['A second line of tracks runs to the door — going in. Boots the size of yours.', '门口多了一行脚印，往屋里走的，跟你的靴子一样大。'],
   change2: ['No smoke from the chimney. The fire was burning when you went out.', '烟囱不冒烟了。你出门时炉火还烧着。'],
   lamp: ['The clerk: "Look — east-north-east. Smoke."', '书记员：“你看——东北偏东，有烟。”'],
+  wheel: ['The clerk: "The lights are gone. The wheel, I should think."', '书记员：“灯灭了。多半是水轮。”'], // 第 2 天夜里断电，她在书桌前看着灯灭
+  dark: ['Nothing to see by in this fog. The cabin is ahead of you again.', '雾里什么也照不见。眼前又是小屋。'], // 没提灯走进雾里（第 2 天夜里、第 3 天）绕回门口：不说「去拿灯」，提灯故事里有「劈开黑雾」
 };
 Object.assign(HINTS, {
   d2block: [['Before the woods, look about the porch.', '进林子之前，先看看门廊边上。'], ['By the porch there is a chopping block.', '门廊边有一个劈柴木桩。'], 'd2_block'],
@@ -3695,6 +3747,7 @@ Object.assign(HINTS, {
   d2blaze: [['Look at the trees along the path.', '看看路边的树。'], ['An old spruce by the path has a mark cut in its bark.', '路边一棵老云杉的树皮上刻了记号。'], 'd2_blaze'],
   d2cairn: [['Further on, where the path bends again.', '再往前，路又拐弯的地方。'], ['A heap of stones where the path bends.', '小路拐弯处有一堆石头。'], 'd2_cairn'],
   d2light: [['Look up, over the treetops.', '抬头看看树梢。'], ['East-north-east, past the cabin.', '东北偏东，小屋那边过去。'], 'd2_lamp'],
+  wheel2: [['The wire runs from the east wall down to the brook.', '电线从东墙一直拉到溪边。'], ['The water wheel, down by the brook, south-east of the porch.', '水轮在溪边，门廊的东南方。'], 'd2_rag'],
 });
 const HINT_ORDER2 = ['d2block', 'd2stake', 'd2blaze', 'd2cairn', 'd2light'];
 const BED_USED = ['The blankets he folded so square lie in a heap now. The clerk slept here in the night, and was up before you.', '他叠得方方正正的被子，现在乱堆在床上。书记员夜里睡在这儿，比你起得早。']; // 第 2 天起床是乱的（messyBed）
@@ -3703,18 +3756,19 @@ for (const [n, c] of Object.entries(D2_CARDS)) { INFO[n] = [c[0], c[1], c[5]]; S
 function quest2() {
   const f = game.found;
   if (f.has('notes2')) return 'end2';
-  if (game.night) return game.dusk ? 'dusk' : 'night';
+  if (game.night) return game.dusk ? 'dusk' : f.has('wheel2') ? 'night' : BROOK.dark ? 'wheel' : 'dusk'; // 她坐下以后、灯灭之前那几秒任务行空着（不先说「她在写」再改口）
   if (f.has('d2light')) return 'home2';
   return DAY2_NEED.every((k) => f.has(k)) ? 'dusk2' : DAY2_NEED.some((k) => f.has(k)) ? 'out1' : 'out';
 }
 function gameSeen2(name, title, add, got) {
   let over = null;
   if (D2_KEY[name]) { add(D2_KEY[name]); over = D2_CARDS[name]; }
-  if (game.night && !game.dusk && (title === 'Writing Desk, Chair & Wall Lamp' || name === 'person_woman')) { add('notes2'); over = NOTES2_CARD; }
+  if (game.night && !game.dusk && game.found.has('wheel2') && (title === 'Writing Desk, Chair & Wall Lamp' || name === 'person_woman')) { add('notes2'); over = NOTES2_CARD; } // 断电那段先去溪边（wheel2）
   else if (name === 'person_woman') { const z = STORY_ZH['The Clerk|Loft']; over = ['The Clerk', 'Parlour', z[0], STORY['The Clerk|Loft'], z[1].replace(/^[^。]*。/, ''), INFO.person_woman[2]]; }
   gameSeen.got = got.length;
   if (!got.length) return over;
   saveGame(); renderJournal();
+  if (got.includes('wheel2')) wheelFree(); // 你把布解下来：水轮慢慢转回来，灯跟着亮
   if (got.some((k) => DAY2_NEED.includes(k))) d2Clock(); // 每认出一样，天往后走一截；四样齐了转到傍晚，烟在 updateDay2 里按时刻升起
   if (got.includes('notes2')) setTimeout(endDay2, 500); // 读完第 2 夜的记录：卡片关了弹「第二天结束」→ 第三天早上
   mmDirty = true;
@@ -4137,7 +4191,7 @@ function loopBack() { // 走进雾里太远：雾浓到看不见（不黑屏）�
     else if (fp && x3.on) { placeMan(fp.p, ...D2.door, 0); fp.yaw = 0; fp.pitch = -0.1; }
     else if (fp) { const [p] = pathAt(9); placeMan(fp.p, p.x, p.z, 0); fp.yaw = Math.atan2(-p.x, D2.door[1] - p.z); fp.pitch = -0.05; if (!game.found.has('d2light')) loopChange(); } // 在院子边上、面朝小屋
     const n = DAY2_MARKS.filter((k) => game.found.has(k)).length; if (d2.passed && !x3.shifted) d2.over = { n, k: d2.over && d2.over.n === n ? d2.over.k + 1 : 1 }; // 同一样记号走过头几次了
-    d2.fogGoal = 0; showRoomNote(!x3.shifted ? (d2.passed ? (d2.over.k > 1 ? D2_SAYS.lost2 : D2_SAYS.lost) : D2_SAYS.lost0) : x3.on ? D3_SAYS.lostX : D3_SAYS.lost); hint.clicks++; // 第 2 次起换一句，别让人当成惩罚（评审④ v2 #6）
+    d2.fogGoal = 0; showRoomNote(d2.dark ? D2_SAYS.dark : !x3.shifted ? (d2.passed ? (d2.over.k > 1 ? D2_SAYS.lost2 : D2_SAYS.lost) : D2_SAYS.lost0) : x3.on ? D3_SAYS.lostX : D3_SAYS.lost); hint.clicks++; // 第 2 次起换一句，别让人当成惩罚（评审④ v2 #6）
     setTimeout(() => { d2.veil = false; }, 1500);
   }, 1100);
 }
@@ -4153,11 +4207,11 @@ function loopChange() { // 雾里绕回来，小屋有一处变了（只第 2 �
   else return;
   (d2.chgQ = d2.chgQ || []).push(d2.loops); // 11-10：画面已经摆出来了，旁白不主动说；玩家卡住、第一次提示时才当提示说（hintFire）
 }
-function lostFog(dev, dt) { // dev = 偏出可走范围多少米
+function lostFog(dev, dt, dark) { // dev = 偏出可走范围多少米；dark = 没提灯（绕回时换一句）
   if (LOG && (dev >= D2.lostAt) !== !!d2.logLost) { d2.logLost = dev >= D2.lostAt; LOG.ev('fog', d2.logLost ? `雾里迷路 偏出${dev.toFixed(1)}m` : '走出迷雾'); }
   d2.fogGoal = 0.75 * THREE.MathUtils.smoothstep(dev, 2, D2.lostAt);
   d2.lostT = dev < D2.lostAt ? 0 : d2.lostT + dt;
-  if (d2.lostT > D2.lost) { d2.lostT = 0; loopBack(); }
+  if (d2.lostT > D2.lost) { d2.lostT = 0; d2.dark = !!dark; loopBack(); }
 }
 function facesCam(w, x, z) { // 她转去看 (x, z) 会不会在 2m 内正脸对着镜头（东西在玩家身后、她在玩家前面）：会就不转（11-11 Fable A4 镜头规矩）
   const p = w.root.position, cx = camera.position.x - p.x, cz = camera.position.z - p.z;
@@ -4196,7 +4250,7 @@ function updateDay2(dt) {
   d2.fogV = (d2.fogV || 0) + ((d2.fogGoal || 0) - (d2.fogV || 0)) * Math.min(1, dt * 2.5); // 0 平常、0.75 走偏了、1 绕回去那一下
   FOG_L.value = fp && !game.night ? 1 : 0; RAG.t.value = t; RAG.w.value = wx.cur.wind; // 树的雾分层（fogLayer）、红布条摆动
   if (fogWalls) updateFogWalls();
-  if (fp && !game.night) { scene.fog.near = 2 * (1 - d2.fogV); scene.fog.far = 26 + 12 * (game.day === 2 && d2.glade ? 1 - THREE.MathUtils.smoothstep(Math.hypot(camera.position.x - d2.glade.x, camera.position.z - d2.glade.z), 4, 10) : 0) - 24 * d2.fogV - 7 * (x3.near || 0); } // 第一人称在雾里：二十来米外就看不见，走偏越远越浓
+  if (fp && (!game.night || game.day === 2)) { scene.fog.near = 2 * (1 - d2.fogV); scene.fog.far = 26 + 12 * (game.day === 2 && d2.glade ? 1 - THREE.MathUtils.smoothstep(Math.hypot(camera.position.x - d2.glade.x, camera.position.z - d2.glade.z), 4, 10) : 0) - 24 * d2.fogV - 7 * (x3.near || 0); } // 第一人称在雾里：二十来米外就看不见，走偏越远越浓
   // 傍晚林子那头冒烟：四样找齐、天色到傍晚才有；人在屋里看不到
   const lampOn = DAY2_NEED.every((k) => f.has(k)) && !game.night && sky.hour > 17.2 && outdoors(camera.position) && !x3.shifted; // 挪世界后（✕ 那边）不画：它就在 ✕ 门廊望自家烟的方向上 40m，根部的火光成了树梢上一块橙色（11-04 r4 #5）
   d2.lamp.visible = lampOn;
@@ -4207,7 +4261,8 @@ function updateDay2(dt) {
   if (lampOn) { // 走偏、雾浓起来时烟也跟着淡进雾里（d2.fogV）；第 2 天树梢以下不画（SMOKE_FAR.low），从哪看都只是树梢上那一段，看不到它底下悬空的根
     updatePlume(d2.lamp, dt, THREE.MathUtils.smoothstep(sky.hour, 17.2, 17.5) * (1 - THREE.MathUtils.smoothstep(d2.fogV || 0, 0, 0.6)));
     if (game.day === 2) d2.lamp.userData.plume.uLow.value = SMOKE_FAR.low; }
-  if (!fp || game.night) return;
+  if (!fp) return;
+  if (game.night) { if (game.day === 2 && !d2.veil) lostFog(nightDev(fp.p.root.position), dt, !gear.lantern); return; } // 第 2 天夜里：提着灯顺电线去水轮
   const r = fp.p.root.position;
   const w2 = people.get('person_woman'), saw = f.has('saw:yes') || f.has('saw:no');
   if (game.day === 2 && lampOn && !d2.clerkOut && w2 && !w2.player && !f.has('log2')) { d2.clerkOut = 'going'; clerkPorch(w2); } // 烟起来了，她出门站到门廊上看（11-11 用户：第 2 天她一直在屋里，没窗看不见烟，你在林子里也听不见她）
@@ -4231,7 +4286,8 @@ function updateDay2(dt) {
   d2.passed = ahead > side; // 是走过了记号（不是走偏）：绕回来时提一句「路边好像有什么」
   const L2 = d2.lamp.position, toSmoke = game.day === 2 && DAY2_NEED.every((k) => f.has(k)) ? (SMOKE_FAR.near - Math.hypot(r.x - L2.x, r.z - L2.z)) * D2.lostAt / (SMOKE_FAR.near - SMOKE_FAR.loop) : 0; // 往烟那边走：那柱烟其实在四英里外（第 3 天 ✕ 那间），走不到；离烟根 near 米起雾变浓，loop 米处绕回
   if (AUDIT && lampOn && game.day === 2 && !d2.auditSmoke && Math.hypot(r.x - L2.x, r.z - L2.z) < SMOKE_FAR.loop - 4) { d2.auditSmoke = true; worldAudit('fact', 'smoke over the trees is far off: walked under it', { ok: false }); } // 审计：烟升着时走到了它底下
-  lostFog(Math.hypot(r.x, r.z) < D2.yard ? 0 : Math.max(side, toSmoke, game.day >= 3 ? ahead : ahead * D2.lostAt / D2.lostAhead), dt); // 第 2 天走过头：12m 就绕回（评审④ v2 #6：原来 30m，走过标桩还能走到 52m）
+  const dark = game.day >= 3 && !x3.shifted && !gear.lantern, dk = dark ? (Math.hypot(r.x, r.z) - D2.yard) * D2.lostAt / WHEEL.dark : 0; // 第 3 天没提灯：出了院子再走 dark 米就绕回（11-12 用户：进雾去 ✕ 要提灯）
+  lostFog(Math.hypot(r.x, r.z) < D2.yard ? 0 : Math.max(side, toSmoke, dk, game.day >= 3 ? ahead : ahead * D2.lostAt / D2.lostAhead), dt, dark); // 第 2 天走过头：12m 就绕回（评审④ v2 #6：原来 30m，走过标桩还能走到 52m）
 }
 // —— 三日调查小游戏 · 第 3 天 + 结局（2026-10-27，灰盒）：读完第 2 夜记录 →「第二天结束」→ 重新载入成第三天早上（还是雾）→ 书架读工作日志后段 →「出门走走」，
 // 雾里的路一直放到 ✕（D3.s 米处一棵老云杉、树根下裂口、焦黑松针）→ 走到树跟前压黑，「放进」✕ 那间小屋：就是同一个模型换一套状态（applyX：大衣 / 靴子 / 提灯藏掉、
@@ -4888,6 +4944,7 @@ function mmDraw() {
     const mark = (wx, wz, col, r = 3) => { const [a, d] = P(wx, wz); g.fillStyle = col; g.beginPath(); g.arc(a, d, r, 0, 7); g.fill(); };
     for (const n of ['d2_stake', 'd2_blaze', 'd2_cairn']) { const o = layers.get(n); if (o) mark(o.position.x + ox, o.position.z + oz, n === 'd2_stake' ? '#8a3a2a' : n === 'd2_blaze' ? '#2f3a2e' : '#6d6a62', 2.5); }
     mark(D2.lamp[0], D2.lamp[2], '#b8b2a8', 3.5);
+    if (game.day === 2 && f.has('wheel0') && BROOK.wheel) { const w = wheelAt(); mark(w.x, w.z, f.has('wheel2') ? '#6d6a62' : '#8a3a2a', 3); } // 第 2 天夜里停了的水轮
     // 雾：整张盖住，再按进度挖洞：红圈（拿到那页纸就开）→ 黄线（沿卵石路走过的，第 2 天起整条）→ 绿线（沿踪迹一段段）
     const fog = mmDraw.fog || (mmDraw.fog = document.createElement('canvas')); fog.width = W; fog.height = H;
     const m = fog.getContext('2d'); m.fillStyle = 'rgba(206,208,204,0.97)'; m.fillRect(0, 0, W, H);
@@ -5507,7 +5564,7 @@ function railInfo() { // infoOf('entry_coat_rail') 先问这里：null = 照旧�
   if (!gear.coat) return null;
   return !fp ? gear.lantern ? GEAR_RAIL.orbitBoth : GEAR_RAIL.orbitCoat : gear.lantern ? GEAR_RAIL.both : GEAR_RAIL.coat; // 鸟瞰：画面上的稽查没穿大衣、手里没灯，不说「你手里」（叙事 r3 #4）
 }
-function gearDay() { const f = game.found; return game.day >= 2 && !game.night && !f.has('ended') && !x3.on && !x3.pending && !(game.day === 2 && f.has('d2light')); } // x3.pending：在 ✕ 那间刷新，平移之前人还在自家门口，别当成「没拿就出门」
+function gearDay() { const f = game.found; return game.day >= 2 && (!game.night || wheelDown()) && !f.has('ended') && !x3.on && !x3.pending && !(game.day === 2 && f.has('d2light') && !wheelDown()); } // 第 2 天夜里水轮停了：要提灯出门 // x3.pending：在 ✕ 那间刷新，平移之前人还在自家门口，别当成「没拿就出门」
 function gearOf(name) { return /^entry_coat(_rail)?$/.test(name || '') ? 'coat' : name === 'entry_lantern' ? 'lantern' : null; }
 function gearCan(name) { const k = gearOf(name); return !!k && !gear[k] && !!fp && gearDay(); }
 function gearOn(k, how) { // 穿上大衣 / 提起提灯（不查能不能拿、不出声）。how = 'reach'：点 / E 拿，伸手去摘（gear.anim）；不给 = 直接到手（没拿就出门、刷新恢复）
@@ -5531,7 +5588,7 @@ function gearOn(k, how) { // 穿上大衣 / 提起提灯（不查能不能拿、
 }
 function gearSave() { game.wear = [game.day, gear.coat, gear.lantern]; saveGame(); }
 function gearRestore() { // 刷新 / 关掉再回来：存档里当天穿着大衣、提着灯，就照样穿上、提上（叙事 r3 #1）。plantForest 链尾、applyX 平移之后调；提灯每帧按镜头摆（updateGear），不跟着平移走
-  const w = x3.on ? [game.day, true, true] : game.wear; if (!w || w[0] !== game.day || !(gearDay() || x3.on)) return; // 到得了 ✕ 那间就一定出过门、两样都拿了（老存档没有 wear 也算）
+  const w = x3.on ? [game.day, game.wear?.[0] === game.day ? game.wear[1] : true, true] : game.wear; if (!w || w[0] !== game.day || !(gearDay() || x3.on)) return; // 到得了 ✕ 那间就一定出过门、两样都拿了（老存档没有 wear 也算）
   if (w[1] && !gear.coat) gearOn('coat');
   if (w[2] && !gear.lantern) { gearOn('lantern'); gear.t = 1; layers.get('entry_lantern').visible = !!fp; } // 直接在手里（不演从钉子上摘下来）；鸟瞰时 updateGear 不跑，先藏起（同 stopFP），不然画在 HELD_LAYER 上隔墙可见
 }
@@ -5558,10 +5615,8 @@ function gearPose() { // 画面右下角露出上半截；只跟着转身、不�
 }
 const GEAR_YAW = 0;
 function updateGear(dt) {
-  if (fp && !morn && gearDay() && (!gear.coat || !gear.lantern) && outdoors(fp.p.root.position)) { // 没拿就出了门：自动取下，补一句
-    gearTake('entry_coat', true); gearTake('entry_lantern', true); sfx('pick'); // 11-10：不再旁白复述动作，只留音效（衣帽架空了、手里有灯，画面已经说了）
-  }
-  if (fp && game.day === 2 && game.found.has('d2light') && (gear.coat || gear.lantern) && !outdoors(fp.p.root.position)) { gearHang(); sfx('place'); } // 傍晚回到屋里
+  if (fp && !morn && gearDay() && !gear.coat && outdoors(fp.p.root.position)) { gearTake('entry_coat', true); sfx('pick'); } // 没穿大衣就出了门：顺手披上（只留音效）。提灯不替你拿（11-12 用户：夜里、进雾要提灯，拿不拿是你的事）
+  if (fp && game.day === 2 && game.found.has('d2light') && !wheelDown() && (gear.coat || gear.lantern) && !outdoors(fp.p.root.position)) { gearHang(); sfx('place'); } // 傍晚回到屋里 / 修好水轮回来
   if (gear.anim && gear.anim.k === 'coat') coatAnim(dt);
   if (!gear.lantern) return;
   const g = layers.get('entry_lantern'); g.visible = true; gearLayer(g, true);
@@ -6800,7 +6855,7 @@ renderer.setAnimationLoop(() => {
   updateBirds(dt);
   gearCarry(); updatePeople(dt); gearOrbit(dt); lampSnow(); updateBreath(dt); // 人动完再把提灯挂到手上
   if (WATER.mat) WATER.mat.userData.u.uT.value = now / 1000;
-  if (BROOK.wheel) { BROOK.wheel.rotation.x = -now / 1000 * 0.9; BROOK.snow.value = sstep(0.3, 0.85, cover.uSnow.value); } // 水轮慢转（约 7 秒一圈），底下的叶片顺流走；土岸积雪跟地面差不多同时出现
+  if (BROOK.wheel) { updateWheel(dt); BROOK.snow.value = sstep(0.3, 0.85, cover.uSnow.value); } // 水轮慢转（约 7 秒一圈），底下的叶片顺流走；土岸积雪跟地面差不多同时出现
   if (WATER.ice) { const I = WATER.ice, k1 = wx.name === 'Blizzard' ? 1 : 0; // 浮冰：暴雪时约 4 秒长出来，转晴时缩回去；看不到就不算
     I.k = I.t ? I.k + THREE.MathUtils.clamp(k1 - I.k, -0.004, 0.004) * Math.min(4, (now - I.t) / 16.7) : k1; I.t = now; // 开局就是暴雪：直接满冰
     for (const im of I.ims) im.visible = I.k > 0.01;

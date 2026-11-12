@@ -113,9 +113,16 @@ function brookNear() { // 0–1：离溪多近（家的坐标；第 3 天挪世�
 let creakT = 3;
 function wheelCreak(dt) {
   const w = shared.brookWheel; if (!w || (creakT -= dt) > 0) return;
-  creakT = 4 + Math.random() * 4;
+  creakT = 4 + Math.random() * 4; if (shared.brookSpin < 0.3) return; // 水轮停着（第 2 天夜里叶片缠了布）：不吱呀
   const m = w.matrixWorld.elements, d = Math.hypot(camera.position.x - m[12], camera.position.z - m[14]); if (d > 15) return;
   play('creak', 0.22 * (1 - d / 15) ** 2, { rate: 0.55 + Math.random() * 0.1, out: outBus });
+}
+
+export function wheelGroan(start) { // 水轮被布卡住慢下来 / 清了布重新转起来：轮轴一声长的吱呀，声源在水轮，15m 外听不见（同 wheelCreak）
+  const w = shared.brookWheel; if (!ctx || !w) return;
+  const m = w.matrixWorld.elements, d = Math.hypot(camera.position.x - m[12], camera.position.z - m[14]); if (d > 15) return;
+  play('creak', 0.4 * (1 - d / 15) ** 2, { rate: start ? 0.5 : 0.4, out: outBus });
+  play('creak', 0.3 * (1 - d / 15) ** 2, { rate: start ? 0.6 : 0.36, delay: 0.7, out: outBus });
 }
 
 // 第一人称每帧调：bob = fp.bob（走一步涨 π），moving = 这帧在走，run = 跑
