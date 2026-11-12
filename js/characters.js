@@ -373,7 +373,7 @@ const CLIMB_TASKS = {
     start: (p, T) => { const d = toggles.get('toilet_door_A'); T.skip = !d || !d.on; if (!T.skip) p.play('Interact', 0.3); },
     step: (p, T) => { const d = toggles.get('toilet_door_A'); if (T.skip) return true; if (!T.g && T.t > 0.5) { T.g = true; d.on = false; } return T.g && d.k < 0.05; } },
   stow: { // 下完梯子把它滑回沙发边，不挡玄关进屋的过道（11-10 用户）；要上去时 mount.fix 会再推过来。玩家正在梯子上就留着
-    start: () => { const d = toggles.get('loft_ladder'); if (d && d.on && !shared.ladderBusy()) { shared.sfxToggle?.('loft_ladder', false); d.on = false; } },
+    start: (p) => { const d = toggles.get('loft_ladder'); if (d && d.on && !shared.ladderBusy()) { shared.sfxToggle?.('loft_ladder', false, p.root.position); d.on = false; } },
     step: () => true },
   gate: { // 拦杆：['gate', true] 放下、false 抬起；已经是那样就跳过
     start: (p, T) => { const g = toggles.get('loft_gate'); T.skip = !g || g.on === T[1]; if (!T.skip) p.play('Interact', 0.3); },
@@ -382,6 +382,14 @@ const CLIMB_TASKS = {
     start: (p, T) => { p.play(T[1], 0.5); if (T[3]) { p.look = T[3]; p.lookT = T[2]; } },
     step: (p, T) => T.t >= T[2] },
   look: { start: (p, T) => { p.look = [T[1], T[2], T[3]]; p.lookT = T[4]; }, step: () => true },
+  // —— 世界自洽（11-11 world）：她做的事由她的动作触发 ——
+  call: { start: (p, T) => { const r = T[1](p); if (Array.isArray(r) && r.length) p.tasks.splice(1, 0, ...r); }, step: () => true }, // ['call', fn]：做到这一步才调；fn 返回任务数组就接着做
+  toggle: { // ['toggle', 名字, on, 站点?, 朝向?]：抬手开 / 关一样东西（带声音，不算玩家动的）；已经是那样就跳过。给了站点：要动手时先走过去、转身（大门往外开，她站门闩一侧 SL.pull，同第 1 天领路）
+    need: (p, T) => { const d = toggles.get(T[1]); return !T[3] || !d || d.on === T[2] || Math.hypot(p.root.position.x - T[3][0], p.root.position.z - T[3][1]) < 0.15; },
+    fix: (p, T) => [['walk', ...T[3]], ...(T[4] ? [['face', ...T[4]]] : [])],
+    start: (p, T) => { const d = toggles.get(T[1]); T.skip = !d || d.on === T[2]; if (!T.skip) p.play('Interact', 0.3); },
+    step: (p, T) => { if (T.skip) return true; const d = toggles.get(T[1]); if (!T.g && T.t > 0.5) { T.g = true; shared.sfxToggle?.(T[1], T[2], p.root.position); d.ajar = 0; d.on = T[2]; } return T.g && T.t > 0.9; } },
+  wait: { start: () => {}, step: (p, T) => T[1](p) || T.t >= (T[2] ?? 1e9) }, // ['wait', 条件, 最多几秒]
 };
 const WALK_SPEED = 1.0; // 米/秒，按 Walk_Loop 的步幅（一个周期 1.33s 两步、脚相对身体移 0.68m）
 let npcFloors = [], npcFloorsT = 0;
@@ -404,7 +412,7 @@ function blockedBy(p, ux, uz) { // 走的方向上正前方 0.6m、左右 0.3m �
 const playerBusy = () => !document.getElementById('card').hidden || !document.getElementById('journal').hidden; // 玩家在读卡片、遗稿：挡着她的路也别挤他
 function runTask(p, dt) {
   const T = p.tasks[0], k = T[0], r = p.root, C = CLIMB_TASKS[k];
-  if (!T.on && C && C.need && !C.need(p)) { p.tasks.unshift(...C.fix(p)); return; } // 条件不满足：先把要做的插到前面
+  if (!T.on && C && C.need && !C.need(p, T)) { p.tasks.unshift(...C.fix(p, T)); return; } // 条件不满足：先把要做的插到前面
   if (!T.on) {
     T.on = true; T.t = 0;
     if (k === 'anim' || k === 'walk' || k === 'face' || k === 'turn' || k === 'idle') p.play(k === 'anim' ? T[1] : k === 'walk' ? 'Walk_Loop' : (p.mode === 'sit' && k === 'idle' ? moodOf(p) : MOODS.stand).idle, 0.3);
@@ -627,4 +635,4 @@ function deskFix(p) {
 
 
 share({ people: () => people, SEATS: () => SEATS }); // interact.js 用
-export { setOutfit, people, SEATS, wakePerson, loadPeople, seatTaken, goHome, SPOTS, routeTasks, NAV, MOODS, fpRise, sitTasks, CLIMB, moodOf, climbAt, WALK_SPEED, ladderRoot, floorBelow, goTasks, nearNode, navPath, updatePeople };
+export { setOutfit, people, SEATS, wakePerson, loadPeople, seatTaken, goHome, SPOTS, routeTasks, NAV, MOODS, fpRise, sitTasks, CLIMB, moodOf, climbAt, WALK_SPEED, ladderRoot, floorBelow, goTasks, nearNode, navPath, updatePeople, riseTasks, trimBack, wcDoorTasks };
