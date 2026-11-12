@@ -179,6 +179,8 @@ const LAMPS = {
   ceiling_light_loft_rocker: { pos: [-0.35, 3.72, 1.1], power: 3, range: 4 },
 };
 const GLOW_COLOR = new THREE.Color(0xffc27a);
+// 屋里的电从溪边水轮带的发电机来（门廊灯故事）：电灯亮度 × POWER.k（index.html 的 updateWheel 按水轮转速写），开关状态不动。壁灯、提灯是蜡烛，不算
+const ELECTRIC = /^(entry_porch_lamp|hall_pendant_|ceiling_light_)/, POWER = { k: 1, last: 1, lamps: [] };
 const LAMP_COLOR = 0xffc898; // 约 2700K（r2 美术 #2：原 0xffb46b 乘上偏橙的原木，屋里一片橙）；炉火 0xff8a3c 不动，留它当屋里最暖的一处
 const toggles = new Map(); // 图层名 → { on, k(动画进度 0→1), apply(k) }
 // 灯挂在图层下，图层一藏，three.js 就不数这盏灯，可见灯数一变所有受光材质重编译（第 3 天 ✕ 那间藏起提灯，一路连卡 5 次共 17s）。
@@ -230,10 +232,11 @@ function setupToggles() {
     light.position.set(...l.pos); // 一直 visible，只调强度：可见灯数变了会让所有材质重编译着色器（开灯卡顿）
     g.add(light); trackLight(light); addHalo(light, g, name); // 挂在灯的图层下：揭开屋顶藏灯时光也一起灭
     const mats = g.children.filter((m) => m.isMesh && m.material.userData.glow).map((m) => m.material);
-    toggles.set(name, { on: false, k: 0, parts: [(k) => {
-      light.intensity = l.power * k;
-      for (const m of mats) if (m.emissive) { m.emissive.copy(GLOW_COLOR); m.emissiveIntensity = 2.5 * k; }
-    }] });
+    const el = ELECTRIC.test(name), t = { on: false, k: 0, parts: [(k) => {
+      const e = k * (el ? POWER.k : 1); light.intensity = l.power * e;
+      for (const m of mats) if (m.emissive) { m.emissive.copy(GLOW_COLOR); m.emissiveIntensity = 2.5 * e; }
+    }] };
+    toggles.set(name, t); if (el) POWER.lamps.push(t);
   }
   setupLanternFlame();
   setupNoren();
@@ -649,6 +652,7 @@ function toggle(name) { const t = toggleOf(name); shared.worldBy?.(t); shared.sf
 let toggleT = 0;
 function updateToggles() {
   const now = performance.now(), dt = Math.min(0.1, (now - (toggleT || now)) / 1000); toggleT = now;
+  if (POWER.k !== POWER.last) { POWER.last = POWER.k; for (const t of POWER.lamps) { const e = t.k * t.k * (3 - 2 * t.k); for (const f of t.parts) f(e); } } // 电压变了：开着的电灯跟着明暗（开关不动）
   for (const t of toggles.values()) {
     const goal = t.on ? t.ajar || 1 : 0; // ajar：关着但没关严（第 1 天大门虚掩，0.75 缓动后 ≈ 留 14° 的缝）
     if (t.k === goal) continue;
@@ -788,4 +792,4 @@ function updateFire(dt) {
 
 
 share({ LAMPS: () => LAMPS, toggles: () => toggles, DOORS: () => DOORS }); // time-of-day.js、weather.js 用
-export { LAMPS, toggles, DOORS, swapSoftProps, splitParts, setupToggles, setupFire, setupWaterFx, toggle, fire, rocker, toggleOf, updateToggles, updateFire, updateLantern, updateRocker, updateWaterFx, updateHalos };
+export { LAMPS, POWER, ELECTRIC, toggles, DOORS, swapSoftProps, splitParts, setupToggles, setupFire, setupWaterFx, toggle, fire, rocker, toggleOf, updateToggles, updateFire, updateLantern, updateRocker, updateWaterFx, updateHalos };
