@@ -133,6 +133,12 @@ async function loadCoat(p) {
   indoorShade(p.root); // 新材质也要屋里压暗（已处理过的会跳过）
   p.coat = list; p.coatHide = []; p.root.traverse((o) => { if (o.isMesh && /^Male_Peasant_(Body|Arms)/.test(o.name)) p.coatHide.push(o); });
   p.hand?.traverse((o) => { if (o.isMesh && o.name === 'HandSleeve') { p.sleeve = [o, o.material, o.material.clone()]; p.sleeve[2].map = null; p.sleeve[2].color.copy(COAT_SLEEVE); p.sleeve[2].onBeforeCompile = o.material.onBeforeCompile; } });
+  if (p.sleeve) { // 大衣袖筒（11-12）：hand.glb 是 Peasant 挽起袖子的手，前臂 25cm 光着，穿上大衣后第一人称还露胳膊。沿前臂套一截锥筒盖到手腕，材质同上面的袖口（prewarm 编过，不新增着色器）
+    const g = new THREE.CylinderGeometry(0.056, 0.066, 0.42, 14, 1, true), A = new THREE.Vector3(0.02, -0.035, 0.085), d = new THREE.Vector3(0, -0.061, 0.15).normalize(); // hand 局部：手腕截面中心 A，前臂朝 d 往肘部去（j5 量的截面）；粗口在肘那头
+    g.translate(0, -0.21, 0); g.scale(0.85, 1, 1); // 上口（细）在手腕，椭圆截面（前臂扁）
+    const m = p.cuff = new THREE.Mesh(g, p.sleeve[2]); m.quaternion.setFromUnitVectors(new THREE.Vector3(0, -1, 0), d); m.position.copy(A);
+    m.name = 'CoatCuff'; m.frustumCulled = false; m.castShadow = false; m.layers.set(shared.HELD_LAYER); m.visible = false; p.hand.add(m);
+  }
 }
 function applyOutfit(p) {
   const on = OUTFIT[p.id] === 'coat'; if (!p.P?.coat) return;
@@ -141,6 +147,7 @@ function applyOutfit(p) {
   for (const m of p.coat) m.visible = on;
   for (const m of p.coatHide) m.visible = !on;
   if (p.sleeve) p.sleeve[0].material = p.sleeve[on ? 2 : 1];
+  if (p.cuff) p.cuff.visible = on;
   shared.shadowDirty = true;
 }
 async function loadHand(P, body) { // 第一人称拿东西的右手（../blender/scripts/make_hand.py / make_hand_woman.py 从人身上切的握拳右手），材质用人身上同名的
@@ -467,7 +474,7 @@ function runTask(p, dt) {
 let shadowT = 0;
 function updatePeople(dt) {
   let busy = false;
-  for (const [id, p] of people) { unLook(p); unDesk(p); p.mixer.update(dt); stepPerson(id, p, dt); deskFix(p); updateLook(p, dt); busy ||= p.tasks.length > 0; }
+  for (const [id, p] of people) { unLook(p); unDesk(p); unCarry(p); p.mixer.update(dt); stepPerson(id, p, dt); deskFix(p); carryFix(p); updateLook(p, dt); busy ||= p.tasks.length > 0; }
   if (busy && (shadowT -= dt) < 0) { shadowT = 0.25; shared.shadowDirty = true; } // 人在走/做事：阴影图 0.25 秒重画一次（每帧重画太贵），原地待机的小动作不重画
 }
 function stepPerson(id, p, dt) {
@@ -633,6 +640,48 @@ function deskFix(p) {
   d.on = true;
 }
 
+// —— 提着提灯的右臂（11-12 用户：人物跑动时提灯的手很奇怪）：p.carry 由 index.html 每帧设 ——
+// 'hang'（鸟瞰里走路、站着）：右臂七成拉回 Idle_Loop 自然下垂的姿势（走路只剩三成摆幅，提灯的人胳膊不大甩），往外张开一点让灯离开大腿，四指握拳攥住提梁；
+// 'fp'（第一人称）：身体的右臂整条缩进肩膀（upperarm 缩放到 0）：画面里握灯的是 hand.glb 那只手，原来小跑时身体的右臂照样甩，会出现两只右手。
+// 改的是 mixer 之后的最终值，下一帧 mixer.update 之前 unCarry 还原（Idle 的手、手指是常量轨道，不还原会累加，同 unLook）。
+const CARRY = { keep: 0.3, out: 0.16, curl: { index: [1.2, 1.3, 0.9], middle: [1.3, 1.35, 0.9], ring: [1.35, 1.35, 0.85], pinky: [1.35, 1.3, 0.8] } };
+const _cq = new THREE.Quaternion(), _cfw = new THREE.Vector3();
+function carryInit(p) {
+  const g = (n) => p.root.getObjectByName(n), idle = p.acts.Idle_Loop?.getClip();
+  const arm = [g('upperarm_r'), g('lowerarm_r'), g('hand_r')];
+  if (!idle || arm.some((b) => !b)) return (p.carryRig = null);
+  const ref = arm.map((b) => { const t = idle.tracks.find((k) => k.name === b.name + '.quaternion'); return t ? new THREE.Quaternion().fromArray(t.values, 0) : b.quaternion.clone(); });
+  let sk = null; p.root.traverse((o) => { if (o.isSkinnedMesh && !sk && o.skeleton.bones.some((b) => b.name === 'index_01_r')) sk = o.skeleton; });
+  const grip = [];
+  if (sk) { // 手指：从静止姿势起绕局部 +X（往手心）弯，同 deskInit
+    const restW = (n) => sk.boneInverses[sk.bones.findIndex((b) => b.name === n)].clone().invert();
+    for (const [f, as] of Object.entries(CARRY.curl)) as.forEach((ang, j) => {
+      const b = g(`${f}_0${j + 1}_r`); if (!b) return;
+      const q = new THREE.Quaternion(); restW(b.parent.name).invert().multiply(restW(b.name)).decompose(_dk[0], q, _dk[1]);
+      grip.push([b, q.multiply(new THREE.Quaternion().setFromAxisAngle(_dk[0].set(1, 0, 0), ang))]);
+    });
+  }
+  p.carryRig = { arm, ref, grip, all: [...arm, ...grip.map(([b]) => b)], on: null };
+}
+function unCarry(p) {
+  const c = p.carryRig; if (!c || !c.on) return;
+  for (const b of c.all) b.quaternion.copy(b.userData.carryQ);
+  c.arm[0].scale.copy(c.arm[0].userData.carryS);
+  c.on = null;
+}
+function carryFix(p) {
+  if (!p.carry || (p.carry === 'hang' && p.mode === 'sit')) return; // 坐着：灯放在脚边（gearOrbit），手照原动作搭在膝上
+  if (p.carryRig === undefined) carryInit(p);
+  const c = p.carryRig; if (!c) return;
+  for (const b of c.all) (b.userData.carryQ ||= new THREE.Quaternion()).copy(b.quaternion);
+  (c.arm[0].userData.carryS ||= new THREE.Vector3()).copy(c.arm[0].scale);
+  c.on = p.carry;
+  if (p.carry === 'fp') { c.arm[0].scale.setScalar(1e-3); return; }
+  c.arm.forEach((b, i) => { _cq.copy(b.quaternion); b.quaternion.copy(c.ref[i]).slerp(_cq, CARRY.keep); });
+  const up = c.arm[0]; p.root.getWorldDirection(_cfw); // 往外张开：绕身体朝前的轴转负角 = 往他的右边（面朝 +Z 时右边是 -X）
+  up.updateWorldMatrix(true, false); setWorldQ(up, _cq.setFromAxisAngle(_cfw, -CARRY.out).multiply(up.getWorldQuaternion(_dkq[0])));
+  for (const [b, q] of c.grip) b.quaternion.copy(q);
+}
 
 share({ people: () => people, SEATS: () => SEATS }); // interact.js 用
 export { setOutfit, people, SEATS, wakePerson, loadPeople, seatTaken, goHome, SPOTS, routeTasks, NAV, MOODS, fpRise, sitTasks, CLIMB, moodOf, climbAt, WALK_SPEED, ladderRoot, floorBelow, goTasks, nearNode, navPath, updatePeople, riseTasks, trimBack, wcDoorTasks };

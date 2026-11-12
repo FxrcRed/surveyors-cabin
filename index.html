@@ -5450,8 +5450,8 @@ function heldPutBack() { // 退出第一人称时手里的东西直接回原处
 // —— 第 2、3 天出门带上大衣和提灯（11-04 用户定）：早上在门口点 / E 拿大衣（穿上，衣帽架上那件藏起）和提灯（提在手里，画面右下角）；没拿就出了门，自动取下、补一句。
 // 提灯 = 衣帽架那个图层整个挪到镜头前（同 held 的 setPose），画在 HELD_LAYER 上不穿墙；它自带的点光源跟着走，灯数不变（不在第一人称时图层藏起，trackLight 补替身灯）。
 // 第 2 天傍晚（看到烟以后）回屋挂回原处；第 3 天到 ✕ 那间也提着（X_HIDE 不藏它）。第 1 天不碰：他什么都没带，衣帽架是满的
-const gear = { coat: false, lantern: false, t: 0, k: 0, from: null, c0: null, home: null };
-window.cabinGear = gear; // 调试
+const gear = { coat: false, lantern: false, t: 0, k: 0, from: null, c0: null, home: null, anim: null, sw: {} }; // anim：正在伸手摘大衣 / 提灯；sw：提灯单摆的状态（gearSwing）
+window.cabinGear = gear; gear.take = (n) => gearTake(n); // 调试
 // 11-10：拿、挂大衣和提灯不再旁白复述（原 GEAR_SAYS 三句 + GEAR_HANG：「你从钉子上取下大衣」等），只留音效 sfx('pick') / sfx('place')
 const GEAR_RAIL = { // 衣帽架空了：换名字和说明（交互 r2 UX4、叙事 r2 #5）；名字同 X_CARDS.xcoat，✕ 那间照样算 xcoat
   coat: ['Coat Rail', 'Entry', 'The greatcoat\'s peg is bare: you have it on.', '挂大衣的钉子空了，大衣穿在你身上。'],
@@ -5471,13 +5471,19 @@ function railInfo() { // infoOf('entry_coat_rail') 先问这里：null = 照旧�
 function gearDay() { const f = game.found; return game.day >= 2 && !game.night && !f.has('ended') && !x3.on && !x3.pending && !(game.day === 2 && f.has('d2light')); } // x3.pending：在 ✕ 那间刷新，平移之前人还在自家门口，别当成「没拿就出门」
 function gearOf(name) { return /^entry_coat(_rail)?$/.test(name || '') ? 'coat' : name === 'entry_lantern' ? 'lantern' : null; }
 function gearCan(name) { const k = gearOf(name); return !!k && !gear[k] && !!fp && gearDay(); }
-function gearOn(k) { // 穿上大衣 / 提起提灯（不查能不能拿、不出声）
+function gearOn(k, how) { // 穿上大衣 / 提起提灯（不查能不能拿、不出声）。how = 'reach'：点 / E 拿，伸手去摘（gear.anim）；不给 = 直接到手（没拿就出门、刷新恢复）
   gear[k] = true; gear.who = fp ? fp.p.id : gear.who || 'person_man';
-  if (k === 'coat') { const c = layers.get('entry_coat'); if (c) c.visible = false; setOutfit(gear.who, 'coat'); } // 穿上外套（Ranger 短上衣，鸟瞰看得到；第一人称看到袖口变卡其）
-  else {
+  const reach = (X) => how === 'reach' && !gear.anim && !!fp && !!hand && !held && X.distanceTo(camera.position) < 1.3; // 远处点的（< 2m 也能点）手够不着、手正在摘另一样（连按两下）：不演伸手，直接到手
+  if (k === 'coat') { // 穿上外套（Ranger 短上衣，鸟瞰看得到；第一人称袖子换成大衣袖筒）
+    const c = layers.get('entry_coat'), b = c && new THREE.Box3().setFromObject(c), top = b && new THREE.Vector3((b.min.x + b.max.x) / 2, b.max.y - 0.06, (b.min.z + b.max.z) / 2); // top：领口（挂在钉子上的那头）
+    if (c && reach(top)) { gear.anim = { k, t: 0, g: c, p0: c.position.clone(), top }; c.traverse((o) => { if (o.isMesh) o.castShadow = false; }); }
+    else { if (c) c.visible = false; setOutfit(gear.who, 'coat'); }
+  } else {
     const g = layers.get('entry_lantern'), t = toggles.get('entry_lantern');
     if (!gear.c0) gear.c0 = new THREE.Box3().setFromObject(g).getCenter(new THREE.Vector3()); // 原位中心（第一次拿时还挂在钉子上）
-    gear.from = poseOf(g, gear.c0); gear.t = 0; gear.k = 1;
+    gear.from = poseOf(g, gear.c0); gear.sw.p = null;
+    if (reach(gear.from.X)) { gear.anim = { k, t: 0 }; gear.t = 0; gear.k = 1; }
+    else { gear.t = 1; gear.k = 0; } // 直接到手：从画面下沿提上来（k 0 → 1），不再从身后的钉子飞过来
     if (!gear.home) gear.home = g.parent; scene.attach(g); // 提在手里就挂到场景下（env r4 #1）：fogCullHouse 雾外藏整栋小屋时它不跟着藏、灯不灭；上面一串父级都是单位变换，世界姿态不变
     g.traverse((o) => { if (o.isMesh) o.castShadow = false; }); heldLayer(g, true); gear.lay = true;
     if (t) t.on = true; // 点上蜡烛（updateToggles 慢慢亮）
@@ -5492,7 +5498,7 @@ function gearRestore() { // 刷新 / 关掉再回来：存档里当天穿着大�
 }
 function gearTake(name, quiet) { // → true = 拿了（不再出卡片 / 说明）
   if (!gearCan(name)) return false;
-  const k = gearOf(name); gearOn(k); gearSave(); if (!quiet) sfx('pick');
+  const k = gearOf(name); gearOn(k, quiet ? null : 'reach'); gearSave(); if (!quiet) sfx('pick');
   if (hovered) tip.textContent = nameOf(infoOf(hovered)); // 准星还对着衣帽架：名字马上换成空衣帽架
   return true;
 }
@@ -5508,7 +5514,7 @@ function gearHang() { // 挂回原处
 function gearPose() { // 画面右下角露出上半截；只跟着转身、不跟着抬头低头（挂着的提灯总是竖的）；k < 1 沉出画面（手里拿着别的东西时让开）
   const tall = camera.aspect < 0.7, d = tall ? 0.875 : 0.7, hh = d * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)), hw = hh * camera.aspect; // 手机竖屏（UX7）：远一点 = 缩到 0.8 倍，往左让开右下角的语言按钮，再沉一点
   const X = new THREE.Vector3(hw * (tall ? 0.49 : 0.62), -hh * ((tall ? 0.92 : 0.8) + 0.7 * (1 - gear.k)), -d).applyQuaternion(camera.quaternion).add(camera.position);
-  const Q = new THREE.Quaternion().setFromAxisAngle(_hY, fp.yaw + GEAR_YAW).multiply(_hq.setFromAxisAngle(_hX, (RM.matches ? 0 : Math.sin((fp.bob || 0) * 2) * 0.05 * (fp.bobA || 0)))); // 走路时轻轻晃（减少动态效果时不晃）
+  const Q = new THREE.Quaternion().setFromAxisAngle(_hY, fp.yaw + GEAR_YAW); // 走路时的晃动由 gearStep（手）+ gearSwing（灯挂在提梁上）算
   return { X, Q };
 }
 const GEAR_YAW = 0;
@@ -5517,21 +5523,84 @@ function updateGear(dt) {
     gearTake('entry_coat', true); gearTake('entry_lantern', true); sfx('pick'); // 11-10：不再旁白复述动作，只留音效（衣帽架空了、手里有灯，画面已经说了）
   }
   if (fp && game.day === 2 && game.found.has('d2light') && (gear.coat || gear.lantern) && !outdoors(fp.p.root.position)) { gearHang(); sfx('place'); } // 傍晚回到屋里
+  if (gear.anim && gear.anim.k === 'coat') coatAnim(dt);
   if (!gear.lantern) return;
   const g = layers.get('entry_lantern'); g.visible = true; gearLayer(g, true);
-  gear.k += ((held || !card.hidden ? 0 : 1) - gear.k) * Math.min(1, dt * 7); // 卡片开着也沉出画面：手机上走到地上的线索前低头读卡，提灯会变大压到 EN（交互 r3 #7）
-  const P = gearPose();
-  if (gear.t < 1) { // 从钉子上摘下来：中途往上抬一点（同 held 的 up）
-    gear.t = Math.min(1, gear.t + dt / 0.55); const e = gear.t * gear.t * (3 - 2 * gear.t);
-    _hp.lerpVectors(gear.from.X, P.X, e); _hp.y += Math.sin(Math.PI * e) * 0.06; setPose(g, gear.c0, _hp, _hq.slerpQuaternions(gear.from.Q, P.Q, e));
-  } else setPose(g, gear.c0, P.X, P.Q);
-  if (hand && !held && gear.t >= 1 && gear.k > 0.02) { // 握着提梁的手（原来提灯悬在右下角、下面没有手，动画检查 #7）
-    hand.visible = true; hand.position.copy(P.X); hand.position.y += LANT_HAND.up;
-    hand.quaternion.setFromAxisAngle(_hY, fp.yaw + Math.PI).multiply(LANT_HAND.rot);
+  const coat = !!gear.anim && gear.anim.k === 'coat'; // 先提了灯再取大衣：灯沉出画面，手去拿大衣
+  gear.k += ((held || !card.hidden || coat ? 0 : 1) - gear.k) * Math.min(1, dt * 7); // 卡片开着也沉出画面：手机上走到地上的线索前低头读卡，提灯会变大压到 EN（交互 r3 #7）
+  const P = gearPose(), piv = _gp.copy(P.X); piv.y += LANT_HAND.up; gearStep(piv); // piv：提梁（拳心），提灯挂在它下面
+  let q0 = P.Q; const A = gear.anim && gear.anim.k === 'lantern' ? gear.anim : null;
+  if (A) { // 从钉子上摘下来（11-12 用户：拿装备的样子奇怪；原来灯自己 0.55 秒飞到右下角、没有手）：手伸到提梁 → 往上往外提离钉子 → 收到身前
+    const T = GEAR_T, B = _gb.copy(gear.from.X); B.y += LANT_HAND.up; A.t += dt;
+    if (A.t < T.reach) { setPose(g, gear.c0, gear.from.X, gear.from.Q); gearHand(gearHandFrom(_gh).lerp(B, sstep(0, 1, A.t / T.reach))); return; } // 灯还挂着，手从画面下沿伸过去
+    gearLift(B, Math.min(1, (A.t - T.reach) / T.lift));
+    if (A.t < T.reach + T.lift) { _hp.copy(B).y -= LANT_HAND.up; setPose(g, gear.c0, _hp, gear.from.Q); gearHand(B); gear.sw.p = null; return; } // 摘离钉子，灯还竖着
+    const e = sstep(0, 1, (A.t - T.reach - T.lift) / T.carry); piv.lerpVectors(B, piv, e); q0 = _hq2.slerpQuaternions(gear.from.Q, P.Q, e); // 收到身前：单摆接着算，路上自然晃起来
+    if (e >= 1) { gear.anim = null; gear.t = 1; }
+  }
+  const tilt = gearSwing(gear.sw, piv, dt); // 灯挂在提梁上晃：握点一加速（起步、停步、转身、步子），灯身往反方向甩、慢慢摆回
+  setPose(g, gear.c0, _hp.set(0, -LANT_HAND.up, 0).applyQuaternion(tilt).add(piv), _hq.copy(tilt).multiply(q0));
+  if (!coat) gearHand(piv);
+}
+const GEAR_T = { reach: 0.3, lift: 0.16, carry: 0.5 }; // 伸手、摘离钉子、收到身前（秒）
+const LANT_HAND = { up: 0.105, rot: handRot([0.35, -0.85, 0.4], [1, 0, 0.2]) }; // 拳心在提灯中心上方 up（提梁）；rot：同 HAND.rot 的 e / back，只是不跟着低头（提灯一直竖着）
+const _gv = new THREE.Vector3(), _gv2 = new THREE.Vector3(), _gp = new THREE.Vector3(), _gb = new THREE.Vector3(), _gh = new THREE.Vector3(), _hq2 = new THREE.Quaternion();
+function gearHand(X, coat) { // 握着提梁的手（原来提灯悬在右下角、下面没有手，动画检查 #7）；手不跟着灯晃，提梁在手指里转。coat：在取大衣（gear.k 管的是提灯沉没沉出画面）
+  if (!hand || held || (!coat && gear.k <= 0.02)) return;
+  hand.visible = true; hand.position.copy(X); hand.quaternion.setFromAxisAngle(_hY, fp.yaw + Math.PI).multiply(LANT_HAND.rot);
+}
+function gearHandFrom(v) { return v.copy(handPose(0).p); } // 伸手的起点：画面右下沿外面
+function gearLift(B, k) { // 摘离钉子：往上 5cm、往人这边 4cm（钉子在墙上，灯要先抬过钉头）
+  const e = sstep(0, 1, k); _gv.subVectors(camera.position, B).setY(0).normalize();
+  B.y += 0.05 * e; B.addScaledVector(_gv, 0.04 * e);
+}
+function gearStep(v) { // 走路时拿灯的手跟着步子前后摆一点（两步一个来回），跑起来摆幅大些；减少动态效果时不摆
+  if (RM.matches || !fp.bobA) return;
+  const a = fp.bobA * Math.min(2, (fp.sp || 0) / 1.8), ph = fp.bob || 0;
+  v.x += Math.sin(fp.yaw) * Math.sin(ph) * 0.012 * a; v.z += Math.cos(fp.yaw) * Math.sin(ph) * 0.012 * a; v.y += (Math.cos(2 * ph) - 1) * 0.005 * a;
+}
+const SWING = { L: 0.11, c: 2.6, max: 0.055 }; // 单摆：摆长 = 提梁到灯身重心（m）、阻尼（1/s）、最多偏出（m，约 27°）
+const _gsv = new THREE.Vector3(), _gsa = new THREE.Vector3(), _gsd = new THREE.Vector3(), _gsq = new THREE.Quaternion();
+function gearSwing(S, P, dt) { // 提梁在 P，返回灯身的倾斜（世界四元数）。只算水平两个方向；P 一帧跳出 0.5m（换第一人称 / 鸟瞰、挪世界）就从静止重来
+  if (RM.matches || !S.p || !(dt > 0) || S.p.distanceToSquared(P) > 0.25) {
+    (S.p ||= new THREE.Vector3()).copy(P); (S.v ||= new THREE.Vector3()).set(0, 0, 0); (S.d ||= new THREE.Vector3()).set(0, 0, 0); (S.dv ||= new THREE.Vector3()).set(0, 0, 0);
+    return _gsq.identity();
+  }
+  _gsv.subVectors(P, S.p).divideScalar(dt); _gsa.subVectors(_gsv, S.v).divideScalar(dt); _gsa.y = 0; if (_gsa.lengthSq() > 225) _gsa.setLength(15); // 第一人称起步、停步是一帧到满速：按 15m/s² 封顶（人起步约 0.15 秒）
+  S.v.copy(_gsv); S.p.copy(P);
+  const n = Math.ceil(dt / 0.01), h = dt / n, w2 = 9.8 / SWING.L;
+  for (let i = 0; i < n; i++) { S.dv.x += (-w2 * S.d.x - SWING.c * S.dv.x - _gsa.x) * h; S.dv.z += (-w2 * S.d.z - SWING.c * S.dv.z - _gsa.z) * h; S.d.x += S.dv.x * h; S.d.z += S.dv.z * h; }
+  if (S.d.length() > SWING.max) { S.d.setLength(SWING.max); S.dv.multiplyScalar(0.5); }
+  return _gsq.setFromUnitVectors(_gsd.set(0, -1, 0), _gsv.set(S.d.x, -SWING.L, S.d.z).normalize());
+}
+function coatAnim(dt) { // 取大衣（gearOn 'reach'）：手伸到领口 → 连衣带手提离钉子 → 往身前、往下收出画面（披上），再换外套
+  const A = gear.anim, T = GEAR_T, c = A.g; A.t += dt;
+  if (A.t < T.reach) { gearHand(gearHandFrom(_gh).lerp(A.top, sstep(0, 1, A.t / T.reach)), true); return; }
+  const B = _gb.copy(A.top); gearLift(B, Math.min(1, (A.t - T.reach) / T.lift));
+  const e = Math.max(0, (A.t - T.reach - T.lift) / T.carry), s = e * e; // 往下收：先慢后快
+  _gv2.set(Math.sin(fp.yaw), 0, Math.cos(fp.yaw)).multiplyScalar(0.45).add(camera.position); _gv2.y -= 1.25; // 收到胸前下方、画面外
+  B.lerp(_gv2, Math.min(1, s)); c.position.copy(A.p0).add(_gv.subVectors(B, A.top)); // 父级一串是单位变换（同提灯）：世界位移直接加
+  gearHand(B, true);
+  if (e >= 1) gearCoatDone();
+}
+function gearCoatDone() { // 大衣披上了：衣帽架那件藏起、放回原位，身上换外套
+  const A = gear.anim, c = A.g; gear.anim = null;
+  c.visible = false; c.position.copy(A.p0); c.traverse((o) => { if (o.isMesh) o.castShadow = true; });
+  setOutfit(gear.who || 'person_man', 'coat'); shadowDirty = true;
+}
+function gearFinish() { // 退出第一人称时手上的动作直接做完
+  if (!gear.anim) return;
+  if (gear.anim.k === 'coat') gearCoatDone(); else { gear.anim = null; gear.t = 1; }
+}
+function gearCarry() { // 提灯那条胳膊（characters.js carryFix）：第一人称把身体的右臂收起（画面里握灯的是 hand.glb），鸟瞰里垂下、握拳提着。updatePeople 之前设
+  const who = gear.who || 'person_man';
+  for (const p of people.values()) {
+    let c = null;
+    if (gear.lantern && p.id === who && p.root.visible) c = fp && fp.p === p ? (fp.cut ? null : 'fp') : CARRY_CLIPS.has(p.cur?.getClip().name) ? 'hang' : null;
+    p.carry = c;
   }
 }
-const LANT_HAND = { up: 0.105, rot: handRot([0.35, -0.85, 0.4], [1, 0, 0.2]) }; // 拳心在提灯中心上方 up（提梁）；rot：同 HAND.rot 的 e / back，只是不跟着低头（提灯一直竖着）
-const _gv = new THREE.Vector3(), _gv2 = new THREE.Vector3();
+const CARRY_CLIPS = new Set(['Idle_Loop', 'Idle_Talking_Loop', 'Walk_Loop', 'Jog_Fwd_Loop']); // 别的动作（爬梯、伸手、坐下起身）手要用，不改
 function gearLayer(g, on) { if (gear.lay !== on) { heldLayer(g, on); gear.lay = on; } } // 第一人称画在 HELD_LAYER（不穿墙），鸟瞰挂在人手上要回普通图层
 function lampSnow() { // 提着的灯照亮身边 3m 内的飞雪（雪片着色器按点光源同样的衰减加灯色，见 weather.js snowLamp）
   const g = gear.lantern && layers.get('entry_lantern'), L = g && g.visible && (gear.light ||= g.children.find((o) => o.isPointLight));
@@ -5562,17 +5631,19 @@ function updateBreath(dt) {
   s.material.opacity = 0.4 * Math.min(1, e / 0.12) * (1 - e) ** 1.5;
   s.material.color.setScalar(0.85 * (0.25 + 0.75 * Math.min(1, hemi.intensity / 0.8))); // 同雪片：跟着天光暗下去
 }
-function gearOrbit() { // 鸟瞰：提灯提在他右手上（原来鸟瞰时藏起，人空着手，衣帽架却说他带着，动画检查 #6）
+function gearOrbit(dt) { // 鸟瞰：提灯提在他右手上（原来鸟瞰时藏起，人空着手，衣帽架却说他带着，动画检查 #6）。胳膊垂下握拳见 gearCarry
   if (fp || !gear.lantern) return;
   const m = people.get(gear.who || 'person_man'), g = layers.get('entry_lantern'); if (!m || !g) return;
   if (!m.root.visible) { g.visible = false; return; }
   g.visible = true; gearLayer(g, false);
-  _gv2.set(0, 0, 1).applyQuaternion(m.root.quaternion); const yaw = Math.atan2(_gv2.x, _gv2.z);
-  if (m.mode === 'sit') { const r = m.root.position; _gv.set(r.x - Math.cos(yaw) * 0.3 + Math.sin(yaw) * 0.15, m.standY + LANT_HAND.up - 0.005, r.z + Math.sin(yaw) * 0.3 + Math.cos(yaw) * 0.15); } // 坐着：放在右脚边稍前的地上（贴脚会插进沙发前沿）（手搭在膝盖上，挂手上会插进腿和坐垫）
-  else { const H = m.root.getObjectByName('hand_r'), M = m.root.getObjectByName('middle_01_r'); if (!H || !M) return;
-    H.getWorldPosition(_gv); M.getWorldPosition(_gv2); _gv.lerp(_gv2, 0.7); _gv.y -= LANT_HAND.up; } // 拳心 ≈ 手腕到中指根 70% 处
-  setPose(g, gear.c0, _gv, _hq.setFromAxisAngle(_hY, yaw + GEAR_YAW));
+  _gv2.set(0, 0, 1).applyQuaternion(m.root.quaternion); const yaw = Math.atan2(_gv2.x, _gv2.z), Q = _hq.setFromAxisAngle(_hY, yaw + GEAR_YAW);
+  if (m.mode === 'sit') { const r = m.root.position; _gv.set(r.x - Math.cos(yaw) * 0.3 + Math.sin(yaw) * 0.15, m.standY + LANT_HAND.up - 0.005, r.z + Math.sin(yaw) * 0.3 + Math.cos(yaw) * 0.15); gear.sw.p = null; setPose(g, gear.c0, _gv, Q); return; } // 坐着：放在右脚边稍前的地上（贴脚会插进沙发前沿）（手搭在膝盖上，挂手上会插进腿和坐垫）
+  const H = m.root.getObjectByName('hand_r'), M = m.root.getObjectByName('middle_01_r'); if (!H || !M) return;
+  H.getWorldPosition(_gp); M.getWorldPosition(_gv2); _gp.lerp(_gv2, ORBIT_GRIP.k); _gp.y -= ORBIT_GRIP.down; // 提梁：握拳的手指圈里
+  const tilt = gearSwing(gear.sw, _gp, dt);
+  setPose(g, gear.c0, _gv.set(0, -LANT_HAND.up, 0).applyQuaternion(tilt).add(_gp), _hq2.copy(tilt).multiply(Q));
 }
+const ORBIT_GRIP = { k: 1.0, down: 0.03 }; // 中指根往下一点 ≈ 四指圈住的地方（carryFix 握拳后量）
 function startFP(id) {
   const p = people.get(id);
   if (!p || fly || intro) return;
@@ -5596,6 +5667,7 @@ function startFP(id) {
 function stopFP() {
   if (!fp) return;
   heldPutBack(); // 拿着东西就直接放回原处
+  gearFinish(); if (hand) hand.visible = false; // 握提灯的手只在第一人称画（原来退出后它留在 HELD_LAYER 上，鸟瞰里飘在半空）
   if (fp.cut) { fp.cut.dest = null; ladCutSkip(); } // 正在上下梯子：别把人留在半空
   const p = fp.p; fp = null;
   p.player = false; p.hit.visible = true; p.next = 6; p.roam = 8; // 过一会儿走回自己的座位
@@ -6687,7 +6759,7 @@ renderer.setAnimationLoop(() => {
   if (sceneReady) hideOutdoors(now);
   audioTick(dt, !!VOICE.a && !VOICE.a.paused, !!(intro || morn || SL.auto) || document.body.classList.contains('endshot'));
   updateBirds(dt);
-  updatePeople(dt); gearOrbit(); lampSnow(); updateBreath(dt); // 人动完再把提灯挂到手上
+  gearCarry(); updatePeople(dt); gearOrbit(dt); lampSnow(); updateBreath(dt); // 人动完再把提灯挂到手上
   if (WATER.mat) WATER.mat.userData.u.uT.value = now / 1000;
   if (BROOK.wheel) { BROOK.wheel.rotation.x = -now / 1000 * 0.9; BROOK.snow.value = sstep(0.3, 0.85, cover.uSnow.value); } // 水轮慢转（约 7 秒一圈），底下的叶片顺流走；土岸积雪跟地面差不多同时出现
   if (WATER.ice) { const I = WATER.ice, k1 = wx.name === 'Blizzard' ? 1 : 0; // 浮冰：暴雪时约 4 秒长出来，转晴时缩回去；看不到就不算
