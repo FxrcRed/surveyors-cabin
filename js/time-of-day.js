@@ -263,7 +263,8 @@ function updateSky(dt) {
   skyU.uTime.value += dt;
   if (sky.goal !== null) { // 点了时段按钮：沿较短方向快速转过去
     let d = ((sky.goal - sky.hour) % 24 + 36) % 24 - 12;
-    const step = Math.sign(d) * Math.min(Math.abs(d), dt * (sky.goalRate || 6)); // goalRate：游戏里天慢慢黑下来（小时/秒）
+    const rate = typeof sky.goalRate === 'function' ? sky.goalRate(sky.hour) : sky.goalRate || 6;
+    const step = Math.sign(d) * Math.min(Math.abs(d), dt * rate); // goalRate：游戏里天慢慢黑下来（小时/秒）；可以是按钟点算的函数（sunPace）
     sky.hour += step; if (Math.abs(d - step) < 1e-3) { sky.hour = sky.goal; sky.goal = null; sky.goalRate = 0; }
   } else if (sky.play) sky.hour += dt * sky.rate;
   sky.hour = ((sky.hour % 24) + 24) % 24;
@@ -312,4 +313,8 @@ function syncSkyUI() {
 
 
 share({ sunRig: [() => sunRig, (v) => { sunRig = v; }] }); // 模型加载后主页面设
-export { WX_ZH, sky, skyEl, skyU, indoorU, indoorShade, PANELS, wallU, roomU, roomOf, updateSky };
+function sunPace(deg) { // goalRate 用：太阳在天上每秒最多走 deg 度（高度和方位合起来的弧长，公式同 applySky）→ (钟点) => 小时/秒；太阳落下以后按 0.5 小时/秒（只剩天色）
+  return (h) => { const a = (h - 6) / 12, el = Math.sin(Math.PI * a) * 62; if (el < -4) return 0.5;
+    return deg / Math.max(1, Math.hypot(62 * Math.PI / 12 * Math.cos(Math.PI * a), 160 / 12 * Math.cos(el * Math.PI / 180))); };
+}
+export { WX_ZH, sky, skyEl, skyU, indoorU, indoorShade, PANELS, wallU, roomU, roomOf, updateSky, sunPace };
