@@ -530,7 +530,7 @@ import { scene, sun, hemi, renderer, camera, controls, $, lang, esc, lbl, PR_MAX
 import { shared, share } from './js/state.js';
 import { terrain, terrainH, terrainSlope, sstep, makeGroundGeometry, applyTerrain, setBrook, brookAt, brookCutD, groundSpan, BROOK_WL, BROOK_BANK } from './js/terrain.js';
 import { paperMesh, agedPaper, handwrite, makeBook, inspectTick, inspecting, inspectBusy, inspectKind, inspectStart, inspectRelease, inspectDuo, sigDraw, inspectWatch } from './js/props3d.js';
-import { WX_ZH, sky, skyEl, skyU, indoorU, indoorShade, PANELS, wallU, updateSky } from './js/time-of-day.js';
+import { WX_ZH, sky, skyEl, skyU, indoorU, indoorShade, PANELS, wallU, updateSky, sunPace } from './js/time-of-day.js';
 import { audioTick, audioPreload, audioStep, audioRung, setIce, sfx, sfxToggle } from './js/audio.js';
 import { updateBirds } from './js/birds.js';
 import { LOG } from './js/playlog.js';
@@ -3613,7 +3613,7 @@ function gameInit() { // 模型和开关都建好后调（loadPeople 之前）�
   if (game.day === 1 && !game.night) makePage(); // 天黑后（她坐下写了）那页纸就不在了
   notes1Text();
   if (game.day === 1 && game.night) makeNotes();
-  sky.goal = null; sky.play = false; sky.bearing = skyEl.bearing.value = game.day === 1 ? 335 : 55; /* 第 1 天：太阳转到小屋前方（15:30 方位约 21°），正面受光、山墙檐口影子落在前墙上；55 时下午太阳在侧面、前墙背光，黄昏时逆光 */ sky.indoorK = game.day === 1 ? 0.3 : 1; /* 第 1 天屋里不靠天光：灯没开前是暗的 */ sky.hour = game.night && game.day > 1 ? 21 : game.day >= 3 ? 9.5 : game.day >= 2 ? (DAY2_NEED.every((k) => game.found.has(k)) ? 17.5 : 9.5) : game.night ? 18.3 : 16.4; // 第 1 天下午到，找齐线索后转黄昏（用户 2026-10-31：17 点太暗，改回下午；11-11 配薄雾挪到 16:24，17 点以后前景发黑）
+  sky.goal = null; sky.play = false; sky.bearing = skyEl.bearing.value = game.day === 1 ? 335 : 55; /* 第 1 天：太阳转到小屋前方（15:30 方位约 21°），正面受光、山墙檐口影子落在前墙上；55 时下午太阳在侧面、前墙背光，黄昏时逆光 */ sky.indoorK = game.day === 1 ? 0.3 : 1; /* 第 1 天屋里不靠天光：灯没开前是暗的 */ sky.hour = game.night && game.day > 1 ? 21 : game.day >= 3 ? 9.5 : game.day >= 2 ? d2Hour() : game.night ? 18.3 : 16.4; // 第 1 天下午到，找齐线索后转黄昏（用户 2026-10-31：17 点太暗，改回下午；11-11 配薄雾挪到 16:24，17 点以后前景发黑）
   if (game.day === 2 && game.found.has('notes2')) endDay2(); // 读完第 2 夜的记录还没点「第三天早上」就刷新了
   if (game.day === 1 && game.found.has('notes1')) endDay(); // 读完第 1 夜的记录还没点「第二天早上」就刷新了 // 下午到，找齐线索时天黑；时间不自己走，免得找着找着天就黑了
   if (game.day === 1 && !/[?&]wx=/.test(location.search)) { setMist(); cover.uSnow.value = 0; } // 第 1 天傍晚薄雾、不下雪、不换天气（11-11 Fable 评审 A1：原来随机晴 / 阴，平光下写实木屋和低多边形树画风撞在一起，是第一印象里最弱的一段；雾把两者统一成冷灰，门廊灯是唯一暖色。三天升级：薄雾 → 雪雾 → 更浓）；?wx= 试玩照旧
@@ -3694,7 +3694,7 @@ function gameSeen2(name, title, add, got) {
   gameSeen.got = got.length;
   if (!got.length) return over;
   saveGame(); renderJournal();
-  if (got.some((k) => DAY2_NEED.includes(k)) && DAY2_NEED.every((k) => game.found.has(k))) startDusk2();
+  if (got.some((k) => DAY2_NEED.includes(k))) d2Clock(); // 每认出一样，天往后走一截；四样齐了转到傍晚，烟在 updateDay2 里按时刻升起
   if (got.includes('notes2')) setTimeout(endDay2, 500); // 读完第 2 夜的记录：卡片关了弹「第二天结束」→ 第三天早上
   mmDirty = true;
   showQuest();
@@ -3711,9 +3711,10 @@ function dayStartNote() { // 第二天早上：两句开场（第 1 天的旧存
   if (game.day >= 3) { if (game.found.has('xarrive')) return; setTimeout(() => clerkSay(D3_SAYS.go, { walk: false }), 3000); return; }
   // 第 2 天早上不再放 D2_SAYS.clerk：任务行已说「留了记号、出去找找」，15 秒内同一个意思说三遍（文字经济 11-07 #5）
 }
-function startDusk2() { // 四样找齐：天慢慢转到傍晚，灯在 updateDay2 里按时刻亮
-  setTimeout(() => { sky.play = false; sky.goal = 17.5; sky.goalRate = 0.8; }, 4000);
-}
+const D2_CLOCK = { hours: [9.5, 12, 14, 16, 17.5], sun: 0.7 }; // 第 2 天的钟点跟着认出了几样记号走（0–4 样）；sun = 太阳在天上每秒最多走几度。11-12 用户：四样找齐时 10 秒内从 9:30 转到 17:30，太阳每秒掉 13°，像 bug
+window.cabinClock = D2_CLOCK; // 调试 / 无头流程调快
+const d2Hour = () => D2_CLOCK.hours[DAY2_NEED.filter((k) => game.found.has(k)).length];
+function d2Clock() { sky.play = false; sky.goal = d2Hour(); sky.goalRate = (h) => sunPace(D2_CLOCK.sun)(h); } // 天慢慢往后走，不跳
 function startNight2() { // 她在书架前把日志翻到中段、卡片弹出：天黑，她走去书桌、点壁灯，坐下那一刻才是「书记员在写」（11-11 world #3）
   game.night = game.dusk = true; showQuest();
   setTimeout(() => { sky.play = false; sky.goal = 21; sky.goalRate = 1; clerkToDesk(nightSeated); }, 2500);
@@ -4155,6 +4156,18 @@ function smokeAsk() { // 11-11 Fable 评审 F1：她指烟，你回一句。选�
   showRoomNote(null);
 }
 const D2_ALL_AT_LOAD = DAY2_NEED.every((k) => game.found.has(k)); // 刷新前就找齐了：石堆那行回程脚印直接在（刷新本身就是「没看」）
+const SMOKE_FAR = { near: 40, loop: 28, low: 14 }; // 第 2 天傍晚那柱烟：离烟根 near 米起雾变浓、loop 米处雾里绕回（11-12 用户：顺着踪迹走到底再离路 18m 就站到烟根底下，什么都没有）；low = 烟柱这个高度（离烟根）以下不画
+const SMOKE_GAZE = { hold: 1, ang: 0.2 }; // 准星离烟柱 ang 弧度以内、看得见、连续 hold 秒 = 找到
+const _sg = new THREE.Vector3(), _sf = new THREE.Vector3();
+function smokeGaze(dt) { // 11-12 用户：任务行说「树梢上有没有什么」，看见了烟却不知道要找的就是它、没去点 → 准星对着树梢上那段烟、烟已经浓了、确实看得见，连续 1 秒就算找到（同点了它）
+  const g = d2.lamp, u = g.userData.plume; let ok = fp && !fp.cut && !fp.turn && card.hidden && $('dlg').hidden && u.uAmt.value > 0.5;
+  if (ok) { camera.getWorldDirection(_sf); let best = -1, at = null; const w = 1 + 0.6 * Math.min(wx.cur.wind, 6);
+    for (let y = SMOKE_FAR.low + 4; y <= 66; y += 8) { const age = 1 - Math.pow(1 - y / 75, 1 / 1.8); _sg.set(w * Math.pow(age, 1.5) * 5, y, 0); g.localToWorld(_sg); // 烟柱中线（同 makePlume 顶点着色器：越高越往下风偏）
+      const c = _sf.dot(_sg.clone().sub(camera.position).normalize()); if (c > best) { best = c; at = _sg.toArray(); } }
+    ok = best > Math.cos(SMOKE_GAZE.ang) && sees('player', { at, r: 6, sky: true }); }
+  d2.gazeT = ok ? (d2.gazeT || 0) + dt : 0;
+  if (d2.gazeT > SMOKE_GAZE.hold) { d2.gazeT = 0; select('d2_lamp'); }
+}
 const SMOKE_SEE = () => { const L = d2.lamp.position; return { at: [L.x + 5, L.y + 18, L.z], r: 6, sky: true }; }; // 她看那柱烟：树梢上那段（烟柱粗，命中点在 6m 内就算看见）
 function updateDay2(dt) {
   if (!d2.samples) return;
@@ -4170,13 +4183,16 @@ function updateDay2(dt) {
     const via = []; for (let s = D2_SPOTS.d2_cairn.s - 0.5; s > 3; s -= 3) { const [, rt] = pathAt(s); via.push(logDetour(s, D2_LOGS).addScaledVector(rt, 0.55)); }
     const pts = [...via, new THREE.Vector3(0.45, 0, 4.3), new THREE.Vector3(0.3, 0, 3.0)], make = () => { d2.backPrints = makePrints('d2_back', pts); };
     if (D2_ALL_AT_LOAD) make(); else { d2.backPrints = 'wait'; whenUnseen(pts.map((p) => ({ at: p.clone().setY(ground.position.y + terrainH(p.x, p.z) + 0.3), r: 1 })), make, { hold: 3, name: 'second line of prints from the cairn' }); } }
-  if (lampOn) updatePlume(d2.lamp, dt, THREE.MathUtils.smoothstep(sky.hour, 17.2, 17.5));
+  if (lampOn) { // 走偏、雾浓起来时烟也跟着淡进雾里（d2.fogV）；第 2 天树梢以下不画（SMOKE_FAR.low），从哪看都只是树梢上那一段，看不到它底下悬空的根
+    updatePlume(d2.lamp, dt, THREE.MathUtils.smoothstep(sky.hour, 17.2, 17.5) * (1 - THREE.MathUtils.smoothstep(d2.fogV || 0, 0, 0.6)));
+    if (game.day === 2) d2.lamp.userData.plume.uLow.value = SMOKE_FAR.low; }
   if (!fp || game.night) return;
   const r = fp.p.root.position;
   const w2 = people.get('person_woman'), saw = f.has('saw:yes') || f.has('saw:no');
   if (game.day === 2 && lampOn && !d2.clerkOut && w2 && !w2.player && !f.has('log2')) { d2.clerkOut = 'going'; clerkPorch(w2); } // 烟起来了，她出门站到门廊上看（11-11 用户：第 2 天她一直在屋里，没窗看不见烟，你在林子里也听不见她）
   if (lampOn && d2.clerkOut === true && !d2.lampSaid && !saw && sky.hour > 17.4 && (d2.sayT = (d2.sayT || 0) + dt) > 0.25) { d2.sayT = 0; // 她站在门廊上、看得见那柱烟、你在 12m 内（屋外正常说话的距离，11-11 world #14：原来 18m）才指给你看；你在林子里自己看见烟也照说，后面要你回她一句
     if (clerkCan(w2, { hear: 12, about: SMOKE_SEE })) { d2.lampSaid = true; clerkSay(D2_SAYS.lamp, { hear: 12, about: SMOKE_SEE, jump: true, walk: false }); smokeCue(r); } }
+  if (game.day === 2 && lampOn && !f.has('d2light')) smokeGaze(dt);
   if (lampOn && d2.lampSaid && sky.hour > 17.4 && !f.has('saw:yes') && !f.has('saw:no') && !f.has('log2') && !fp.turn && !fp.cut && card.hidden && $('dlg').hidden && hears(w2, 12)) { if ((d2.askT = (d2.askT || 0) + dt) > 6.5) smokeAsk(); } // 她说完、镜头转过去看了一阵，才轮到你回话（你还在她跟前）
   if (f.has('d2light') && !f.has('log2') && !outdoors(r) && Math.abs(r.x) < 1.7 && Math.abs(r.z) < 1.7) { // 进了屋：她走到书架前翻开日志，卡片这才弹（11-11 world #2：原来你一进门就弹「回到屋里，书记员把日志翻到了中间」，她还在门廊上）
     if (!d2.logT || (!d2.logReady && performance.now() - d2.logT > 90000)) clerkLog2(); // 90 秒还没到（被挡住、被打断）：再走一遍，仍由她走到书架触发
@@ -4192,7 +4208,9 @@ function updateDay2(dt) {
   // 没有墙：离踪迹（或走过还没认出的记号）越远雾越浓，偏出 D2.lostAt 米、再走 D2.lost 秒才绕回去
   const side = q.d - D2.width, ahead = q.s - (game.day >= 3 ? D3.reach : D2.reach[n]);
   d2.passed = ahead > side; // 是走过了记号（不是走偏）：绕回来时提一句「路边好像有什么」
-  lostFog(Math.hypot(r.x, r.z) < D2.yard ? 0 : Math.max(side, game.day >= 3 ? ahead : ahead * D2.lostAt / D2.lostAhead), dt); // 第 2 天走过头：12m 就绕回（评审④ v2 #6：原来 30m，走过标桩还能走到 52m）
+  const L2 = d2.lamp.position, toSmoke = game.day === 2 && DAY2_NEED.every((k) => f.has(k)) ? (SMOKE_FAR.near - Math.hypot(r.x - L2.x, r.z - L2.z)) * D2.lostAt / (SMOKE_FAR.near - SMOKE_FAR.loop) : 0; // 往烟那边走：那柱烟其实在四英里外（第 3 天 ✕ 那间），走不到；离烟根 near 米起雾变浓，loop 米处绕回
+  if (AUDIT && lampOn && game.day === 2 && !d2.auditSmoke && Math.hypot(r.x - L2.x, r.z - L2.z) < SMOKE_FAR.loop - 4) { d2.auditSmoke = true; worldAudit('fact', 'smoke over the trees is far off: walked under it', { ok: false }); } // 审计：烟升着时走到了它底下
+  lostFog(Math.hypot(r.x, r.z) < D2.yard ? 0 : Math.max(side, toSmoke, game.day >= 3 ? ahead : ahead * D2.lostAt / D2.lostAhead), dt); // 第 2 天走过头：12m 就绕回（评审④ v2 #6：原来 30m，走过标桩还能走到 52m）
 }
 // —— 三日调查小游戏 · 第 3 天 + 结局（2026-10-27，灰盒）：读完第 2 夜记录 →「第二天结束」→ 重新载入成第三天早上（还是雾）→ 书架读工作日志后段 →「出门走走」，
 // 雾里的路一直放到 ✕（D3.s 米处一棵老云杉、树根下裂口、焦黑松针）→ 走到树跟前压黑，「放进」✕ 那间小屋：就是同一个模型换一套状态（applyX：大衣 / 靴子 / 提灯藏掉、
