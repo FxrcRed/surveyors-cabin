@@ -19,22 +19,29 @@ window.__vol = volfog; // 调试、无头测试
 
 const TIERS = [{ res: 0.5, steps: 16 }, { res: 0.25, steps: 8 }];
 const sstep = (a, b, x) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
-let rt, fogA, fogB, march, blurM, compM, fsScene, fsTri, fsCam, sunRT, sunCam, shadowOnly;
+let rt, fogA, fogB, march, blurM, compM, fsScene, fsTri, fsCam, sunRT, sunCam, shadowOnly, waterRT, waterTry = 0;
 const U = {
   tDepth: { value: null }, tSun: { value: null }, tNoise: { value: null }, uInvP: { value: new THREE.Matrix4() }, uCamW: { value: new THREE.Matrix4() }, uSunVP: { value: new THREE.Matrix4() },
   uCam: { value: new THREE.Vector3() }, uSunDir: { value: new THREE.Vector3(0, 1, 0) }, uSunC: { value: new THREE.Color() }, uAmb: { value: new THREE.Color() },
-  uD: { value: 0 }, uBase: { value: 0 }, uFall: { value: 0.36 }, uTop: { value: 7.5 }, uMax: { value: 70 }, uG: { value: 0.72 }, uT: { value: 0 },
+  uD: { value: 0 }, uW: { value: 0 }, uBase: { value: 0 }, uFall: { value: 0.11 }, uTop: { value: 22 }, uMax: { value: 100 }, uG: { value: 0.72 }, uT: { value: 0 },
+  tWater: { value: new THREE.DataTexture(new Uint8Array(4), 1, 1) }, uWO: { value: new THREE.Vector2() }, uWS: { value: new THREE.Vector2(1, 1) },
   uBoxMin: { value: new THREE.Vector3(1e9, 1e9, 1e9) }, uBoxMax: { value: new THREE.Vector3(-1e9, -1e9, -1e9) },
 };
 const FS_VERT = 'varying vec2 vUv; void main(){ vUv = position.xy * 0.5 + 0.5; gl_Position = vec4(position.xy, 1.0, 1.0); }';
 const FOG_FRAG = `precision highp float; precision highp sampler3D;
-uniform sampler2D tDepth, tSun; uniform sampler3D tNoise; uniform mat4 uInvP, uCamW, uSunVP; uniform vec3 uCam, uSunDir, uSunC, uAmb, uBoxMin, uBoxMax; uniform float uD, uBase, uFall, uTop, uMax, uG, uT; varying vec2 vUv;
+uniform sampler2D tDepth, tSun, tWater; uniform sampler3D tNoise; uniform mat4 uInvP, uCamW, uSunVP; uniform vec3 uCam, uSunDir, uSunC, uAmb, uBoxMin, uBoxMax; uniform vec2 uWO, uWS; uniform float uD, uW, uBase, uFall, uTop, uMax, uG, uT; varying vec2 vUv;
 float ign(vec2 p){ return fract(52.9829189 * fract(dot(p, vec2(0.06711056, 0.00583715)))); }
 float dens(vec3 p){
   if (all(greaterThan(p, uBoxMin)) && all(lessThan(p, uBoxMax))) return 0.0; // 小屋里没有雾（门开着时从屋里看出去照样有）
-  float h = p.y - uBase, t = clamp(h / uTop, 0.0, 1.0);    // 世界高度：低处积在洼地里；越高雾团越碎，一层层断开
-  float n = texture(tNoise, p * 0.040 + vec3(uT * 0.010, 0.0, uT * 0.005)).r + (texture(tNoise, p * 0.13 - vec3(uT * 0.016, uT * 0.006, 0.0)).r - 0.5) * 0.6;
-  return uD * exp(-max(h, 0.0) * uFall) * smoothstep(0.34 + 0.34 * t, 0.70 + 0.2 * t, n) * (1.0 - t * t);
+  float h = max(p.y - uBase, 0.0);                          // 世界高度。林间雾：贴地最浓、往上慢慢淡（树干中段还在，树冠高度只剩薄薄一层），雾顶 uTop 在树冠上沿
+  vec2 wu = vec2((p.x - uWO.x) * uWS.x, (uWO.y - p.z) * uWS.y);
+  float wm = (wu.x > 0.0 && wu.y > 0.0 && wu.x < 1.0 && wu.y < 1.0) ? textureLod(tWater, wu, 2.5).r : 0.0; // 水面遮罩（湖、河），取模糊的一级：晨雾从岸上漂出去一点，边缘是软的
+  float nA = texture(tNoise, p * 0.005 + vec3(uT * 0.0012, 0.0, uT * 0.0006)).r;   // 大尺度低频（雾块几十米），慢慢漂
+  float nB = texture(tNoise, p * 0.022 - vec3(uT * 0.0020, 0.0, uT * 0.0008)).r - 0.5; // 只给边缘一点起伏，不出细碎团块
+  float land = uD * exp(-h * uFall) * (1.0 - smoothstep(0.5 * uTop, uTop, h)) * smoothstep(0.28, 0.68, nA + nB * 0.35)
+    * mix(0.4, 1.0, smoothstep(6.0, 36.0, length(p.xz - (uBoxMin.xz + uBoxMax.xz) * 0.5))) * (1.0 - 0.85 * wm); // 小屋四周的雾淡一些，开场落地时小屋看得清
+  float wat = uW * wm * exp(-h * 0.5) * (1.0 - smoothstep(3.0, 7.0, h)) * smoothstep(0.30, 0.74, nA + nB * 0.15);   // 水面晨雾：贴水一层，大片、边缘宽而软
+  return land + wat;
 }
 float sunVis(vec3 p){ vec3 s = (uSunVP * vec4(p, 1.0)).xyz * 0.5 + 0.5; if (min(s.x, s.y) < 0.0 || max(s.x, s.y) > 1.0) return 1.0; return s.z <= texture(tSun, s.xy).r + 0.0015 ? 1.0 : 0.0; }
 void main(){
@@ -91,6 +98,20 @@ function build() {
   sunCam = new THREE.OrthographicCamera(-80, 80, 80, -80, 1, 400); sunCam.layers.set(FOG_LAYER); shadowOnly = new THREE.MeshBasicMaterial({ colorWrite: false });
   U.tNoise.value = noise3D(48); volfog.built = true;
 }
+// 水面遮罩：湖和河的网格从正上方画一张白色俯视图（2m 一格，带 mipmap），雾按它在水面上放晨雾。找不到水就重试几次（开了没水的场景不会白画）
+function buildWater() {
+  const lake = scene.getObjectByName('lake'), river = scene.getObjectByName('river'); if (!lake || !river || ++waterTry > 5) return;
+  const box = new THREE.Box3().setFromObject(lake).union(new THREE.Box3().setFromObject(river)).expandByScalar(30), sx = box.max.x - box.min.x, sz = box.max.z - box.min.z, cx = (box.min.x + box.max.x) / 2, cz = (box.min.z + box.max.z) / 2;
+  const W = Math.min(2048, Math.ceil(sx / 2)), H = Math.min(2048, Math.ceil(sz / 2)), WL = FOG_LAYER + 1;
+  waterRT = new THREE.WebGLRenderTarget(W, H, { generateMipmaps: true, minFilter: THREE.LinearMipmapLinearFilter, magFilter: THREE.LinearFilter, depthBuffer: false });
+  const cam = new THREE.OrthographicCamera(-sx / 2, sx / 2, sz / 2, -sz / 2, 1, 200); cam.up.set(0, 0, -1); cam.position.set(cx, 100, cz); cam.lookAt(cx, 0, cz); cam.updateMatrixWorld(); cam.layers.set(WL);
+  lake.layers.enable(WL); river.layers.enable(WL);
+  const bg = scene.background, fog = scene.fog, sm = renderer.shadowMap.enabled, cc = renderer.getClearColor(new THREE.Color()), ca = renderer.getClearAlpha();
+  scene.background = null; scene.fog = null; scene.overrideMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide, fog: false }); renderer.shadowMap.enabled = false; renderer.setClearColor(0x000000, 1);
+  renderer.setRenderTarget(waterRT); renderer.clear(); renderer.render(scene, cam);
+  scene.overrideMaterial.dispose(); scene.overrideMaterial = null; scene.background = bg; scene.fog = fog; renderer.shadowMap.enabled = sm; renderer.setClearColor(cc, ca);
+  U.tWater.value = waterRT.texture; U.uWO.value.set(box.min.x, box.max.z); U.uWS.value.set(1 / sx, 1 / sz);
+}
 const blit = (mat, target) => { fsTri.material = mat; renderer.setRenderTarget(target); renderer.render(fsScene, fsCam); };
 const _c = new THREE.Vector3(), _sz = new THREE.Vector2(), shC = new THREE.Vector3(1e9, 0, 0); let shAt = -1e9;
 function fogShadow(now) { // 雾专用太阳深度图：只有树（主页面的树不投影，阴影贴图里没有它们，光束就穿不出树缝）；太阳转了、人走远了才重画，最多半秒一次
@@ -108,11 +129,12 @@ export function volDraw(outdoors, groundY, sunD, now, force) {
   volfog.active = k > 0;
   if (!volfog.active) { renderer.setRenderTarget(null); renderer.render(scene, camera); return renderer.info.render.triangles; }
   if (!volfog.built) build();
+  if (!waterRT && waterTry <= 5) buildWater();
   renderer.getDrawingBufferSize(_sz); const T = TIERS[volfog.tier];
   if (rt.width !== _sz.x || rt.height !== _sz.y) rt.setSize(_sz.x, _sz.y);
   const fw = Math.max(2, Math.round(_sz.x * T.res)), fh = Math.max(2, Math.round(_sz.y * T.res)); if (fogA.width !== fw || fogA.height !== fh) { fogA.setSize(fw, fh); fogB.setSize(fw, fh); }
   renderer.setRenderTarget(rt); renderer.render(scene, camera); const tris = renderer.info.render.triangles;
-  U.uSunDir.value.copy(sunD); U.uBase.value = groundY - 0.3; U.uT.value = now / 1000; U.uD.value = 0.12 * k;
+  U.uSunDir.value.copy(sunD); U.uBase.value = groundY - 0.3; U.uT.value = now / 1000; U.uD.value = 0.05 * k; U.uW.value = 0.22 * k;
   U.uSunC.value.copy(sun.color).multiplyScalar(sun.intensity * 1.4 * sstep(-0.02, 0.08, sunD.y)); U.uAmb.value.copy(hemi.color).multiplyScalar(hemi.intensity * 0.45);
   const box = window.cabin && window.cabin.box; if (box && !box.isEmpty()) { U.uBoxMin.value.copy(box.min).subScalar(0.3); U.uBoxMax.value.copy(box.max).addScalar(0.3); }
   fogShadow(now);
