@@ -173,9 +173,13 @@ function leatherCanvas(W, H, seed, kind) {
   pebble(x, W, H, R, 0.16);
   return c;
 }
-function pebble(x, W, H, R, a) { // 皮纹：一粒粒压扁的小鼓包（上亮下暗），按真实像素画
-  const n = W * H / 9;
-  for (let i = 0; i < n; i++) { const px = R() * W, py = R() * H, r = 0.8 + R() * 1.6; x.fillStyle = `rgba(0,0,0,${R() * a})`; x.fillRect(px, py + r * 0.5, r * 1.4, r); x.fillStyle = `rgba(255,214,170,${R() * a * 0.4})`; x.fillRect(px, py - r * 0.4, r * 1.2, r * 0.7); }
+const pebTile = {};
+function pebble(x, W, H, R, a) { // 皮纹：一粒粒压扁的小鼓包（上亮下暗）。先在 64² 小块上画一次再平铺（原来按 W*H/9 逐粒画，加载多 0.2–0.4s，11-13 性能评审 3）
+  let t = pebTile[a]; if (!t) {
+    t = pebTile[a] = mkCanvas(64, 64); const tx = t.getContext('2d'), n = 64 * 64 / 9, r2 = rngOf(63 + Math.round(a * 100));
+    for (let i = 0; i < n; i++) { const px = r2() * 64, py = r2() * 64, r = 0.8 + r2() * 1.6; tx.fillStyle = `rgba(0,0,0,${r2() * a})`; tx.fillRect(px, py + r * 0.5, r * 1.4, r); tx.fillStyle = `rgba(255,214,170,${r2() * a * 0.4})`; tx.fillRect(px, py - r * 0.4, r * 1.2, r * 0.7); }
+  }
+  x.fillStyle = x.createPattern(t, 'repeat'); x.fillRect(0, 0, W, H);
 }
 let lBump = null;
 function leatherBump() { // 凹凸：皮纹颗粒 + 横竖几道折痕（四块皮共用一张）
@@ -419,8 +423,9 @@ export function watchModel() {
   const caseP = [[0, 0], [0.009, 0.00035], [0.016, 0.0012], [0.0215, 0.0025], [0.0252, 0.004], [0.0268, 0.0053], [0.0272, 0.0063], [0.027, 0.0073], [0.0263, 0.008], [0.0266, 0.0086], [0.0262, 0.0094], [0.0251, 0.0099], [0.0243, 0.0096], [0.0241, DIAL_Y]];
   const caseM = brassMat(coarse ? 256 : 512, coarse ? 64 : 128, 71, [[0.58, 0.66], [0.9, 1]]); // 表圈和表盘边上的缝里发暗
   body.add(new THREE.Mesh(new THREE.LatheGeometry(V2(caseP), 56), caseM));
-  const S = coarse ? 512 : 1024, dc = dialCanvas(S), dt = tex(dc);
-  document.fonts?.load('40px "IM Fell English"').then(() => { dc.getContext('2d').drawImage(dialCanvas(S), 0, 0); dt.needsUpdate = true; }, () => {}); // 字体到了重画罗马数字
+  const S = coarse ? 512 : 1024, dc = mkCanvas(S, S), dt = tex(dc); let dialDrawn = false;
+  const drawDial = () => { if (dialDrawn) return; dialDrawn = true; dc.getContext('2d').drawImage(dialCanvas(S), 0, 0); dt.needsUpdate = true; }; // 字体到了才画一次罗马数字（原来先画一遍、字体到了整张重画，每次都跑 grain）；字体 1.5 秒还没到也画，别让表盘一直空着
+  if (document.fonts?.load) { document.fonts.load('40px "IM Fell English"').then(drawDial, drawDial); setTimeout(drawDial, 1500); } else drawDial();
   const dialM = new THREE.MeshStandardMaterial({ map: dt, roughness: 0.28, emissive: 0xffffff, emissiveMap: dt, emissiveIntensity: 0 });
   const dial = new THREE.Mesh(new THREE.CircleGeometry(WR, 56), dialM); dial.rotation.x = -Math.PI / 2; dial.position.y = DIAL_Y; body.add(dial);
   const steel = new THREE.MeshStandardMaterial({ color: 0x1b2340, metalness: 0.75, roughness: 0.28 }); // 烤蓝的钢针
@@ -544,7 +549,7 @@ export function inspectWatch(w, anchor, dial, done) {
 }
 export function inspectRelease(onHome) { // 卡片关了：飞回原位（书先合上）
   if (!V) { onHome?.(); return; }
-  if (V.busy) { inspectSkip(); }
+  if (V.busy) { inspectSkip(); if (!V) { onHome?.(); return; } } // 正在收（再按一次 Esc）：跳到结尾时 end() 已把 V 清成 null，不能再往下 V.busy = true（11-13 报过 setting 'busy'）
   const v = V; v.busy = true; v.onHome = onHome; tw.length = 0; cbs.length = 0; clock = 0;
   if (v.kind === 'book') {
     const A = book.A; for (let i = NLEAF - 1; i >= 0; i--) go(A.l, i, 0, 0.3, (NLEAF - 1 - i) * 0.05);

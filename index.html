@@ -5047,7 +5047,9 @@ function setHL(name, on) { // 把这个图层的网格加进/移出高亮 layer
     if (g) g.traverse((o) => { if (o.isMesh && !o.userData.pad && !o.userData.noHL) on ? o.layers.enable(HL_LAYER) : o.layers.disable(HL_LAYER); }); // pad：看不见的大点选块，不描边；noHL：贴地的贴图方片
   }
 }
+const noHov = () => !!inspecting() || !!gear.anim; // 古书、怀表飞到眼前和伸手摘灯 / 大衣的途中不画描边、准星环、悬停名（11-13 画面评审 V1、V5）
 function drawHighlight() {
+  if (noHov()) return;
   const hov = hovered || hintGlow; // 卡关提示三级：没悬停时描提示的那件
   const want = [selected, hov].filter((n, i, a) => n && layers.get(n) && (i === 0 || n !== a[0]));
   if (!want.length) return;
@@ -5571,7 +5573,7 @@ function gearOn(k, how) { // 穿上大衣 / 提起提灯（不查能不能拿、
   gear[k] = true; gear.who = fp ? fp.p.id : gear.who || 'person_man';
   const reach = (X) => how === 'reach' && !gear.anim && !!fp && !!hand && !held && X.distanceTo(camera.position) < 1.3; // 远处点的（< 2m 也能点）手够不着、手正在摘另一样（连按两下）：不演伸手，直接到手
   if (k === 'coat') { // 穿上外套（Ranger 短上衣，鸟瞰看得到；第一人称袖子换成大衣袖筒）
-    const c = layers.get('entry_coat'), b = c && new THREE.Box3().setFromObject(c), top = b && new THREE.Vector3((b.min.x + b.max.x) / 2, b.max.y - 0.06, (b.min.z + b.max.z) / 2); // top：领口（挂在钉子上的那头）
+    const c = layers.get('entry_coat'), b = c && new THREE.Box3().setFromObject(c), top = b && new THREE.Vector3((b.min.x + b.max.x) / 2, b.max.y - 0.16, (b.min.z + b.max.z) / 2); // top：领口（挂在钉子上的那头）
     if (c && reach(top)) { gear.anim = { k, t: 0, g: c, p0: c.position.clone(), top }; c.traverse((o) => { if (o.isMesh) o.castShadow = false; }); }
     else { if (c) c.visible = false; setOutfit(gear.who, 'coat'); }
   } else {
@@ -5610,6 +5612,7 @@ function gearHang() { // 挂回原处
 function gearPose() { // 画面右下角露出上半截；只跟着转身、不跟着抬头低头（挂着的提灯总是竖的）；k < 1 沉出画面（手里拿着别的东西时让开）
   const tall = camera.aspect < 0.7, d = tall ? 0.875 : 0.7, hh = d * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)), hw = hh * camera.aspect; // 手机竖屏（UX7）：远一点 = 缩到 0.8 倍，往左让开右下角的语言按钮，再沉一点
   const X = new THREE.Vector3(hw * (tall ? 0.49 : 0.62), -hh * ((tall ? 0.92 : 0.8) + 0.7 * (1 - gear.k)), -d).applyQuaternion(camera.quaternion).add(camera.position);
+  X.y -= 0.09; // 握点下移 9cm（评审要 12–15cm，但 13cm 时灯身只剩顶上约 0.1m 在画面下沿，取折中）：真人提灯手垂在腰侧（11-13 画面评审 V3）
   const Q = new THREE.Quaternion().setFromAxisAngle(_hY, fp.yaw + GEAR_YAW); // 走路时的晃动由 gearStep（手）+ gearSwing（灯挂在提梁上）算
   return { X, Q };
 }
@@ -5650,8 +5653,8 @@ function gearLift(B, k) { // 摘离钉子：往上 5cm、往人这边 4cm（钉�
 }
 function gearStep(v) { // 走路时拿灯的手跟着步子前后摆一点（两步一个来回），跑起来摆幅大些；减少动态效果时不摆
   if (RM.matches || !fp.bobA) return;
-  const a = fp.bobA * Math.min(2, (fp.sp || 0) / 1.8), ph = fp.bob || 0;
-  v.x += Math.sin(fp.yaw) * Math.sin(ph) * 0.012 * a; v.z += Math.cos(fp.yaw) * Math.sin(ph) * 0.012 * a; v.y += (Math.cos(2 * ph) - 1) * 0.005 * a;
+  const a = fp.bobA * Math.min(2.6, (fp.sp || 0) / 1.8), ph = fp.bob || 0; // 上限 2→2.6：小跑时手摆得开一点，灯才跟着晃（11-13 V3）
+  v.x += Math.sin(fp.yaw) * Math.sin(ph) * 0.018 * a; v.z += Math.cos(fp.yaw) * Math.sin(ph) * 0.018 * a; v.y += (Math.cos(2 * ph) - 1) * 0.005 * a;
 }
 const SWING = { L: 0.11, c: 2.6, max: 0.055 }; // 单摆：摆长 = 提梁到灯身重心（m）、阻尼（1/s）、最多偏出（m，约 27°）
 const _gsv = new THREE.Vector3(), _gsa = new THREE.Vector3(), _gsd = new THREE.Vector3(), _gsq = new THREE.Quaternion();
@@ -6475,6 +6478,7 @@ function updateHover() {
   if (!hoverDirty || !home) return;
   hoverDirty = false;
   const n = fly || intro || spotHot || (fp && (fp.cut || x3.sit || !card.hidden || (fp.paused && !touchFP))) ? null : fp ? fpAimPick() : pick(pointer.lastEvent); // 锁放开（点画面继续）、上下梯子的过场里不留描边和名字
+  if (noHov()) { setHovered(null); hv.cand = null; hv.ring = -1e9; hv.on = false; fpHud.classList.remove('aim'); aim = fp ? n : aim; return; }
   if (fp) fpHover(n); else setHovered(n);
 }
 const aimAt = { pos: new THREE.Vector3(), q: new THREE.Quaternion(), t: -1e9, n: null, hd: Infinity };
