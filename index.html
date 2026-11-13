@@ -918,6 +918,8 @@ float wH(vec2 p) { vec2 q = p + 3.0 * vec2(wNoise(p * 0.06 + uT * 0.03), wNoise(
   [D2.lamp[0], D2.lamp[2]] = on(86, -18); // 傍晚的烟：踪迹往前、石堆再过去，离踪迹 18m 的林子里
   { const [cx, cz] = on(D2_SPOTS.d2_cairn.s, D2_SPOTS.d2_cairn.off), dx = D2.lamp[0] - cx, dz = D2.lamp[2] - cz, L = Math.hypot(dx, dz), ux = dx / L, uz = dz / L; // 石堆望烟的视线：一条越远越宽的楔形不种树（11-03 评审④ #1：石堆边一棵云杉把烟整个挡住）
     for (let d = 2; d < L - 8; d += 1.5) for (let o = -0.2 * d; o <= 0.2 * d; o += 1.5) trailClear.push([cx + ux * d - uz * o, cz + uz * d + ux * o]); }
+  { const [fx, fz] = END_SHOT.to, dx = D2.lamp[0] - fx, dz = D2.lamp[2] - fz, L = Math.hypot(dx, dz), ux = dx / L, uz = dz / L; // 结局画面（留下）里那盏灯：从结局机位到烟根开一条窄走廊不种树，不然近处一棵云杉正好挡住（美术评审 W1）；宽 3m + 随远增宽，竖屏机位偏右约 5°，走廊多留一点
+    for (let d = 3; d < L - 4; d += 1.5) for (let o = -(3 + 0.07 * d); o <= 3 + 0.07 * d; o += 2) trailClear.push([fx + ux * d - uz * o, fz + uz * d + ux * o]); }
   CROWN_KEEP.push([...on(D2_SPOTS.d2_blaze.s, D2_SPOTS.d2_blaze.off), MARK_TREES.blaze[1] * MARK_R], [...on(D3.s), MARK_TREES.spruce[1] * MARK_R]); // 两棵标记树先占位
   // 屋旁小溪（11-04 D 批，环境评审 #7/#11）：北边雾里的泉眼往南，在踪迹 D2_SCENE.brook 米处横过踪迹（踏石），过小屋东边、下游不远是水轮，再沿卵石路东侧 15–25m 流进湖西北角。
   // 中心线 1m 一点 [x, z, 沿线米数, 水面半宽, 挖深系数]：半宽 0.6–1.2m（过踪迹处 0.6、泉眼渐窄）；挖深 = 1，过踪迹处 0.25（踏得过去）、泉眼渐出、过踪迹 98m 后渐成 0（再往下只是贴在地面上的一条水，开场从天上看）
@@ -4716,7 +4718,15 @@ function ending(kind) { LOG && LOG.ev('end', `结局 ${kind}`); LOG && LOG.ev('d
 }
 // —— 结局画面（11-10，动机评审 #5 #6、美术评审「结局只有黑底文字」）：回到自家，天刚黑，从院子西南角的树影里看小屋：门廊灯亮着，东北偏东的树梢上那柱烟还在升；「留下」时书记员站在门廊东头望着它。
 // 镜头用 fly 慢慢推近，结局文字一段一页压在画面下三分之一，点「继续」翻页，放完才出「遗稿齐了」。机位照宣传图 b-night 那个角度（用户认可过），时刻 18.3：树是黑剪影（日落时树发棕，不用），烟还衬得出来（入夜就看不见了）
-const END_SHOT = { smoke: [4.5, 0.65, 1.6], hour: 18.3, dur: 30, from: [-7.5, 1.6, 10.5], to: [-6.6, 1.6, 9.3], wide: { fov: 50, tgt: [2, 1.9, -2] }, tall: { fov: 62, tgt: [3.1, 0.4, -1.2] }, woman: [1.5, 2.9] }; // from：右边一棵树挡着半个画面，推到 to 让开，露出门廊东头的人和右上的烟；再往后退或往东挪就钻进树冠里全黑。tall = 竖屏：视野窄，往右偏 5° 才同时装下门和烟；两种都压低视线，把小屋抬到画面中上，下三分之一留给字
+const END_SHOT = { smoke: [4.5, 0.65, 1.6], hour: 18.3, dur: 30, from: [-7.5, 1.6, 10.5], to: [-6.6, 1.6, 9.3], wide: { fov: 50, tgt: [2, 1.9, -2] }, tall: { fov: 62, tgt: [3.1, 0.4, -1.2] }, woman: [2.3, 3.0], lightSize: 5 }; // from：右边一棵树挡着半个画面，推到 to 让开，露出门廊东头的人和右上的烟；再往后退或往东挪就钻进树冠里全黑。tall = 竖屏：视野窄，往右偏 5° 才同时装下门和烟；两种都压低视线，把小屋抬到画面中上，下三分之一留给字
+function endLight() { // 烟根下的窗光：只在「留下」结局画面里出现（别的天那边没有人家）；一块暖色光晕，不是点光源（91m 外照不到任何东西），受雾、被树挡
+  if (!d2.lamp) { setTimeout(endLight, 300); return; }
+  const L = d2.lamp.position, c = document.createElement('canvas'); c.width = c.height = 64; const x = c.getContext('2d'), g = x.createRadialGradient(32, 32, 0, 32, 32, 32);
+  g.addColorStop(0, 'rgba(255,236,190,1)'); g.addColorStop(0.18, 'rgba(255,200,120,0.85)'); g.addColorStop(0.5, 'rgba(255,150,60,0.22)'); g.addColorStop(1, 'rgba(255,140,50,0)'); x.fillStyle = g; x.fillRect(0, 0, 64, 64);
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(c), transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false, toneMapped: false }));
+  m.scale.setScalar(END_SHOT.lightSize); m.position.set(L.x, L.y - 4, L.z); m.renderOrder = 5; m.raycast = () => {}; m.userData.noHL = true;
+  m.onBeforeRender = (r, sc, cam) => { m.quaternion.copy(cam.quaternion); }; scene.add(m);
+}
 function endShotStart(kind) {
   const E = { ...END_SHOT, ...(innerHeight > innerWidth ? END_SHOT.tall : END_SHOT.wide) }, V = (a) => new THREE.Vector3(...a), d = $('dlg');
   intro = null; spin = false; controls.enabled = false; document.body.classList.add('endshot');
@@ -4728,6 +4738,7 @@ function endShotStart(kind) {
     worldSetup(); // 结局画面一开场就摆好
     placeMan(w, ...E.woman, Math.atan2(D2.lamp[0] - E.woman[0], D2.lamp[2] - E.woman[1])); w.root.position.y = floorAt(...E.woman); w.roam = w.next = 1e9; }; // 脸朝那柱烟
   if (kind === 'stay' || kind === 'page') stand();
+  if (kind === 'stay' || kind === 'page') endLight(); // 「林子深处多了一盏灯」：烟根下那间屋的窗里亮着
   const smoke = () => { const u = d2.lamp?.userData.plume; if (!u) { setTimeout(smoke, 300); return; } u.uK.value.set(...END_SHOT.smoke); }; smoke(); // 那柱烟加浓压暗、不放大：远看的那柱平时 uK (2.2, 1)，黄昏天上偏淡；颜色还是去了饱和的灰，不会变褐、变红
   const pages = ({ stay: ['endStay'], page: ['endStay', 'endPage'], hidden: ['endBack', 'endHidden'] }[kind] || ['endBack']).flatMap((k) => { const t = GAME_TEXT[k], zh = t[2].split('\n\n'); return t[1].split('\n\n').map((p, i) => [i ? ['', ''] : END_TITLE[k], [p, zh[i] || ''], k]); });
   const next = (i) => {

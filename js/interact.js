@@ -299,7 +299,7 @@ function updateHalos(GONE) { // 每帧，innerCull 之后：GONE = innerCull 藏
 }
 // —— 铸铁锅、水壶、炉身（r2 美术 #6）：原来近黑 + 粗糙 1，灯下是一块纯黑剪影；养过的铸铁有一层油亮，灯下有一道暗银色的高光 ——
 // 材质在别的图层（斧头、猎枪、水桶、屋顶泛水）也用着：只给这几个图层换克隆
-const IRON = { layers: ['take_skillet', 'take_pot', 'wall_pot_rail', 'stove_kettle', 'stove_kettle_lid', 'stove_kettle_bail', 'stove_iron_body', 'stove_door'],
+const IRON = { layers: ['take_skillet_1', 'take_skillet_2', 'take_pot', 'wall_pot_rail', 'stove_kettle', 'stove_kettle_lid', 'stove_kettle_bail', 'stove_iron_body', 'stove_door'],
   pot: /^(wall_cast_iron|stove_kettle_steel_grey3)/, stove: /^rusty_metal_sheet/ };
 function setupIron() {
   const done = new Map();
