@@ -3368,7 +3368,8 @@ if (AUDIT) { const sT = new Map(), sL = new Map(); let pt = 0, sQ = ''; setInter
   for (const [n, t] of toggles) { if (done.has(t)) continue; done.add(t); const on = !!t.on, was = sT.get(t); if (was !== undefined && was !== on && !rebase) auditState('toggle', n, on, t); sT.set(t, on); }
   if (!lv) sL.clear(); else for (const [n, g] of layers) { const was = sL.get(n); if (was !== undefined && was !== g.visible && !rebase) auditState('layer', n, g.visible); sL.set(n, g.visible); }
   // 屏幕上的任务行换成「书记员在书桌前写」的那一刻，她真坐在那儿（读的是画面上的字，不管谁调的）
-  const qt = $('quest').textContent; if (qt !== sQ) { sQ = qt; if (!rebase && qt.startsWith(QUEST.night[0])) { const w = clerkHere(); worldAudit('fact', QUEST.night[0], { ok: !!w && w.seat === 'loft_chair' && w.mode === 'sit', seat: w && w.seat, mode: w && w.mode }); } }
+  const qt = $('quest').textContent; if (qt !== sQ) { sQ = qt; if (!rebase && qt.startsWith(QUEST.dusk2[0])) worldAudit('fact', QUEST.dusk2[0], { ok: smokeUp(), hour: +sky.hour.toFixed(2) }); // 任务行叫人看树梢时，烟真升起来了（11-13 评审 F1）
+    if (!rebase && qt.startsWith(QUEST.night[0])) { const w = clerkHere(); worldAudit('fact', QUEST.night[0], { ok: !!w && w.seat === 'loft_chair' && w.mode === 'sit', seat: w && w.seat, mode: w && w.mode }); } }
   const pv = WORLD.pv ||= new THREE.PerspectiveCamera(); pv.copy(camera, false); pv.userData.body = fp ? fp.p.root.position.clone() : null;
   pt = performance.now(); }, 100); }
 window.__auditText = () => { const v = (AUDIT || []).filter((a) => !a.ok); return `audit: ${v.length} violations (${(AUDIT || []).length} events)` + v.map((a) => `\n  ✗ ${a.kind} d${a.day} t${a.t} "${String(a.text).slice(0, 70)}" ${JSON.stringify(Object.fromEntries(Object.entries(a).filter(([k]) => !['kind', 'text', 't', 'day', 'ok'].includes(k))))}`).join(''); };
