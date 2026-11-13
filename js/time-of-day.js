@@ -112,7 +112,7 @@ function applySky() {
 // 灯、炉火是 PointLight（直接光）、灯泡火苗是自发光，都不受影响。外面有自己 onBeforeCompile 的材质（院子、路、雪板）跳过。
 const indoorU = { uIndoor: { value: 1 }, uFlashIn: { value: 1 }, uCamIn: { value: 0 }, uFill: { value: new THREE.Color() }, uFillR: { value: new Float32Array(6) } }; // uFillR：每间屋暗部冷灰底的份量（interact.js 按点着的灯和 ROOM_V 算）
 // 屋里的白平衡（11-13 美术 #4）：木头材质按名字挑出来，屋内那一面往亮度靠；夜里暗部垫冷灰。颜色是线性值
-const WOOD = /oak|walnut|plank|wood|log_wall|log_end|log_slab|roof_deck|roof_ridge|door_board|headboard|firewood|partition|doghouse_frame/, WOOD_DESAT = 0.5;
+const WOOD = /oak|walnut|plank|wood|log_wall|log_end|log_slab|roof_deck|roof_ridge|door_board|headboard|firewood|partition|doghouse_frame/, WOOD_DESAT = 0.35;
 const FILL_COLOR = new THREE.Color(0.08, 0.09, 0.12);
 // 屋内灯、炉火是不投影的 PointLight，原来穿墙照亮屋外的院子、路、外墙（夜里地上一圈暖光）。改 three 的着色器块，对所有受光材质：
 // 光源在墙内、片元在墙外时，只有从大门洞（南墙 z=1.8、x ±0.45、高 2.1 以下）穿出去、且门开着才算数。小屋没有窗（射线扫过四面墙，只有原木缝）。
