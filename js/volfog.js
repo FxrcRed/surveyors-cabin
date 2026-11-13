@@ -26,7 +26,7 @@ const U = {
   uD: { value: 0 }, uW: { value: 0 }, uBase: { value: 0 }, uFall: { value: 0.11 }, uTop: { value: 22 }, uMax: { value: 100 }, uG: { value: 0.72 }, uT: { value: 0 },
   tWater: { value: new THREE.DataTexture(new Uint8Array(4), 1, 1) }, uWO: { value: new THREE.Vector2() }, uWS: { value: new THREE.Vector2(1, 1) },
   uBoxMin: { value: new THREE.Vector3(1e9, 1e9, 1e9) }, uBoxMax: { value: new THREE.Vector3(-1e9, -1e9, -1e9) },
-};
+}; volfog.U = U; // 调试 / 无头测试读 uWO
 const FS_VERT = 'varying vec2 vUv; void main(){ vUv = position.xy * 0.5 + 0.5; gl_Position = vec4(position.xy, 1.0, 1.0); }';
 const FOG_FRAG = `precision highp float; precision highp sampler3D;
 uniform sampler2D tDepth, tSun, tWater; uniform sampler3D tNoise; uniform mat4 uInvP, uCamW, uSunVP; uniform vec3 uCam, uSunDir, uSunC, uAmb, uBoxMin, uBoxMax; uniform vec2 uWO, uWS; uniform float uD, uW, uBase, uFall, uTop, uMax, uG, uT; varying vec2 vUv;
@@ -100,7 +100,7 @@ function build() {
 }
 // 水面遮罩：湖和河的网格从正上方画一张白色俯视图（2m 一格，带 mipmap），雾按它在水面上放晨雾。找不到水就重试几次（开了没水的场景不会白画）
 function buildWater() {
-  const lake = scene.getObjectByName('lake'), river = scene.getObjectByName('river'); if (!lake || !river || ++waterTry > 5) return;
+  const lake = scene.getObjectByName('lake'), river = scene.getObjectByName('river'); if (++waterTry > 5 || !lake || !river) return;
   const box = new THREE.Box3().setFromObject(lake).union(new THREE.Box3().setFromObject(river)).expandByScalar(30), sx = box.max.x - box.min.x, sz = box.max.z - box.min.z, cx = (box.min.x + box.max.x) / 2, cz = (box.min.z + box.max.z) / 2;
   const W = Math.min(2048, Math.ceil(sx / 2)), H = Math.min(2048, Math.ceil(sz / 2)), WL = FOG_LAYER + 1;
   waterRT = new THREE.WebGLRenderTarget(W, H, { generateMipmaps: true, minFilter: THREE.LinearMipmapLinearFilter, magFilter: THREE.LinearFilter, depthBuffer: false });
@@ -112,6 +112,7 @@ function buildWater() {
   scene.overrideMaterial.dispose(); scene.overrideMaterial = null; scene.background = bg; scene.fog = fog; renderer.shadowMap.enabled = sm; renderer.setClearColor(cc, ca);
   U.tWater.value = waterRT.texture; U.uWO.value.set(box.min.x, box.max.z); U.uWS.value.set(1 / sx, 1 / sz);
 }
+export function volShift(dx, dz) { if (waterRT) { U.uWO.value.x += dx; U.uWO.value.y += dz; } volfog.sunDirty = true; } // 第 3 天世界平移（shiftWorld）：湖河跟着挪了，水面遮罩的原点同挪；树也挪了，太阳深度图要重画
 const blit = (mat, target) => { fsTri.material = mat; renderer.setRenderTarget(target); renderer.render(fsScene, fsCam); };
 const _c = new THREE.Vector3(), _sz = new THREE.Vector2(), shC = new THREE.Vector3(1e9, 0, 0); let shAt = -1e9;
 function fogShadow(now) { // 雾专用太阳深度图：只有树（主页面的树不投影，阴影贴图里没有它们，光束就穿不出树缝）；太阳转了、人走远了才重画，最多半秒一次
