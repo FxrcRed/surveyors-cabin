@@ -984,11 +984,47 @@ async function loadTree0(url, all) { // → [{ geometry, material }]，底部中
   const c = b.getCenter(new THREE.Vector3()), k = 1 / (b.max.y - b.min.y);
   parts.forEach((p) => { p.geometry.translate(-c.x, -b.min.y, -c.z).scale(k, k, k); if (!p.trunk && !all) { p.geometry.computeBoundingBox(); p.material.userData.crB.value = p.geometry.boundingBox.min.y; } }); // 树冠最低点（抬冠底用，见 crownMaterial）
   parts.radius = Math.max(b.max.x - b.min.x, b.max.z - b.min.z) / 2 * k; // 树冠半径 / 树高，避开小屋时用
+  if (!all) { const tk = parts.find((p) => p.trunk), r = tk && !/dead/.test(url) && roundTrunk(tk.geometry); if (r) tk.geometry.userData.round = r.geo; // 近处换圆柱树干（nearTrunks）；枯树整棵是树皮，不换
+    for (const p of parts) if (!p.trunk) crownRim(p.geometry, r ? r.axes : undefined); }
   return parts;
+}
+// 近处树干换圆柱（11-13 美术，用户：近处树干别是多边形）：原树干是六棱柱（平面法线）。按原模型每一圈（同一高度的顶点）量圆心和外接半径，做 18 边、按圆算法线的圆柱，
+// 半径 ×1.04 把六棱柱整个包住——原树干照旧画（被盖在里面），实例矩阵、count 都不动。pines.glb 一个模型几棵树：按连通块分开，每块一根
+function roundTrunk(g) {
+  const P = g.attributes.position, id = new Map(), U = [], vid = new Int32Array(P.count);
+  for (let i = 0; i < P.count; i++) { const k = Math.round(P.getX(i) * 1e5) + ',' + Math.round(P.getY(i) * 1e5) + ',' + Math.round(P.getZ(i) * 1e5); if (!id.has(k)) { id.set(k, U.length / 3); U.push(P.getX(i), P.getY(i), P.getZ(i)); } vid[i] = id.get(k); }
+  const n = U.length / 3, par = Int32Array.from({ length: n }, (_, i) => i), f = (a) => { while (par[a] !== a) a = par[a] = par[par[a]]; return a; }, I = g.index && g.index.array, T = I ? I.length : P.count;
+  for (let t = 0; t < T; t += 3) { const a = f(vid[I ? I[t] : t]); par[f(vid[I ? I[t + 1] : t + 1])] = a; par[f(vid[I ? I[t + 2] : t + 2])] = a; }
+  const comp = new Map(); for (let i = 0; i < n; i++) { const r = f(i); (comp.get(r) || comp.set(r, []).get(r)).push(i); }
+  const S = 18, pos = [], nrm = [], idx = [], axes = [];
+  for (const vs of comp.values()) {
+    vs.sort((a, b) => U[a * 3 + 1] - U[b * 3 + 1]); const gap = (U[vs[vs.length - 1] * 3 + 1] - U[vs[0] * 3 + 1]) * 0.04, lv = [[vs[0]]]; // 一圈的顶点高度不齐（模型里有 ±2% 的错落）：按高度排好，断开超过 4% 才算下一圈
+    for (let k = 1; k < vs.length; k++) { if (U[vs[k] * 3 + 1] - U[vs[k - 1] * 3 + 1] > gap) lv.push([]); lv[lv.length - 1].push(vs[k]); }
+    const rings = lv.map((ids) => { let cx = 0, cz = 0, y = 0; for (const i of ids) { cx += U[i * 3]; y += U[i * 3 + 1]; cz += U[i * 3 + 2]; } cx /= ids.length; cz /= ids.length; y /= ids.length;
+      let r = 0; for (const i of ids) r = Math.max(r, Math.hypot(U[i * 3] - cx, U[i * 3 + 2] - cz)); return [y, cx, cz, r * 1.04]; });
+    if (rings.length < 2) continue;
+    axes.push([rings[0][1], rings[0][2]]);
+    rings.forEach(([y, cx, cz, r], k) => { const a = rings[Math.max(0, k - 1)], b = rings[Math.min(rings.length - 1, k + 1)], sl = -(b[3] - a[3]) / ((b[0] - a[0]) || 1), base = pos.length / 3;
+      for (let s = 0; s <= S; s++) { const t = s / S * Math.PI * 2, c = Math.cos(t), si = Math.sin(t), l = Math.hypot(1, sl); pos.push(cx + r * c, y, cz + r * si); nrm.push(c / l, sl / l, si / l);
+        if (k && s < S) { const p = base - (S + 1) + s, q = base + s; idx.push(p, q, p + 1, p + 1, q, q + 1); } } });
+  }
+  if (!idx.length) return null;
+  const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3)); geo.setAttribute('normal', new THREE.Float32BufferAttribute(nrm, 3)); geo.setIndex(idx); geo.computeBoundingSphere();
+  return { geo, axes };
+}
+// 树冠每个顶点：离（最近的）树干轴多远 ÷ 同一高度一带树冠最宽处（0 = 贴着树心，1 = 枝梢），着色器按它让里面暗、枝梢亮（crownMaterial）。轴默认在原点（模型按包围盒居中）
+function crownRim(g, axes = [[0, 0]]) {
+  if (g.attributes.aRim) return g; g.userData.axes = axes;
+  const P = g.attributes.position, B = 40, mx = axes.map(() => new Float32Array(B)), bin = (y) => Math.min(B - 1, Math.max(0, Math.floor(y * B))), near = new Int8Array(P.count), d = new Float32Array(P.count);
+  for (let i = 0; i < P.count; i++) { let best = 1e9, k = 0; axes.forEach(([x, z], j) => { const e = Math.hypot(P.getX(i) - x, P.getZ(i) - z); if (e < best) { best = e; k = j; } }); near[i] = k; d[i] = best; const m = mx[k], b = bin(P.getY(i)); m[b] = Math.max(m[b], best); }
+  const sm = mx.map((m) => m.map((v, i) => Math.max(v, m[i - 1] || 0, m[i + 1] || 0)));
+  const a = new Float32Array(P.count); for (let i = 0; i < P.count; i++) a[i] = Math.min(1, d[i] / Math.max(sm[near[i]][bin(P.getY(i))], 1e-4));
+  g.setAttribute('aRim', new THREE.BufferAttribute(a, 1)); return g;
 }
 
 // 树冠材质：底色是每棵树的实例颜色（色卡），再按树上的位置分块加色差——
 // 下层偏暗、梢头偏亮，一些块偏枯金、一些偏深绿，同一棵树上就有几种颜色（顶点位置已归一化成高 1）
+const CR_NEAR = lite ? 20 : 40; // 树冠针叶纹、枝团画到多远（m）：手机像素着色吃紧，减半
 const BUSH_B = { value: new THREE.Color() }; // 灌木底面的补光（见 crownMaterial），渲染循环里 = 半球光颜色 × 强度 × 0.45
 function crownMaterial(opts = {}, bush = false) { // bush：灌木、草（loadPlant）
   // 色差在顶点里算好再插值（逐像素算的话远处一棵树只占几个像素、里面挤好几块颜色，相机一动就闪）
@@ -999,18 +1035,38 @@ function crownMaterial(opts = {}, bush = false) { // bush：灌木、草（loadP
         float seed = fract(dot(instanceMatrix[3].xz, vec2(0.137, 0.071))) * 10.0;
         float h = fract(sin(dot(floor(position * vec3(7.0, 6.0, 7.0)), vec3(12.9898, 78.233, 37.719)) + seed) * 43758.5453);
         vTreeK = vec3(0.72 + 0.5 * clamp(position.y, 0.0, 1.0), smoothstep(0.62, 1.0, h) * 0.55, smoothstep(0.38, 0.0, h) * 0.5);
-        vSnowK = ` + (bush ? '0.45 * smoothstep(-0.1, 0.7, normalize(objectNormal).y) + 0.55 * h;' : '0.85 * smoothstep(0.05, 0.55, normalize(objectNormal).y) + 0.15 * h;') + (bush ? '' : `
+        vSnowK = ` + (bush ? '0.45 * smoothstep(-0.1, 0.7, normalize(objectNormal).y) + 0.55 * h;' : '0.85 * smoothstep(0.05, 0.55, normalize(objectNormal).y) + 0.15 * h;') + (bush ? `
+        vCrS = seed; vCrL = transformed * vec3(length(instanceMatrix[0].xyz), length(instanceMatrix[1].xyz), length(instanceMatrix[2].xyz));` : `
         { float th = length(instanceMatrix[1].xyz), b1 = max(uCrB, 3.0 * smoothstep(5.0, 11.0, th) / max(th, 1.0)); // 11-10 art #7：密林里的大云杉下枝见不到光早枯落，活冠底在 3m 上下；原来 10–14m 的树最低一层冠在 1.2–1.7m，第一人称眼高处一顶顶「蘑菇伞」挡在脸前
-          transformed.y = 1.0 - (1.0 - transformed.y) * (1.0 - b1) / (1.0 - uCrB); }`)); // 以树顶为锚把树冠往上压（不动树顶和树干）；5m 以下的幼树枝条照旧到地
+          transformed.y = 1.0 - (1.0 - transformed.y) * (1.0 - b1) / (1.0 - uCrB); }
+        vRim = aRim; vDn = normalize(objectNormal).y; vCrS = seed; // 11-13 美术 #1/#5：离树心远近、朝下的面、本地坐标（米）给片元算明暗和针叶纹
+        vCrL = transformed * vec3(length(instanceMatrix[0].xyz), length(instanceMatrix[1].xyz), length(instanceMatrix[2].xyz));`)); // 以树顶为锚把树冠往上压（不动树顶和树干）；5m 以下的幼树枝条照旧到地
     if (!bush) sh.uniforms.uCrB = crB;
     sh.uniforms.uSnow = cover.uSnow;
-    sh.vertexShader = sh.vertexShader.replace('varying vec3 vTreeK;', 'varying vec3 vTreeK; varying float vSnowK;');
-    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 vTreeK; varying float vSnowK; uniform float uSnow;')
+    const crV = bush ? ' varying float vCrS; varying vec3 vCrL;' : ' varying float vRim; varying float vDn; varying float vCrS; varying vec3 vCrL;';
+    sh.vertexShader = sh.vertexShader.replace('varying vec3 vTreeK;', 'varying vec3 vTreeK; varying float vSnowK;' + crV + (bush ? '' : ' attribute float aRim;'));
+    sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nvarying vec3 vTreeK; varying float vSnowK; uniform float uSnow;' + crV + (`
+        float crH(vec2 p) { return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453); }
+        float crN(vec2 p) { vec2 i = floor(p), f = fract(p); f = f * f * (3.0 - 2.0 * f); return mix(mix(crH(i), crH(i + vec2(1.0, 0.0)), f.x), mix(crH(i + vec2(0.0, 1.0)), crH(i + 1.0), f.x), f.y); }`))
       .replace('#include <color_fragment>', `#include <color_fragment>
         diffuseColor.rgb *= vTreeK.x;                                                 // 下暗上亮
         diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.26, 0.21, 0.08), vTreeK.y);  // 枯金块
-        diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.03, 0.045, 0.03), vTreeK.z); // 深绿块
-        diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.82, 0.85, 0.9), smoothstep(0.0, 0.25, uSnow * ` + (bush ? '0.55' : '1.4') + ` - (1.0 - vSnowK)) * ` + (bush ? '0.8' : '0.9') + (bush ? '' : ' * smoothstep(0.08, 0.3, vSnowK) * ' + (opts.flatShading ? '0.45' : '1.0')) + `); // 积雪（树冠：只积在朝上的面，侧面、底面露出针叶色，11-11 r2 art #4；远处的两节圆锥面朝向一样，按近树侧看的平均覆盖率压到 0.45）`);
+        diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.03, 0.045, 0.03), vTreeK.z); // 深绿块` + (bush ? '' : `
+        { float an = atan(vCrL.z, vCrL.x) * 40.0, aw = fwidth(an), dv = -vViewPosition.z, tex = 0.0; // 11-13 美术 #1：树冠里面暗、枝梢亮 ±20%，每层「帽子」朝下的面压暗一道；近处（40m 内）加枝团和针叶纹
+          if (dv < ${CR_NEAR}.0) { float rr = length(vCrL.xz), cl = crN(vec2(vCrL.x + vCrL.y * 0.5, vCrL.z - vCrL.y * 0.3) * 2.6 + vCrS * 7.0);
+            float st = sin(an + crN(vec2(rr * 4.0, vCrL.y * 3.0) + vCrS * 5.0) * 9.0) * clamp(1.4 - aw * 0.8, 0.0, 1.0); // 从树心往枝梢放射的细条（40 条一圈，首尾接得上）；细到一个像素以下就淡掉，不闪
+            tex = ((cl - 0.5) * 0.6 + st * 0.16) * (1.0 - smoothstep(${(CR_NEAR * 0.6).toFixed(1)}, ${CR_NEAR}.0, dv)); }
+          diffuseColor.rgb *= mix(0.78, 1.22, smoothstep(0.3, 0.95, vRim)) * (1.0 - 0.4 * smoothstep(-0.1, -0.6, vDn)) * (1.0 + tex); }`) + `
+        float crS = smoothstep(0.0, 0.25, uSnow * ` + (bush ? '0.55' : '1.4') + ` - (1.0 - vSnowK)) * ` + (bush ? '0.8' : '0.9') + (bush ? '' : ' * smoothstep(0.08, 0.3, vSnowK) * ' + (opts.flatShading ? '0.45' : '1.0')) + `; // 积雪（树冠：只积在朝上的面，侧面、底面露出针叶色，11-11 r2 art #4；远处的两节圆锥面朝向一样，按近树侧看的平均覆盖率压到 0.45）
+` + (bush ? `
+        { float an = atan(vCrL.z, vCrL.x) * 23.0, sw = sin(an + crN(vec2(length(vCrL.xz) * 3.0, vCrL.y * 2.5) + vCrS * 5.0) * 7.0); // 11-13 美术 #6：雪盖着的灌木露出一道道竖向深色细枝（从丛顶往下放射，23 道一圈），不像一块灰石头
+          crS *= 1.0 - 0.7 * smoothstep(0.55, 0.9, sw) * smoothstep(0.35, 0.7, crN(vec2(an * 0.7, vCrL.y * 6.0 + vCrS * 3.0))) * clamp(1.5 - fwidth(an) * 0.7, 0.0, 1.0); } // 细条再按噪声断成一截截（不然像西瓜皮）` : '') + `
+        diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.82, 0.85, 0.9), crS);`)
+      .replace('#include <lights_lambert_fragment>', `#if NUM_HEMI_LIGHTS > 0 && NUM_DIR_LIGHTS > 0
+        { vec3 sk = hemisphereLights[0].skyColor; float sl = dot(sk, vec3(0.2126, 0.7152, 0.0722)) + 1e-4, su = dot(directionalLights[0].color, vec3(0.2126, 0.7152, 0.0722)) * clamp(dot(normal, directionalLights[0].direction), 0.0, 1.0);
+          diffuseColor.rgb *= mix(vec3(1.0), clamp(mix(vec3(1.0), sk / sl, 2.5), 0.0, 2.0), crS * 0.9 * sl / (sl + su)); } // 11-13 美术 #3：雪背光的地方掺天光色（半球光的天色，色度放大 2.5 倍），太阳照到的留白；天色灰时不变，和地面的雪一致
+        #endif
+        #include <lights_lambert_fragment>`);
     if (bush) { // 11-04 复测 ENV7：灌木一层层的底面朝下、只吃到地面反光，层间一道道黑缝像几张扁饼摞着 → 朝下的面补一份地面（雪）反上来的天光
       // 补光 = 半球光的天色 × 强度（BUSH_B，渲染循环里跟天色更新；11-04 r3 #1：原来是常数，黄昏、夜里每丛亮出白条）
       sh.uniforms.uBushB = BUSH_B;
@@ -1056,6 +1112,7 @@ function barkMaterial() {
       { vec2 w = pow(abs(vBarkN.xz) + 1e-3, vec2(4.0)); w /= w.x + w.y;
         vec3 bk = texture2D(uBark, vec2(vBarkP.z * 1.3, vBarkP.y * 0.9)).rgb * w.x + texture2D(uBark, vec2(vBarkP.x * 1.3, vBarkP.y * 0.9)).rgb * w.y; // 贴图里树皮纹沿 v 走
         diffuseColor.rgb = bk * vec3(2.1, 1.95, 1.8); // 树是 Lambert（不吃环境光），同一张贴图要提亮才看得出树皮
+        diffuseColor.rgb *= mix(0.72, 1.0, smoothstep(0.05, 0.9, vBarkH)) * mix(1.0, 0.7, smoothstep(2.5, 7.0, vBarkH)); // 11-13 美术 #1：树干竖向明暗（根部贴地一段、树冠底下压暗）
         diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.86, 0.88, 0.92), uSnow * max(smoothstep(0.55, 0.3, vBarkH + 0.1 * sin(vBarkP.x * 9.0 + vBarkP.z * 7.0)), smoothstep(0.3, 0.7, vBarkN.y + 0.15 * sin(vBarkP.x * 11.0 + vBarkP.z * 13.0)))); }`); // 树根 0.2m 埋在地下，露出的一截里 0.1–0.35m 是雪；朝上的面也积雪（11-04 r3 #5：枯立木的枝杈原来不积雪，雪雾里整棵近黑）
     fogLayer(sh);
   };
@@ -1114,7 +1171,7 @@ function rockGeo(seed, detail = 1) { // 打乱顶点的二十面体（同湖岸�
 function simpleConifer(color) { // 远处用：两节六棱圆锥，24 个三角面
   const g = mergeGeometries([new THREE.ConeGeometry(0.26, 0.62, 6).translate(0, 0.39, 0),
     new THREE.ConeGeometry(0.18, 0.5, 6).translate(0, 0.75, 0)]);
-  return [{ geometry: g, material: crownMaterial({ color, flatShading: true }) }];
+  return [{ geometry: crownRim(g), material: crownMaterial({ color, flatShading: true }) }];
 }
 
 // 减面细模（2026-10-31，用户：开场看得到的不要两节圆锥）：树冠用 SimplifyModifier 减到约 1/4 面（云杉 1613 → ~400），轮廓同细模；离开场镜头路线 130m 内的远树用它
@@ -1123,7 +1180,7 @@ function lodTree(parts, keep) {
     if (trunk) return { geometry, material, trunk };
     const g = new THREE.BufferGeometry(); g.setAttribute('position', (geometry.index ? geometry.toNonIndexed() : geometry).attributes.position.clone());
     const m = mergeVertices(g), lo = new SimplifyModifier().modify(m, Math.floor(m.attributes.position.count * (1 - keep))).toNonIndexed();
-    lo.computeVertexNormals(); return { geometry: lo, material, trunk };
+    lo.computeVertexNormals(); crownRim(lo, geometry.userData.axes); return { geometry: lo, material, trunk };
   });
   return out; // 不带 radius：同远处圆锥，彼此可交叠、不避让树冠
 }
@@ -1231,7 +1288,7 @@ async function chunkForest() {
   if (/[?&]nochunk\b/.test(location.search)) return; // 真机对比用
   const CELL = 90, keep = [], lodOf = new Map(), t0 = performance.now(), far = new Set(FAR_DETAIL), skip = new Set(NEAR_CONES), groups = new Map(); let nCh = 0, nSrc = 0;
   const lodGeo = (g, tri) => { if (!lodOf.has(g)) { const src = new THREE.BufferGeometry(); src.setAttribute('position', (g.index ? g.toNonIndexed() : g).attributes.position.clone());
-    const m = mergeVertices(src), lo = new SimplifyModifier().modify(m, Math.floor(m.attributes.position.count * (1 - Math.max(110 / tri, 0.08)))).toNonIndexed(); lo.computeVertexNormals(); lo.computeBoundingSphere(); lodOf.set(g, lo); } return lodOf.get(g); };
+    const m = mergeVertices(src), lo = new SimplifyModifier().modify(m, Math.floor(m.attributes.position.count * (1 - Math.max(110 / tri, 0.08)))).toNonIndexed(); lo.computeVertexNormals(); lo.computeBoundingSphere(); crownRim(lo, g.userData.axes); lodOf.set(g, lo); } return lodOf.get(g); };
   for (const o of scene.children.filter((q) => q.isInstancedMesh && q.name === 'forest' && !skip.has(q))) { // 远处细模（FAR_DETAIL）和屋子周围、步行走廊的细模都算
     const k = [o.geometry.uuid, o.material.uuid, far.has(o), !!o.instanceColor, o.visible, o.castShadow, o.receiveShadow, o.renderOrder, o.layers.mask, o.position.toArray(), o.customDepthMaterial?.uuid, o.customDistanceMaterial?.uuid].join('|');
     (groups.get(k) || groups.set(k, []).get(k)).push(o); nSrc++; }
@@ -1255,6 +1312,27 @@ function farLod() { // 每帧（渲染循环）：整格离镜头够远就换远
   const D = 14 * renderer.domElement.height / (2 * Math.tan(camera.fov * Math.PI / 360) * LOD_PX), cp = camera.position;
   for (const q of FAR_LOD) { const P = q.im.position, d = Math.hypot(q.c.x + P.x - cp.x, q.c.y + P.y - cp.y, q.c.z + P.z - cp.z) - q.r;
     if (q.isFar ? d < D - 10 : d > D + 10) { q.isFar = !q.isFar; q.im.geometry = q.isFar ? q.lo : q.hi; } }
+}
+// 近处树干（roundTrunk）：每种树干一个 InstancedMesh，装离相机最近的 N 棵（R 米内），人走出 2m 或过 0.5 秒才重排。读原树干组此刻的实例（walkCull 压紧过的也对），藏着的组不算
+const NEAR_T = { groups: [], x: 1e9, z: 0, t: 0, R: lite ? 18 : 30, N: lite ? 24 : 64 };
+function nearTrunkSetup() {
+  const by = new Map();
+  for (const o of scene.children) if (o.isInstancedMesh && o.name === 'forest' && o.geometry.userData.round) (by.get(o.geometry) || by.set(o.geometry, []).get(o.geometry)).push(o);
+  for (const [g, src] of by) { const im = new THREE.InstancedMesh(g.userData.round, src[0].material, NEAR_T.N); im.count = 0; im.name = 'nearTrunk'; im.frustumCulled = false; im.receiveShadow = src[0].receiveShadow; scene.add(im); NEAR_T.groups.push({ im, src }); }
+  window.__nearTrunk = { n: 0, S: NEAR_T, groups: NEAR_T.groups.length, tri: NEAR_T.groups.map((q) => q.im.geometry.index.count / 3) }; // 调试：现在装了几棵、每种圆柱几个三角面
+}
+function nearTrunks(now) {
+  const S = NEAR_T, cp = camera.position; if (!S.groups.length || (Math.hypot(cp.x - S.x, cp.z - S.z) < 2 && now - S.t < 500)) return;
+  S.x = cp.x; S.z = cp.z; S.t = now; const R2 = S.R * S.R; let tot = 0;
+  for (const { im, src } of S.groups) {
+    const c = [];
+    for (const o of src) { if (!o.visible) continue; const M = o.instanceMatrix.array, ox = o.position.x - cp.x, oz = o.position.z - cp.z;
+      for (let i = 0; i < o.count; i++) { const x = M[i * 16 + 12] + ox, z = M[i * 16 + 14] + oz, d = x * x + z * z; if (d < R2 && M[i * 16 + 5]) c.push(d, o, i); } }
+    const n = Math.min(S.N, c.length / 3), ord = [...Array(c.length / 3).keys()]; if (ord.length > n) ord.sort((a, b) => c[a * 3] - c[b * 3]);
+    for (let j = 0; j < n; j++) { const k = ord[j] * 3, o = c[k + 1], i = c[k + 2], A = im.instanceMatrix.array; A.set(o.instanceMatrix.array.subarray(i * 16, i * 16 + 16), j * 16); A[j * 16 + 12] += o.position.x; A[j * 16 + 13] += o.position.y; A[j * 16 + 14] += o.position.z; }
+    im.count = n; im.visible = n > 0; im.instanceMatrix.needsUpdate = true; tot += n;
+  }
+  window.__nearTrunk.n = tot;
 }
 let seeS = null; const FAR_DETAIL = [], NEAR_CONES = [], WALK_CULL = []; let farOn = null; // farOn：FAR_DETAIL 现在显示没有（null = 还没设过，加载后第一帧按当时状态设一次）
 function introSees(x, z) {
@@ -1771,6 +1849,7 @@ function fpShrubs(o) { // 灌木也是 InstancedMesh：和 fpTrees 一样按位�
 const STEEP = 0.5; // 坡度（m/m）超过这个走不上去（洼地的壁）
 function plantUnder(parts, pts, rand, hMin, hMax, sink, block, pal = BUSHES) { // 灌木/草：保持模型原有长宽比（只有 ±12% 的胖瘦），不拉高
   const tint = new THREE.Color(), m = new THREE.Matrix4(), q = new THREE.Quaternion(), s = new THREE.Vector3(), p = new THREE.Vector3(), up = new THREE.Vector3(0, 1, 0);
+  if (pal === BUSHES) { const t = parts.twig ||= bushTwigs(parts); parts = Object.assign([...parts, t], { radius: parts.radius }); } // 雪天露出雪面的细枝（bushTwigs），每种灌木一份
   const ims = parts.map(({ geometry, material }) => new THREE.InstancedMesh(geometry, material, pts.length)), asp = (parts.radius || 0.5) * 2; // 宽 / 高
   const sh = window.__shrub || (window.__shrub = { n: 0, tris: 0 }); sh.n += pts.length; sh.tris += pts.length * parts.reduce((t, { geometry: g }) => t + (g.index ? g.index.count : g.attributes.position.count) / 3, 0); // 调试：灌木实例数、总三角面
   (sh.xz ||= []).push(...pts.flat());
@@ -1780,9 +1859,30 @@ function plantUnder(parts, pts, rand, hMin, hMax, sink, block, pal = BUSHES) { /
     if (block && w * asp * 0.5 > 0.4) SHRUB_XZ.push(x, z, w * asp * 0.4);
     ims.forEach((im) => im.setMatrixAt(i, m));
     let u = rand(), c = pal.find(([, k]) => (u -= k) < 0) || pal[0];
-    tint.set(c[0]).multiplyScalar(0.9 + 0.2 * rand()); ims.forEach((im) => im.setColorAt(i, tint));
+    tint.set(c[0]).multiplyScalar(0.9 + 0.2 * rand()); ims.forEach((im, k) => !parts[k].twig && im.setColorAt(i, tint));
   });
   ims.forEach((im) => { im.computeBoundingSphere(); im.name = 'forest'; scene.add(im); OUTDOOR.push(im); });
+}
+// 11-13 美术 #6：雪天灌木被雪盖成一块块灰石头，认不出 → 每丛 10 根深色细枝（三棱、上细下粗、拐一道弯，一半带杈）从丛里伸出雪面 8–20%，读得出是灌木。
+// 只在积雪时出来（uSnow 0.15–0.5 从丛心长出来，没雪时缩成一点、不画），一丛 150 个三角面，算进 __shrub
+const TWIGS = []; // 灌木细枝的材质（每种灌木一个）
+function bushTwigs(parts) {
+  const R = rng(97), gs = [], stick = (a, b, r0, r1) => { const d = b.clone().sub(a), l = d.length(), g = new THREE.CylinderGeometry(r1, r0, l, 3, 1, true).translate(0, l / 2, 0);
+    g.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 1, 0), d.normalize())).translate(a.x, a.y, a.z); gs.push(g); };
+  const B = 12, prof = new Float32Array(B); // 灌木外形：每一高度最宽多少（模型高 1）
+  for (const { geometry: g } of parts) { const P = g.attributes.position; for (let i = 0; i < P.count; i++) { const b = Math.min(B - 1, Math.max(0, Math.floor(P.getY(i) * B))); prof[b] = Math.max(prof[b], Math.hypot(P.getX(i), P.getZ(i))); } }
+  const at = (t, rr, y) => new THREE.Vector3(Math.cos(t) * rr, y, Math.sin(t) * rr), rad = (y) => prof[Math.min(B - 1, Math.max(0, Math.floor(y * B)))];
+  for (let k = 0; k < 10; k++) { const t = (k + R() * 0.7) / 10 * Math.PI * 2, y = 0.5 + R() * 0.42, s = rad(y), out = 0.08 + R() * 0.12; // 枝梢在外形面上高 y 处，往外、往上再伸出 out
+    const a = at(t, s * 0.2, y * 0.5), m = at(t + (R() - 0.5) * 0.3, s * 0.75, y * 0.92), b = at(t + (R() - 0.5) * 0.4, s + out * 0.7, y + out); // 丛里一段、拐一下再伸出雪面一段
+    stick(a, m, 0.011, 0.006); stick(m, b, 0.007, 0.0025);
+    if (k % 2 === 0) { const t3 = t + (R() < 0.5 ? -0.35 : 0.35); stick(m, at(t3, s + out * 0.4, y + out * 0.6), 0.004, 0.001); } } // 一半带杈
+  const geometry = mergeGeometries(gs); geometry.deleteAttribute('uv'); geometry.computeBoundingBox();
+  const material = new THREE.MeshLambertMaterial({ color: 0x3e332a }); TWIGS.push(material); // 没雪时整组不画（渲染循环里按 uSnow 开关 material.visible；不动网格的 visible，那个归 walkCull 管）
+  material.onBeforeCompile = (sh) => { sh.uniforms.uSnow = cover.uSnow;
+    sh.vertexShader = 'uniform float uSnow;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n      transformed = mix(vec3(0.0, 0.5, 0.0), transformed, smoothstep(0.15, 0.5, uSnow));');
+    fogLayer(sh); };
+  material.customProgramCacheKey = () => 'twig';
+  return { geometry, material, twig: true };
 }
 function underOk(x, z, pathD) { // 灌木/草不压路、踪迹、看灯的视线、河湖、两间屋的空地、洼地
   return !nearAny(pathClear, x, z, pathD) && !nearAny(trailClear, x, z, 2.2) && !nearAny(WATER.river, x, z, 4)
@@ -2049,7 +2149,7 @@ async function plantForest(center, y) {
     plant(pine, P, r5, 3.5, 9, y, true); plant([...dead], D, r5, 3, 6, y, true); /* 枯立木没有树冠：拷一份不带 radius 的，不和旁边的树冠互相避让（原来走廊 45 棵大多被缩成 0） */ plant(lodP, Y, r5, 0.9, 2.1, y, true); window.__plant5 = [P.length, D.length, Y.length]; } // 调试
   await plantEdgeShrubs(); // 11-12：第 2 天踪迹两侧、第 1 天开场沿路的灌木加密（成丛）；放在 brookClear 前，溪里的会一起清掉
   brookClear();
-  await chunkForest();
+  await chunkForest(); nearTrunkSetup();
   for (const o of scene.children) if (o.isInstancedMesh && /^(forest|floor)$/.test(o.name) && !FAR_DETAIL.includes(o) && !NEAR_CONES.includes(o)) WALK_CULL.push(o); // 第一人称在雾里时按距离藏（见渲染循环）
   window.cabin.forest = { FAR_DETAIL, NEAR_CONES, WALK_CULL }; // 调试
 }
@@ -6924,7 +7024,7 @@ renderer.setAnimationLoop(() => {
   if (FAR_DETAIL.length && sceneReady) { // 远处细模：开场或走远时才画；第一人称在雾里（第 2/3 天）不画——雾 26m 就到底，原来走出 45m 后白画 200 多万面（11-04 环境评审 #2）。原来按 FAR_DETAIL[0].visible 比较、加载途中就开始切，后加进来的几组状态对不上（第 2/3 天加载后两组都藏着），改成加载完才切、记 farOn
     const fog = !!fp && scene.fog.far < 60, v = !!intro || (!fog && Math.hypot(camera.position.x, camera.position.z) > 45);
     if (farOn !== v) { farOn = v; for (const o of FAR_DETAIL) o.visible = v; for (const o of NEAR_CONES) o.visible = !v; shadowDirty = true; }
-    farLod(); walkCull(fog); }
+    farLod(); walkCull(fog); nearTrunks(now); }
   if (intro) updateIntro(now);
   else if (fly) {
     // 按真实时间飞（原来每帧固定 +0.025，高刷屏 0.3 秒就到）；smooth = 慢起慢停，否则先快后慢
@@ -6972,7 +7072,7 @@ renderer.setAnimationLoop(() => {
   mmTick(dt); // 迷雾小地图
   inspectTick(dt); // 书、纸飞到眼前 / 飞回去（js/props3d.js）
   spotsTick(dt); // 地板光点
-  BUSH_B.value.copy(hemi.color).multiplyScalar(hemi.intensity * 0.45);
+  BUSH_B.value.copy(hemi.color).multiplyScalar(hemi.intensity * 0.45); if (sceneReady) for (const m of TWIGS) m.visible = cover.uSnow.value > 0.15; // 灌木细枝没雪不画；加载页盖着时照常可见，预热时一起编译
   if (game.day >= 2) updateDay2(dt); // 雾、走远了绕回门口、傍晚的灯 // 出屋飞行被打断/结束：撤掉黑幕
   fogCullHouse(); // 要在 updateDay2 之后：天气每帧先把雾设回自己的远端（125m），第一人称的 26m 是 updateDay2 里才设的
   // 屋里离东西很近，用最小 near；出屋飞行中 inside 已是 null，但相机还在屋里/门口（原来按离地高度算 near，阁楼约 0.65m，把近处的墙和家具切开）
