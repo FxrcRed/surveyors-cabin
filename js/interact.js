@@ -292,8 +292,8 @@ function updateHalos(GONE) { // 每帧，innerCull 之后：GONE = innerCull 藏
     const s = held ? h.size * 0.4 : h.size;
     sp.position.copy(_hv); sp.scale.setScalar(s);
     sp.layers.set(held ? HELD : 0);
-    sp.material.opacity = h.vis * h.a * k * (h.out ? day * fogK : 1) * (held ? 1 : sstep(s * 0.5, s * 2, d)) * (1 - sstep(f.near, f.far, d)) * (h.all ? 1 : sstep(-0.05, 0.25, -_hc.y / d)); // 走到跟前淡掉（人在光里看不出一圈）；远处跟着雾淡掉
-    sp.visible = sp.material.opacity > 0.003;
+    sp.material.opacity = h.vis * h.a * k * (h.out ? day * fogK : 1) * (held ? 1 : sstep(s * 0.5, s * 2, d)) * (1 - sstep(f.near, h.out ? f.far * 1.8 : f.far, d)) * (h.all ? 1 : sstep(-0.05, 0.25, -_hc.y / d)); // 走到跟前淡掉（人在光里看不出一圈）；远处跟着雾淡掉
+    sp.visible = sp.material.opacity > 0.003; // 屋外的灯（门廊灯）：雾里的灯比东西远处还看得见，光晕按 1.8 倍雾远淡掉（11-13 评审 F6：修好水轮后站溪边回头要看得见门廊灯亮）
   });
   contactTick();
 }
