@@ -14,8 +14,8 @@ const SKY_KEYS = [
   { h: 8.5,  top: 0x7ea5cb, hor: 0xdfe2d8, sun: 0xffe0b4, sunI: 1.9,  hs: 0xd6e2ee, hg: 0x65553f, hI: 0.75, env: 0.45, exp: 1.0 },
   { h: 12,   top: 0x8bb2d6, hor: 0xcfd8dc, sun: 0xfff3e0, sunI: 2.3,  hs: 0xdfeaf2, hg: 0x6b5a45, hI: 0.8,  env: 0.5,  exp: 1.0 },
   { h: 15.5, top: 0x84a6c6, hor: 0xddd6c2, sun: 0xffe2b2, sunI: 2.1,  hs: 0xe0e2e0, hg: 0x6e5a40, hI: 0.78, env: 0.46, exp: 1.0 },
-  { h: 17.6, top: 0x56699a, hor: 0xf2a466, sun: 0xff8a40, sunI: 1.2,  hs: 0x98a8d0, hg: 0x46423c, hI: 0.62, env: 0.3,  exp: 1.0 }, // 11-13 美术 #2：夕阳只染受光面，背光面吃的是蓝天 → 天光蓝灰（原粉灰 0xb4a4a8、0.55）、地面反光不再是亮棕（原 0x5a4430）
-  { h: 18.6, top: 0x2a3560, hor: 0xb0605a, sun: 0xff6a3a, sunI: 0.0,  hs: 0x6a6488, hg: 0x2e241b, hI: 0.36, env: 0.16, exp: 1.0 },
+  { h: 17.6, top: 0x56699a, hor: 0xf2a466, sun: 0xffb46b, sunI: 1.2,  hs: 0x98a8d0, hg: 0x46423c, hI: 0.62, env: 0.3,  exp: 1.0 }, // 11-13 美术 #2：夕阳只染受光面，背光面吃的是蓝天 → 天光蓝灰（原粉灰 0xb4a4a8、0.55）、地面反光不再是亮棕（原 0x5a4430）；夕阳色按约 3000K 黑体（原 0xff8a40 线性绿只剩 0.25，橄榄色树冠被照成锈红），18.6 点约 2300K（原 0xff6a3a）
+  { h: 18.6, top: 0x2a3560, hor: 0xb0605a, sun: 0xff9858, sunI: 0.0,  hs: 0x6a6488, hg: 0x2e241b, hI: 0.36, env: 0.16, exp: 1.0 },
   { h: 19.6, top: 0x111a34, hor: 0x3a3448, sun: 0x8fa6d0, sunI: 0.12, hs: 0x3a4262, hg: 0x1a1611, hI: 0.26, env: 0.09, exp: 0.95 },
   { h: 24,   top: 0x070d1c, hor: 0x18202f, sun: 0x9ab2dc, sunI: 0.3, hs: 0x2c3a58, hg: 0x15130f, hI: 0.22, env: 0.06, exp: 0.95 },
 ].map((k) => ({ ...k, top: new THREE.Color(k.top), hor: new THREE.Color(k.hor), sun: new THREE.Color(k.sun), hs: new THREE.Color(k.hs), hg: new THREE.Color(k.hg) }));
