@@ -154,7 +154,20 @@ async function loadHand(P, body) { // 第一人称拿东西的右手（../blende
   const mats = new Map(); body.traverse((o) => { if (o.isMesh) mats.set(o.material.name, o.material); });
   const g = (await shared.loader.loadAsync(P.hand)).scene;
   g.traverse((o) => { if (o.isMesh) { o.material = mats.get(P.handMat[o.name]) || o.material; o.frustumCulled = false; o.castShadow = false; o.layers.set(shared.HELD_LAYER); } }); // glb 里没带材质（导出 PLACEHOLDER 实际是不导出），按网格名对上
+  const o2 = (await shared.loader.loadAsync(P.hand.replace('.glb', '_open.glb')).catch(() => null))?.scene; // 张开的手（make_hand_open.py，同一套局部坐标）：取大衣伸手时换上（11-13 画面评审 V2）
+  if (o2) {
+    const fist = g.children.filter((o) => o.isMesh), open = [];
+    o2.traverse((o) => { if (o.isMesh) open.push(o); });
+    const pair = open.map((o) => fist.find((f) => f.name === o.name)); // 材质跟着握拳的走（穿上大衣袖子会换材质）
+    for (const o of open) { o.name += 'Open'; o.frustumCulled = false; o.castShadow = false; o.layers.set(shared.HELD_LAYER); o.visible = false; g.add(o); } // 改名：sleeve 按名字找 HandSleeve，别找到这只
+    g.userData.open = { fist, open, pair };
+  }
   g.visible = false; scene.add(g); return g;
+}
+function handOpen(h, on) { // 换成张开的手 / 换回握拳
+  const u = h?.userData.open; if (!u) return;
+  for (const o of u.fist) o.visible = !on;
+  u.open.forEach((o, i) => { o.visible = on; if (u.pair[i]) o.material = u.pair[i].material; });
 }
 // —— 座位（2026-10-20）：人物和第一人称玩家都能坐。pelvis = 坐下时骨盆的位置（坐面中心略靠后，无头浏览器从上往下打射线量的坐面），y = 坐面高，yaw = 坐下后面朝的方向；
 // 坐姿（glb）：骨盆在脚后 0.34m；sitUp = 坐面比根节点高多少（×scale）。2026-10-20 量过：屁股最低点只比骨盆骨骼低 7cm（男）/ 6.4cm（女），原来按 0.468 算硬座上悬空 3cm，现在男 0.517、女 0.49（压进坐面约 1cm）。
@@ -684,4 +697,4 @@ function carryFix(p) {
 }
 
 share({ people: () => people, SEATS: () => SEATS }); // interact.js 用
-export { setOutfit, people, SEATS, wakePerson, loadPeople, seatTaken, goHome, SPOTS, routeTasks, NAV, MOODS, fpRise, sitTasks, CLIMB, moodOf, climbAt, WALK_SPEED, ladderRoot, floorBelow, goTasks, nearNode, navPath, updatePeople, riseTasks, trimBack, wcDoorTasks };
+export { handOpen, setOutfit, people, SEATS, wakePerson, loadPeople, seatTaken, goHome, SPOTS, routeTasks, NAV, MOODS, fpRise, sitTasks, CLIMB, moodOf, climbAt, WALK_SPEED, ladderRoot, floorBelow, goTasks, nearNode, navPath, updatePeople, riseTasks, trimBack, wcDoorTasks };
