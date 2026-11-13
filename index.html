@@ -3169,7 +3169,7 @@ WORLD.ray.firstHitOnly = true;
 const AUDIT = WORLD.on ? (window.__audit = []) : null;
 const ZONE = (r) => (r === 'Kitchen & Dining' ? 'Parlour' : r);
 const _ws = new THREE.Sphere(), _wd = new THREE.Vector3(), _wq = new THREE.Vector3();
-function worldOcc() { const now = performance.now(); if (!WORLD.occ || now - WORLD.occT > 1000) { const hits = new Set([...people.values()].map((q) => q.hit)); const M = window.cabin && window.cabin.model, shown = (o) => { for (; o; o = o.parent) { if (o === M) return true; if (!o.visible) return false; } return true; }; WORLD.occ = meshes.filter((m) => !hits.has(m) && m.material?.visible !== false && shown(m)); WORLD.occT = now; } return WORLD.occ; } // 人物碰撞块、点选垫块（材质不画）不挡；人在雾外时整栋小屋不画（fogCullHouse 藏的是模型根节点），墙照样挡
+function worldOcc() { const now = performance.now(); if (!WORLD.occ || now - WORLD.occT > 1000) { const hits = new Set([...people.values()].map((q) => q.hit)); const M = window.cabin && window.cabin.model, shown = (o) => { for (; o; o = o.parent) { if (o === M) return true; if (!o.visible) return false; } return true; }; WORLD.occ = meshes.filter((m) => !hits.has(m) && m.material?.visible !== false && shown(m)); WORLD.occT = now; for (const m of WORLD.occ) { const g = m.geometry; if (!g.boundsTree && (g.index ? g.index.count : g.attributes.position.count) > 3000) g.computeBoundsTree(); } } return WORLD.occ; } // 大网格没 BVH 的这里补建（刻记号的云杉 2.4 万面是后加进图层的；原来审计每个假想站位逐三角求交，第 3 天世界平移那一拍无头测试卡 0.6–0.9 秒）。人物碰撞块、点选垫块（材质不画）不挡；人在雾外时整栋小屋不画（fogCullHouse 藏的是模型根节点），墙照样挡
 function headOf(p) { return p.root.position.clone().setY(p.root.position.y + 1.5 * p.root.scale.x); }
 function earOf() { const m = fp ? fp.p : people.get('person_man'); return m ? headOf(m) : camera.position.clone(); } // 玩家的耳朵是稽查的头（鸟瞰时相机在天上，人还在原处）
 function clerkHere() { const w = people.get('person_woman'); return w && !w.player && w.root.visible ? w : null; }
@@ -3295,15 +3295,15 @@ function auditChange(w) { // 「没看时变了」那一刻：此刻真相机看
   if (!AUDIT) return;
   const L = tgtList(typeof w.target === 'function' ? w.target() : w.target), now = L.some((t) => sees('player', t, { strict: true })), c = w.o.clerk && clerkHere(), wit = !!c && tgtList(w.o.clerk === true ? L : w.o.clerk).some((t) => sees(c, t));
   const vc = WORLD.vc ||= new THREE.PerspectiveCamera(); vc.fov = camera.fov; vc.aspect = camera.aspect; vc.near = camera.near; vc.far = camera.far; vc.updateProjectionMatrix();
-  let bad = 0, n = 0, ex = null;
-  for (const pos of auditPoses()) {
-    if (w.o.excl?.(pos)) continue;
-    for (const yaw of AUD_YAW) { n++; vc.position.copy(pos); vc.rotation.set(-0.2, yaw, 0, 'YXZ'); const fr = worldFrustum(vc).clone();
-      if (L.some((t) => sees('player', t, { eye: pos, fr, cam: vc, body: pos.clone().setY(pos.y - 1.5), strict: true }))) { bad++; ex ||= [+pos.x.toFixed(1), +pos.y.toFixed(1), +pos.z.toFixed(1), yaw.toFixed(2)]; } }
-  }
-  worldFrustum();
-  // 假想位置看得见不算违规（玩家不在那儿）：违规是此刻真相机严判看得见、或她看得见（clerk 选项）。bad 只当参考：机制该排除却没排除的位置有多少
-  worldAudit('change', w.o.name || '', { ok: !now && !wit, seenNow: now, witness: wit, poses: n, couldSee: bad, example: ex });
+  // 假想位置看得见不算违规（玩家不在那儿）：违规是此刻真相机严判看得见、或她看得见（clerk 选项），当场判。couldSee 只当参考（机制该排除却没排除的位置有多少）：
+  // 约 230 个站位 × 8 个朝向，一次算完无头测试卡 0.4–0.9 秒（第 3 天世界平移那一拍 xLook），所以分片在后面几帧里算（每片 ≤8ms），填回同一条记录
+  worldAudit('change', w.o.name || '', { ok: !now && !wit, seenNow: now, witness: wit, poses: 0, couldSee: 0, example: null }); const rec = AUDIT[AUDIT.length - 1], P = auditPoses().filter((pos) => !w.o.excl?.(pos));
+  const step = () => { const t0 = performance.now();
+    while (P.length && performance.now() - t0 < 8) { const pos = P.pop();
+      for (const yaw of AUD_YAW) { rec.poses++; vc.position.copy(pos); vc.rotation.set(-0.2, yaw, 0, 'YXZ'); const fr = worldFrustum(vc).clone();
+        if (L.some((t) => sees('player', t, { eye: pos, fr, cam: vc, body: pos.clone().setY(pos.y - 1.5), strict: true }))) { rec.couldSee++; rec.example ||= [+pos.x.toFixed(1), +pos.y.toFixed(1), +pos.z.toFixed(1), yaw.toFixed(2)]; } } }
+    worldFrustum(); if (P.length) setTimeout(step, 0); };
+  step();
 }
 function auditMove(p, from, to) { // 她瞬移：原处、目的地此刻都不该被看见
   if (!AUDIT || p !== people.get('person_woman') || !sceneReady || intro || morn || fly) return;
