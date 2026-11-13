@@ -174,7 +174,10 @@ vec3 ripples(vec2 p, float t, float amt) {
     diffuseColor.rgb = mix(diffuseColor.rgb, snC, sn);
     roughnessFactor = mix(roughnessFactor, 0.85, sn);`).replace('#include <normal_fragment_maps>', '#include <normal_fragment_maps>\n    normal = normalize(normal + ripN * (1.0 - sn) + snN);')
     // 水洼近镜面，直接反射 scene.environment（RoomEnvironment = 一间有方形灯箱的屋子）会照出一块块方形亮斑 → 水洼里换成模糊的环境光（irradiance/π），涟漪的环再亮一点
-    .replace('#include <lights_fragment_maps>', '#include <lights_fragment_maps>\n    radiance = mix(radiance, iblIrradiance * RECIPROCAL_PI * (1.0 + 1.5 * rip), pud * (1.0 - sn));');
+    .replace('#include <lights_fragment_maps>', '#include <lights_fragment_maps>\n    radiance = mix(radiance, iblIrradiance * RECIPROCAL_PI * (1.0 + 1.5 * rip), pud * (1.0 - sn));')
+    // 11-13 美术 #3：雪的冷暖。雪本身近白，颜色来自照它的光：太阳照到的地方是直射光（留白），背光和朝下的地方只有天光，现实里偏天空的颜色。
+    // 积雪的间接漫射（半球光 + 环境）再乘一次天光的色度（亮度归一，不变亮暗），不写死蓝：阴天偏灰蓝、第 3 天发黄的天光就发黄，和林墙、体积雾同一个来源
+    .replace('#include <lights_fragment_end>', '#include <lights_fragment_end>\n    #if NUM_HEMI_LIGHTS > 0\n    vec3 snSky = hemisphereLights[0].skyColor; float snL = dot(snSky, vec3(0.2126, 0.7152, 0.0722));\n    if (snL > 1e-5) reflectedLight.indirectDiffuse *= mix(vec3(1.0), snSky / snL, 1.0 * sn);\n    #endif');
 }
 
 const _grey = new THREE.Color(), _snowB = new THREE.Color(), _cool = new THREE.Color();
@@ -191,6 +194,7 @@ function applyWeather(dt) { // 在 applySky 之后：天空/光照按天气压�
   sun.intensity *= 1 - 0.92 * c.cloud;
   hemi.color.lerp(greyOf(hemi.color, 1), c.cloud * 0.7);
   if (c.cool > 0.001) hemi.color.lerp(_cool.setRGB(0.80, 0.93, 1.16).multiplyScalar(0.3 * hemi.color.r + 0.59 * hemi.color.g + 0.11 * hemi.color.b), c.cool);
+  if (c.snow > 0.001) hemi.color.lerp(_cool.setRGB(0.80, 0.93, 1.16).multiplyScalar(0.3 * hemi.color.r + 0.59 * hemi.color.g + 0.11 * hemi.color.b), 0.3 * Math.min(1, c.snow / 0.45)); // 11-13 美术 #3：下雪的阴天天光偏冷一点（亮度不变）；只动半球光，天和雾不动
   sun.color.lerp(greyOf(sun.color, 1.3), c.cloud * 0.9); // 阴天、雨雪里直射光被云层散成漫射，没有夕阳那种饱和橙红（11-05 art #9：雪天黄昏树冠成锈红褐色）；1.3 补回去饱和损失的亮度
   hemi.groundColor.lerp(_snowB.copy(hemi.color).multiplyScalar(0.75), THREE.MathUtils.smoothstep(cover.uSnow.value, 0.3, 0.85)); // 地上有雪时，从下往上的反光是雪（反照率约 0.8 × 天光，中性灰白），不是褐土：树冠、灌木底面不再发褐
   hemi.intensity *= 1 - 0.3 * c.cloud;
