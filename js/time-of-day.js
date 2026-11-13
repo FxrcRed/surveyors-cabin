@@ -92,6 +92,7 @@ function applySky() {
   const day = h >= 5.6 && h < 18.6;
   sun.intensity = L('sunI') * sky.strength * (day ? 1 : THREE.MathUtils.smoothstep(moonElev, -2, 10)); // 夜里 = 月光，月亮落下就没了
   indoorU.uIndoor.value = (0.015 + 0.985 * THREE.MathUtils.smoothstep(sunElev, -5, 12)) * (sky.indoorK ?? 1); // 屋里间接光：天黑后几乎没有（见 indoorShade）
+  indoorU.uFill.value.copy(FILL_COLOR).multiplyScalar(1 - THREE.MathUtils.smoothstep(sunElev, -5, 12)); // 夜里点灯时暗部的冷灰底（见 indoorShade）
   const cp = camera.position; indoorU.uCamIn.value = Math.max(Math.abs(cp.x), Math.abs(cp.z)) < 1.74 && cp.y < 4.1 - 0.72 * Math.abs(cp.x) ? 1 : 0; // 相机在屋里：瓦顶以下全算屋内
   skyU.uSunDir.value.copy(_sd); skyU.uMoonDir.value.copy(_md);
   skyU.uSunCol.value.copy(sun.color).multiplyScalar(Math.min(1, sky.strength));
@@ -109,7 +110,10 @@ function applySky() {
 // 屋里的间接光：半球光和环境光（RoomEnvironment）不受阴影遮挡，会穿墙把屋里照亮，夜里关灯后窗户里还发亮。
 // 给小屋材质注入一个「在屋内」遮罩（墙内 ±1.74m、屋面板以下），屋内的间接漫反射/高光乘 uIndoor：白天 1（不改原样子），夜里压到很暗。
 // 灯、炉火是 PointLight（直接光）、灯泡火苗是自发光，都不受影响。外面有自己 onBeforeCompile 的材质（院子、路、雪板）跳过。
-const indoorU = { uIndoor: { value: 1 }, uFlashIn: { value: 1 }, uCamIn: { value: 0 } };
+const indoorU = { uIndoor: { value: 1 }, uFlashIn: { value: 1 }, uCamIn: { value: 0 }, uFill: { value: new THREE.Color() }, uFillR: { value: new Float32Array(6) } }; // uFillR：每间屋暗部冷灰底的份量（interact.js 按点着的灯和 ROOM_V 算）
+// 屋里的白平衡（11-13 美术 #4）：木头材质按名字挑出来，屋内那一面往亮度靠；夜里暗部垫冷灰。颜色是线性值
+const WOOD = /oak|walnut|plank|wood|log_wall|log_end|log_slab|roof_deck|roof_ridge|door_board|headboard|firewood|partition|doghouse_frame/, WOOD_DESAT = 0.5;
+const FILL_COLOR = new THREE.Color(0.08, 0.09, 0.12);
 // 屋内灯、炉火是不投影的 PointLight，原来穿墙照亮屋外的院子、路、外墙（夜里地上一圈暖光）。改 three 的着色器块，对所有受光材质：
 // 光源在墙内、片元在墙外时，只有从大门洞（南墙 z=1.8、x ±0.45、高 2.1 以下）穿出去、且门开着才算数。小屋没有窗（射线扫过四面墙，只有原木缝）。
 // uWallDoor 放进各 ShaderLib 的 uniforms，值用普通对象（不是 Vector4）：各材质克隆 uniforms 时会共用这一个引用，改一处全变。
@@ -226,19 +230,26 @@ function indoorShade(model) {
     for (const m of [].concat(o.material)) {
       if (seen.has(m) || !m.isMeshStandardMaterial || Object.prototype.hasOwnProperty.call(m, 'onBeforeCompile')) continue;
       seen.add(m);
+      const wood = WOOD.test(m.name) ? WOOD_DESAT : 0;
       m.onBeforeCompile = (sh) => {
-        sh.uniforms.uIndoor = indoorU.uIndoor; sh.uniforms.uFlashIn = indoorU.uFlashIn; sh.uniforms.uCamIn = indoorU.uCamIn;
+        sh.uniforms.uIndoor = indoorU.uIndoor; sh.uniforms.uFlashIn = indoorU.uFlashIn; sh.uniforms.uCamIn = indoorU.uCamIn; sh.uniforms.uFill = indoorU.uFill; sh.uniforms.uFillR = indoorU.uFillR;
+        sh.uniforms.uWood = { value: wood }; // 每个材质一份（程序共用，customProgramCacheKey 不变）
         sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nvarying vec3 vInP;')
           .replace('#include <project_vertex>', '#include <project_vertex>\nvInP = (modelMatrix * vec4(transformed, 1.0)).xyz;');
-        sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform float uIndoor, uFlashIn, uCamIn; varying vec3 vInP;')
-          // 闪电只加在半球光上：屋内把半球光乘回「没闪电时 / 闪电时」的比例，屋里不跟着亮
+        sh.fragmentShader = sh.fragmentShader.replace('#include <common>', '#include <common>\nuniform float uIndoor, uFlashIn, uCamIn, uWood; uniform vec3 uFill; uniform vec3 uFillR[ 2 ]; varying vec3 vInP;')
           // 屋内 = 墙内（原木内表面最远 1.79、关着的大门外面 1.90、墙外表面 ≥1.92；原来 1.70–1.80 过渡正好落在原木缝里，一条条漏光；平滑法线在缝里会朝外，不能按法线分）且（屋面板以下 或 屋顶里不朝上的面：椽子、望板底面离拟合坡面 -0.15～+0.05m，只按高度分不开，按法线分：瓦面朝上 ny≈0.8）
-          .replace('#include <lights_fragment_begin>', `float inRoof = vInP.y - (4.25 - 0.72 * abs(vInP.x)); float inNy = inverseTransformDirection(normal, viewMatrix).y;
+          // 屋里的木头往亮度靠 uWood（白平衡：原木贴图本身偏橙，再乘暖灯就橙两遍）；外墙、屋外不动
+          .replace('#include <lights_physical_fragment>', `float inRoof = vInP.y - (4.25 - 0.72 * abs(vInP.x)); float inNy = inverseTransformDirection(normal, viewMatrix).y;
           float inK = (1.0 - smoothstep(1.83, 1.89, max(abs(vInP.x), abs(vInP.z)))) * max(1.0 - smoothstep(-0.16, -0.08, inRoof), (1.0 - smoothstep(0.14, 0.2, inRoof)) * max(1.0 - smoothstep(0.35, 0.55, inNy), uCamIn));
-          ` + THREE.ShaderChunk.lights_fragment_begin.replace('irradiance += getHemisphereLightIrradiance(', 'irradiance += mix(1.0, uFlashIn, inK) * getHemisphereLightIrradiance('))
+          diffuseColor.rgb = mix(diffuseColor.rgb, vec3(dot(diffuseColor.rgb, vec3(0.2126, 0.7152, 0.0722))), uWood * inK);
+          #include <lights_physical_fragment>`)
+          // 闪电只加在半球光上：屋内把半球光乘回「没闪电时 / 闪电时」的比例，屋里不跟着亮
+          .replace('#include <lights_fragment_begin>', THREE.ShaderChunk.lights_fragment_begin.replace('irradiance += getHemisphereLightIrradiance(', 'irradiance += mix(1.0, uFlashIn, inK) * getHemisphereLightIrradiance('))
+          // 夜里点着灯时暗部垫一层冷灰（uFill，applySky 按天黑程度给）：灯光在屋里来回反射是有的，人眼在暗处辨色变弱、偏蓝（浦肯野效应），暗部不该和灯下一样橙。只给灯照得到的屋（uFillR 按房间），家具底下跟着 rU 压暗，灯全灭时没有
           .replace('#include <aomap_fragment>', `#include <aomap_fragment>
           float inF = mix(1.0, uIndoor, inK);
-          reflectedLight.indirectDiffuse *= inF; reflectedLight.indirectSpecular *= inF;`);
+          reflectedLight.indirectDiffuse *= inF; reflectedLight.indirectSpecular *= inF;
+          int fk = int(roomId(rP) + 0.5); reflectedLight.indirectDiffuse += uFill * (inK * rU * uFillR[fk / 3][fk - fk / 3 * 3]) * material.diffuseColor;`);
       };
       m.customProgramCacheKey = () => 'indoor';
       m.needsUpdate = true;
@@ -317,4 +328,4 @@ function sunPace(deg) { // goalRate 用：太阳在天上每秒最多走 deg 度
   return (h) => { const a = (h - 6) / 12, el = Math.sin(Math.PI * a) * 62; if (el < -4) return 0.5;
     return deg / Math.max(1, Math.hypot(62 * Math.PI / 12 * Math.cos(Math.PI * a), 160 / 12 * Math.cos(el * Math.PI / 180))); };
 }
-export { WX_ZH, sky, skyEl, skyU, indoorU, indoorShade, PANELS, wallU, roomU, roomOf, updateSky, sunPace };
+export { WX_ZH, sky, skyEl, skyU, indoorU, indoorShade, PANELS, wallU, roomU, roomOf, ROOM_V, updateSky, sunPace };
