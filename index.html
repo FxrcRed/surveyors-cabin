@@ -530,7 +530,7 @@ import { scene, sun, hemi, renderer, camera, controls, $, lang, esc, lbl, PR_MAX
 import { shared, share } from './js/state.js';
 import { terrain, terrainH, terrainSlope, sstep, makeGroundGeometry, applyTerrain, setBrook, brookAt, brookCutD, groundSpan, BROOK_WL, BROOK_BANK } from './js/terrain.js';
 import { paperMesh, agedPaper, handwrite, makeBook, inspectTick, inspecting, inspectBusy, inspectKind, inspectStart, inspectRelease, inspectDuo, sigDraw, inspectWatch, watchModel } from './js/props3d.js';
-import { WX_ZH, sky, skyEl, skyU, indoorU, indoorShade, PANELS, wallU, updateSky, sunPace } from './js/time-of-day.js';
+import { WX_ZH, sky, skyEl, skyU, cloudLum, indoorU, indoorShade, PANELS, wallU, updateSky, sunPace } from './js/time-of-day.js';
 import { audioTick, audioPreload, audioStep, audioRung, setIce, sfx, sfxToggle, wheelGroan } from './js/audio.js';
 import { updateBirds } from './js/birds.js';
 import { LOG } from './js/playlog.js';
@@ -6947,7 +6947,7 @@ function bgLum(nx, ny) { // 屏幕上 (nx, ny) 那条视线身后的估计亮度
     obj = lumOf(skyU.uHor.value) * (yard ? 0.1 + 0.7 * sn : 0.03 + 0.25 * sn); t = tG;
   } else { // 天空（天穹着色器同样做了色调映射 + sRGB，这里只乘曝光、转显示亮度）
     _tCol.lerpColors(skyU.uHor.value, skyU.uTop.value, Math.pow(Math.max(0, d.y), 0.55));
-    return disp(lumOf(_tCol) * exp + flash);
+    return disp(cloudLum(d.y, lumOf(_tCol)) * exp + flash); // 11-13 起天上有云
   }
   camera.getWorldDirection(_tCol2); // 雾按视深（沿相机朝向的距离）算，同 three.js 的 vFogDepth
   const f = smoothstep(scene.fog.near, scene.fog.far, t * d.dot(_tCol2));

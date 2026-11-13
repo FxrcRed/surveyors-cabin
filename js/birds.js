@@ -1,5 +1,5 @@
 // 天上的乌鸦（2026-11-03）：每隔几分钟一小群（2–3 只）从树梢上空飞过，低多边形，扑翅膀在顶点着色器里（不占 CPU）
-// 白天晴天才飞：雨、雪、雾、雷、大风和夜里不飞。挂的是 InstancedMesh，hideOutdoors 会自动把它挪进 OUT_LAYER，在屋里不画
+// 白天晴天、阴天、小雪飞（11-13 放宽：第 2、3 天一直下小雪，原来永远看不到）；雨、暴雪、雾、雷、大风和夜里不飞。阴天、下雪时飞得低（云底低，乌鸦贴着树梢飞）。挂的是 InstancedMesh，hideOutdoors 会自动把它挪进 OUT_LAYER，在屋里不画
 // 偶尔配一两声远处的叫声（audio.js 的 audioCaw）
 import * as THREE from 'three';
 import { scene, camera } from './core.js';
@@ -46,11 +46,12 @@ const _m = new THREE.Matrix4(), _q = new THREE.Quaternion(), _e = new THREE.Eule
 
 function ok() { // 能飞的天
   const c = wx.cur, h = sky.hour;
-  return h > 7 && h < 17.5 && c.rain < 0.02 && c.snow < 0.02 && c.fogK < 0.35 && c.bolt < 0.1 && c.wind < 2;
+  return h > 7 && h < 17.5 && c.rain < 0.02 && c.snow < 0.6 && c.fogK < 0.7 && c.bolt < 0.1 && c.wind < 2; // 小雪 snow 0.45、fogK 0.5 能飞；暴雪 1/1、雾 fogK 1、第 1 天薄雾 0.9 不飞
 }
 function launch() {
-  const a = R(0, Math.PI * 2), lat = R(-35, 35), cx = camera.position.x, cz = camera.position.z;
-  const dx = Math.cos(a), dz = Math.sin(a), y = camera.position.y + R(...ALT);
+  const lowVis = scene.fog && scene.fog.far < 60; // 第 2、3 天林子里雾远约 26m：从头顶附近、贴着树梢（树约 13m）飞过，不然整段都在雾外看不见
+  const a = R(0, Math.PI * 2), lat = lowVis ? R(-8, 8) : R(-35, 35), cx = camera.position.x, cz = camera.position.z;
+  const dx = Math.cos(a), dz = Math.sin(a), y = camera.position.y + (lowVis ? R(11, 15) : wx.cur.snow > 0.05 || wx.cur.cloud > 0.5 ? R(14, 20) : R(...ALT)); // 低云、下雪天飞得低
   const n = 2 + Math.floor(Math.random() * 2);
   birds.f = {
     dir: new THREE.Vector3(-dx, 0, -dz), speed: R(8.5, 11.5), n,

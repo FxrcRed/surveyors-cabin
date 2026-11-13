@@ -25,13 +25,32 @@ const sky = { hour: 9, goal: null, play: true, rate: 24 / 360, bearing: 55, stre
 let sunRig = null; // 模型加载后 = { center, r }
 
 // 天穹：跟着相机走的大球，渐变 + 太阳/月亮光晕 + 夜里星星；地平线色和雾一致，远处树和地面淡进去
+// 云的噪声贴图（11-13）：128² 可平铺的分形值噪声（4 层，格子 4/8/16/32），按排名拉成 0–1 均匀分布（阈值 = 覆盖率好调），开局在 CPU 上烤一次。
+// 着色器只采两次贴图；原来逐像素算 3 层哈希值噪声，1080p 晴天仰视帧时 +1ms（树后面被挡的天空像素也要算：天穹最先画、不写深度）
+function cloudNoise(S = 128) {
+  const v = new Float32Array(S * S), sm = (t) => t * t * (3 - 2 * t);
+  for (const [cells, w] of [[4, 0.5], [8, 0.27], [16, 0.15], [32, 0.08]]) {
+    const L = new Float32Array(cells * cells).map(() => Math.random()), k = cells / S;
+    for (let y = 0; y < S; y++) for (let x = 0; x < S; x++) {
+      const fx = x * k, fy = y * k, ix = Math.floor(fx), iy = Math.floor(fy), tx = sm(fx - ix), ty = sm(fy - iy);
+      const a = L[iy * cells + ix], b = L[iy * cells + (ix + 1) % cells], c = L[(iy + 1) % cells * cells + ix], d = L[(iy + 1) % cells * cells + (ix + 1) % cells];
+      v[y * S + x] += w * ((a + (b - a) * tx) * (1 - ty) + (c + (d - c) * tx) * ty);
+    }
+  }
+  const idx = Array.from(v.keys()).sort((i, j) => v[i] - v[j]), px = new Uint8Array(S * S * 4);
+  idx.forEach((i, r) => { px[i * 4] = Math.round(r / (S * S - 1) * 255); px[i * 4 + 3] = 255; });
+  const t = new THREE.DataTexture(px, S, S, THREE.RGBAFormat);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping; t.magFilter = THREE.LinearFilter; t.minFilter = THREE.LinearMipmapLinearFilter; t.generateMipmaps = true; t.needsUpdate = true;
+  return t;
+}
 const skyU = { uTop: { value: new THREE.Color() }, uHor: { value: new THREE.Color() }, uSunDir: { value: new THREE.Vector3() }, uSunCol: { value: new THREE.Color() },
-  uMoonDir: { value: new THREE.Vector3() }, uNight: { value: 0 }, uSunUp: { value: 1 }, uFlash: { value: 0 }, uTime: { value: 0 } };
+  uMoonDir: { value: new THREE.Vector3() }, uNight: { value: 0 }, uSunUp: { value: 1 }, uFlash: { value: 0 }, uTime: { value: 0 },
+  uCloud: { value: new THREE.Vector4(0.15, 0, 0, 1) }, uCloudOff: { value: new THREE.Vector2() }, uCloudTex: { value: cloudNoise() } }; // 云（11-13）：x 覆盖 y 压暗 z 压低 w 看得见（雾里 0），weather.js 按天气写；uCloudOff 随风漂
 const skyDome = new THREE.Mesh(new THREE.SphereGeometry(450, 48, 24), new THREE.ShaderMaterial({
   uniforms: skyU, side: THREE.BackSide, depthWrite: false, fog: false,
   vertexShader: `varying vec3 vDir;
     void main() { vDir = normalize(position); gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); }`,
-  fragmentShader: `uniform vec3 uTop, uHor, uSunDir, uSunCol, uMoonDir; uniform float uNight, uSunUp, uFlash, uTime; varying vec3 vDir;
+  fragmentShader: `uniform vec3 uTop, uHor, uSunDir, uSunCol, uMoonDir; uniform float uNight, uSunUp, uFlash, uTime; uniform vec4 uCloud; uniform vec2 uCloudOff; uniform sampler2D uCloudTex; varying vec3 vDir;
     float hash3(vec3 p) { return fract(sin(dot(p, vec3(12.9898, 78.233, 37.719))) * 43758.5453); }
     float stars(vec3 d, float n, float th) { // 方向按网格分格，每格一点；th 越小星越多；点在格里随机偏移、按离点距离画圆点
       vec3 q = d * n, c = floor(q); float h = hash3(c);
@@ -48,16 +67,36 @@ const skyDome = new THREE.Mesh(new THREE.SphereGeometry(450, 48, 24), new THREE.
       col += uSunCol * (pow(s, 6.0) * 0.35 + pow(s, 60.0) * 0.6) * uSunUp;
       col += uSunCol * smoothstep(0.9993, 0.9996, s) * 4.0 * above * uSunUp;
       float m = max(dot(d, uMoonDir), 0.0);
+      // 云（11-13）：视线投到一张水平的云底上取 2 层噪声贴图（cloudNoise），随风漂；覆盖越大阈值越低（晴天零散几朵，阴天成片）。
+      // 云色从天色的亮度来（阴天天色已被 weather.js 压灰，云就是同一种灰，只多出明暗），厚处底面暗；太阳低时云底被夕阳色照暖、朝太阳那边更亮；
+      // 近地平线淡进 uHor（和雾、林墙同一个颜色），雾天 w=0 看不见。云挡住太阳盘、月亮和星星
+      float ca = 0.0, dens = 0.0;
+      if (uCloud.w > 0.001 && d.y > 0.0) {
+        vec2 p = d.xz / (d.y + 0.1) * mix(3.0, 1.8, uCloud.z) + uCloudOff; // 雨雪天云底低：同样大小的云看起来更大
+        float n = texture2D(uCloudTex, p * 0.18).r * 0.68 + texture2D(uCloudTex, mat2(0.8, 0.6, -0.6, 0.8) * p * 0.45 + 0.37).r * 0.32; // 两层错开角度和比例，看不出贴图重复
+        float th = 0.9 - 1.1 * uCloud.x; // n 均值 0.5、标准差约 0.21：晴天（x 0.15）约一成天空有云，阴天、雨雪九成以上
+        dens = smoothstep(th, th + 0.1 + 0.35 * uCloud.x, n); // 云越多边越虚，阴天是一整片带深浅，不是一块块
+        ca = dens * smoothstep(0.0, 0.14, d.y) * uCloud.w;
+        float g = dot(mix(uHor, uTop, 0.4), vec3(0.2126, 0.7152, 0.0722));
+        vec3 cc = vec3(g) * mix(1.4, 1.05, uCloud.x) * (1.0 - smoothstep(0.35, 1.0, dens) * (0.12 + 0.25 * uCloud.y)) * (1.0 - 0.25 * uCloud.y); // 天色已被 weather.js 按云量压灰压暗，这里只再暗一点，云缝不至于亮成一块块
+        float low = uSunUp * (1.0 - smoothstep(0.05, 0.35, uSunDir.y));
+        cc += uSunCol * (0.12 * (1.0 - low) * uSunUp + low * 0.45 * (0.35 + 0.65 * s * s * s)) * (1.0 - 0.6 * dens);
+        cc += vec3(0.6, 0.65, 0.8) * (0.006 + 0.05 * pow(m, 8.0)) * uNight * smoothstep(-0.02, 0.1, uMoonDir.y); // 月光照着的云
+        cc = mix(cc, uHor, (1.0 - smoothstep(0.02, 0.4, d.y)) * 0.75);
+        col = mix(col, cc, ca);
+        col += uSunCol * pow(s, 24.0) * 0.5 * ca * (1.0 - dens) * uSunUp; // 太阳边上薄云的亮边
+      }
+      float clear = 1.0 - ca;
       // 月亮：约 2° 的盘 + 两层光晕；盘面用低频噪声做一点明暗（月海）
       float disc = smoothstep(0.99925, 0.99945, m);
       float mare = 0.8 + 0.2 * hash3(floor(d * 900.0)) * hash3(floor(d * 300.0) + 2.0);
-      col += vec3(0.86, 0.9, 1.0) * (disc * 2.2 * mare + pow(m, 600.0) * 0.35 + pow(m, 30.0) * 0.07) * above * uNight;
+      col += vec3(0.86, 0.9, 1.0) * (disc * 2.2 * mare + pow(m, 600.0) * 0.35 + pow(m, 30.0) * 0.07) * above * uNight * clear;
       // 星星：疏的亮星 + 密的暗星，银河一条带里暗星更密；被月盘挡住，贴地平线淡掉
       vec3 bn = normalize(vec3(0.35, 0.55, 0.76));
       float band = exp(-pow(dot(d, bn) / 0.2, 2.0));
       float st = stars(d, 170.0, 0.993) * 1.3 + stars(d, 420.0, 0.986 - 0.03 * band) * 0.45;
       vec3 tint = mix(vec3(1.0, 0.86, 0.72), vec3(0.75, 0.85, 1.0), hash3(floor(d * 170.0) + 9.0));
-      col += (tint * st + vec3(0.5, 0.55, 0.7) * band * 0.035) * uNight * smoothstep(0.0, 0.22, y) * (1.0 - disc);
+      col += (tint * st + vec3(0.5, 0.55, 0.7) * band * 0.035) * uNight * smoothstep(0.0, 0.22, y) * (1.0 - disc) * clear;
       col += vec3(0.75, 0.8, 1.0) * uFlash * (0.4 + 0.6 * y);
       gl_FragColor = vec4(col, 1.0);
       #include <tonemapping_fragment>
@@ -328,4 +367,13 @@ function sunPace(deg) { // goalRate 用：太阳在天上每秒最多走 deg 度
   return (h) => { const a = (h - 6) / 12, el = Math.sin(Math.PI * a) * 62; if (el < -4) return 0.5;
     return deg / Math.max(1, Math.hypot(62 * Math.PI / 12 * Math.cos(Math.PI * a), 160 / 12 * Math.cos(el * Math.PI / 180))); };
 }
-export { WX_ZH, sky, skyEl, skyU, indoorU, indoorShade, PANELS, wallU, roomU, roomOf, ROOM_V, updateSky, sunPace };
+// 标题取色（index.html bgLum）用：天上那条视线的平均亮度算上云。覆盖率当平均遮挡比例，云色同天穹着色器（不算夕阳暖色和明暗细节）
+const _cl = new THREE.Color();
+function cloudLum(dy, lum) {
+  const c = skyU.uCloud.value; if (dy <= 0 || c.w < 0.001) return lum;
+  const mid = 0.9 - 1.1 * c.x + (0.1 + 0.35 * c.x) / 2, a = 1 / (1 + Math.exp(-1.7 * (0.5 - mid) / 0.21)) * THREE.MathUtils.smoothstep(dy, 0, 0.14) * c.w; // n 近似正态（均值 0.5、标准差 0.21），过阈值的比例用 logistic 近似
+  _cl.lerpColors(skyU.uHor.value, skyU.uTop.value, 0.4);
+  const g = (0.2126 * _cl.r + 0.7152 * _cl.g + 0.0722 * _cl.b) * (1.4 + (1.05 - 1.4) * c.x) * (1 - 0.25 * c.y);
+  return lum + (g - lum) * a;
+}
+export { WX_ZH, sky, skyEl, skyU, cloudLum, indoorU, indoorShade, PANELS, wallU, roomU, roomOf, ROOM_V, updateSky, sunPace };

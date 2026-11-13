@@ -180,7 +180,7 @@ vec3 ripples(vec2 p, float t, float amt) {
     .replace('#include <lights_fragment_end>', '#include <lights_fragment_end>\n    #if NUM_HEMI_LIGHTS > 0\n    vec3 snSky = hemisphereLights[0].skyColor; float snL = dot(snSky, vec3(0.2126, 0.7152, 0.0722));\n    if (snL > 1e-5) reflectedLight.indirectDiffuse *= mix(vec3(1.0), snSky / snL, 1.0 * sn);\n    #endif');
 }
 
-const _grey = new THREE.Color(), _snowB = new THREE.Color(), _cool = new THREE.Color();
+const _grey = new THREE.Color(), _snowB = new THREE.Color(), _cool = new THREE.Color(), _wDir = new THREE.Vector2(0.8, 0.6);
 const greyOf = (c, k) => _grey.setScalar((0.3 * c.r + 0.59 * c.g + 0.11 * c.b) * k);
 function applyWeather(dt) { // 在 applySky 之后：天空/光照按天气压暗；闪电
   const c = wx.cur, g = wx.goal, k = Math.min(1, dt * 0.8);
@@ -200,6 +200,9 @@ function applyWeather(dt) { // 在 applySky 之后：天空/光照按天气压�
   hemi.intensity *= 1 - 0.3 * c.cloud;
   scene.environmentIntensity *= 1 - 0.3 * c.cloud;
   skyU.uSunUp.value *= 1 - c.cloud; skyU.uNight.value *= (1 - c.cloud) ** 2 * (1 - c.fogK); // 阴天、雨雪、雾夜：星星月亮压掉
+  // 天上的云（11-13，天穹着色器画）：晴天也有零散几朵（0.15），阴天成片；雨雪云底低（z）、越厚越暗（y）；浓雾里看不到天（w）。随风往东北漂
+  skyU.uCloud.value.set(0.15 + 0.85 * c.cloud, THREE.MathUtils.clamp((c.cloud - 0.6) / 0.4 + c.rain * 0.3, 0, 1), Math.min(1, c.rain + c.snow), 1 - THREE.MathUtils.smoothstep(c.fogK, 0.45, 0.95));
+  skyU.uCloudOff.value.addScaledVector(_wDir, dt * (0.012 + 0.004 * c.wind));
   // 闪电：雷雨时每 4–12 秒一次；每次 1 秒左右里闪 3–5 下（[开始时刻, 亮度, 衰减]），再带一段约 1.5 秒的余光
   if (g.bolt && (wx.nextBolt -= dt) <= 0) {
     wx.nextBolt = 4 + Math.random() * 8;
