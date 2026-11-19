@@ -328,7 +328,7 @@ export function makeBook() {
     leaves.push({ g, geo, mf, mb, base: geo.attributes.position.array.slice() });
   }
   scene.add(root); shared.layers.set('field_log', root); indoorShade(root);
-  book = { root, cover, leaves, key: '', A: { open: 0, cover: 0, l: new Array(NLEAF).fill(0) } };
+  book = { root, cover, spine: sp, leaves, key: '', A: { open: 0, cover: 0, l: new Array(NLEAF).fill(0) } };
   applyBook();
 }
 function fillPages(txt, zh) { // 把整段文字按页贴到各叶的正反面
@@ -346,6 +346,10 @@ const sm = (t) => t * t * (3 - 2 * t);
 function applyBook() {
   const { A, cover, leaves } = book;
   cover.rotation.y = -A.cover * Math.PI * 0.985; cover.position.z = ZTOP + (Z0 + BD - ZTOP) * sm(A.cover);
+  // The upper edge of the leather follows the centre of the moving cover hinge.
+  const bottom = -BT / 2, top = cover.position.z + BD * Math.cos(cover.rotation.y);
+  book.spine.position.z = (top + bottom) / 2;
+  book.spine.scale.z = (top - bottom) / BT;
   leaves.forEach((L, i) => {
     const a = A.l[i], s = sm(a); L.g.rotation.y = -s * Math.PI * 0.975;
     L.g.position.z = ZTOP - i * LEAF_E + ((Z0 + BD + (i + 1) * 0.0012) - (ZTOP - i * LEAF_E)) * s;
@@ -556,4 +560,5 @@ export function inspectRelease(onHome) { // 卡片关了：飞回原位（书先
     go(A, 'cover', 0, 0.35, 0.3); go(A, 'open', 0, 0.5, 0.4); go(v, 'f', 0, 0.85, 0.55); after(1.5, () => end(v));
   } else { go(v, 'f', 0, 0.8); after(0.85, () => end(v)); }
 }
-function end(v) { if (V === v) V = null; v.reattach?.(); v.g.position.copy(v.home.p); v.g.quaternion.copy(v.home.q); if (v.hs) v.g.scale.setScalar(v.hs); if (v.mate && v.ms) v.mate.scale.setScalar(v.ms); if (v.mate) v.mate.visible = false; v.onHome?.(); }
+function end(v) { if (V === v) V = null; if (v.reattach) v.reattach();
+  else { v.g.position.copy(v.home.p); v.g.quaternion.copy(v.home.q); if (v.hs) v.g.scale.setScalar(v.hs); } if (v.mate && v.ms) v.mate.scale.setScalar(v.ms); if (v.mate) v.mate.visible = false; v.onHome?.(); }

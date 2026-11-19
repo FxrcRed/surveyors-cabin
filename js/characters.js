@@ -108,6 +108,11 @@ function clerkLook(root) {
   root.traverse((o) => {
     if (!o.isMesh) return; const m0 = o.material, C = CLERK_CLOTH[o.name];
     if (/^MI_Hair/.test(m0.name)) { if (!hair.has(m0)) hair.set(m0, Object.assign(m0.clone(), { color: CLERK_HAIR.clone() })); o.material = hair.get(m0); return; }
+    if (m0.name === 'MI_Superhero_Female') {
+      o.material = m0.clone(); o.material.normalScale.multiplyScalar(0.55);
+      o.material.roughnessMap = null; o.material.roughness = 0.84;
+      return;
+    }
     if (!C || !m0.map) return;
     const k = C.tone.join() + C.all; if (!cloth.has(k)) cloth.set(k, clerkCloth(m0.map.image, C)); // 上衣、手臂同一套参数，共用一张画好的
     const m = o.material = m0.clone(); if (C.name) m.name = C.name;
@@ -421,10 +426,12 @@ function floorBelow(x, y, z) { // 人物走路贴地：起居室木台 0.25、�
   const h = npcRay.intersectObjects(npcFloors, false)[0]; return h ? h.point.y : null;
 }
 const _npcO = new THREE.Vector3();
-function blockedBy(p, ux, uz) { // 走的方向上正前方 0.6m、左右 0.3m 内站着别人（同一层）；坐着的不算，路线已经绕开座位，等也等不走。挡路的是玩家：看前方 0.9m、左右 0.55m，返回 'player'（11-07 新6）
+function blockedBy(p, ux, uz, remaining) { // 走的方向上正前方 0.6m、左右 0.3m 内站着别人（同一层）；坐着的不算，路线已经绕开座位，等也等不走。挡路的是玩家：看前方 0.9m、左右 0.55m，返回 'player'（11-07 新6）
   const r = p.root.position;
   for (const q of people.values()) {
     if (q === p || q.mode === 'sit') continue; const o = q.root.position, x = o.x - r.x, z = o.z - r.z, ahead = x * ux + z * uz, pl = q.player;
+    // A player beyond this short waypoint only blocks it if our bodies would meet there.
+    if (pl && ahead > remaining && Math.hypot(x - ux * remaining, z - uz * remaining) >= 0.55) continue;
     if (Math.abs(o.y - r.y) < 1 && ahead > 0 && ahead < (pl ? 0.9 : 0.6) && Math.abs(x * uz - z * ux) < (pl ? 0.55 : 0.3)) return pl ? 'player' : true;
   }
   return false;
@@ -469,7 +476,12 @@ function runTask(p, dt) {
     const da = shared.angDiff(r.rotation.y, k === 'turn' ? T[1] : Math.atan2(dx, dz)), lim = 4 * dt; // 模型面朝 +Z：朝向 = atan2(dx, dz)
     r.rotation.y += THREE.MathUtils.clamp(da, -lim, lim);
     if (k === 'walk') {
-      const by = dist > 0.05 && blockedBy(p, dx / dist, dz / dist), wait = !!by && ((T.wait || 0) < (by === 'player' ? 6 : 1.5) || (by === 'player' && (playerBusy() || p.tasks.wander))); // 前面 0.6m 内有人：原地等，最多 1.5 秒（两人互等也会各自走开）；挡路的是玩家等 6 秒（领路、开灯要能解开互等），他在读卡片或她只是闲逛就一直等（原来 1.5 秒后硬走过去，把人挤开、镜头钻进她头里）
+      const by = dist > 0.05 && blockedBy(p, dx / dist, dz / dist, dist);
+      const waitForPlayer = shared.game.day >= 2 && !p.player;
+      if (by === 'player' && waitForPlayer) T.clearTime = 0;
+      else if (T.clearTime != null) T.clearTime += dt;
+      const wait = (T.clearTime != null && T.clearTime < 0.35) ||
+        (!!by && ((T.wait || 0) < (by === 'player' ? 6 : 1.5) || (by === 'player' && (playerBusy() || p.tasks.wander))));
       if (wait !== !!T.held) { T.held = wait; p.play(wait ? MOODS.stand.idle : 'Walk_Loop', 0.3); }
       if (wait) T.wait = (T.wait || 0) + dt;
       const v = wait ? 0 : Math.min(dist, WALK_SPEED * r.scale.x * dt * (Math.abs(da) < 1 ? 1 : 0.3)); // 还没转过来先慢走
@@ -487,7 +499,7 @@ function runTask(p, dt) {
 let shadowT = 0;
 function updatePeople(dt) {
   let busy = false;
-  for (const [id, p] of people) { unLook(p); unDesk(p); unCarry(p); p.mixer.update(dt); stepPerson(id, p, dt); deskFix(p); carryFix(p); updateLook(p, dt); busy ||= p.tasks.length > 0; }
+  for (const [id, p] of people) { restorePoint(p); unLook(p); unDesk(p); unCarry(p); p.mixer.update(dt); stepPerson(id, p, dt); deskFix(p); carryFix(p); updateLook(p, dt); updatePoint(p, dt); busy ||= p.tasks.length > 0; }
   if (busy && (shadowT -= dt) < 0) { shadowT = 0.25; shared.shadowDirty = true; } // 人在走/做事：阴影图 0.25 秒重画一次（每帧重画太贵），原地待机的小动作不重画
 }
 function stepPerson(id, p, dt) {
@@ -611,6 +623,32 @@ function setWorldQ(b, q) { b.quaternion.copy(b.parent.getWorldQuaternion(_dkq[3]
 function aimBone(b, from, to) { // 转骨骼，让它下面的点从 from 移到 to（世界）
   const o = b.getWorldPosition(_dk[8]), q = _dkq[2].setFromUnitVectors(_dk[6].subVectors(from, o).normalize(), _dk[7].subVectors(to, o).normalize());
   setWorldQ(b, q.multiply(b.getWorldQuaternion(_dkq[1])));
+}
+// Raise the right arm toward the same world-space target as her gaze.
+function restorePoint(p) {
+  if (p.point?.applied) {
+    for (const joint of p.point.joints) joint.bone.quaternion.copy(joint.rest);
+    p.point.applied = false;
+  }
+}
+function updatePoint(p, dt) {
+  const g = p.point;
+  if (!g) return;
+  g.time += dt;
+  if (g.time >= 4 || p.player || p.seat) { p.point = null; return; }
+  if (!g.joints) {
+    const bones = ['upperarm_r', 'lowerarm_r', 'hand_r'].map((name) => p.root.getObjectByName(name));
+    if (bones.some((b) => !b)) { p.point = null; return; }
+    g.joints = bones.slice(0, 2).map((bone, i) => ({ bone, tip: bones[i + 1], rest: new THREE.Quaternion() }));
+  }
+  const weight = THREE.MathUtils.smoothstep(g.time, 0, 0.6) * (1 - THREE.MathUtils.smoothstep(g.time, 3.2, 4));
+  for (const { bone, tip, rest } of g.joints) {
+    rest.copy(bone.quaternion);
+    aimBone(bone, tip.getWorldPosition(_dk[0]), g.target);
+    bone.quaternion.slerp(rest, 1 - weight);
+    bone.updateMatrixWorld(true);
+  }
+  g.applied = true;
 }
 function deskFix(p) {
   const a = p.acts.Sitting_Write_Loop;

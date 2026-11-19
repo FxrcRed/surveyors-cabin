@@ -27,6 +27,37 @@ try { muted = localStorage.getItem('cabinMute') === '1'; } catch { /* 无痕模�
 const raw = {}; // 文件字节：加载页上就先下（audioPreload，不用等点击），点了「进入」只剩解码，音乐跟着开场一起响
 const fetchRaw = (n) => raw[n] || (raw[n] = fetch(`sfx/${n}.mp3`).then((r) => (r.ok ? r.arrayBuffer() : null)).catch(() => null));
 const bgmName = () => 'bgm-day' + Math.min(3, Math.max(1, shared.game?.day || 1));
+// A day change rebuilds the scene by reloading the page. Carry the outgoing
+// loop position in this tab only, and consume it once on the next morning.
+const carryKey = 'cabin.music.day2To3';
+export function fadeMusicForMorning(seconds) {
+  if (!music || music.name !== 'bgm-day2') return;
+  const level = music.gain.gain, now = ctx.currentTime;
+  level.setValueAtTime(level.value, now);
+  level.linearRampToValueAtTime(0, now + seconds);
+}
+export function carryMusicToMorning() {
+  if (!music || music.name !== 'bgm-day2') return;
+  const elapsed = ctx.currentTime - music.started + music.offset - music.src.loopStart;
+  const offset = music.src.loopStart + elapsed % (music.src.loopEnd - music.src.loopStart);
+  try { sessionStorage.setItem(carryKey, String(offset)); } catch {}
+}
+function readCarry() {
+  try {
+    const value = sessionStorage.getItem(carryKey); sessionStorage.removeItem(carryKey);
+    const offset = Number(value);
+    if (value !== null && bgmName() === 'bgm-day3' && Number.isFinite(offset) && offset >= 0) return offset;
+  } catch {}
+  return null;
+}
+function musicLoop(name, buffer, offset, volume, started = ctx.currentTime) {
+  const src = ctx.createBufferSource(), gain = ctx.createGain();
+  src.buffer = buffer; src.loop = true; src.loopStart = 0.05; src.loopEnd = buffer.duration - 0.05;
+  offset = Math.max(src.loopStart, Math.min(src.loopEnd, offset));
+  gain.gain.value = volume; src.connect(gain).connect(musG);
+  src.start(started, offset);
+  return { name, src, gain, started, offset };
+}
 export function audioPreload() { fetchRaw(bgmName()); for (const n of Object.keys(LOOPS)) fetchRaw(n); for (const n of SHOTS) fetchRaw(n); fetchRaw('crow'); }
 async function load(n) {
   try { const a = await fetchRaw(n); delete raw[n]; buf[n] = await ctx.decodeAudioData(a); } catch { /* 少一个音就不响 */ }
@@ -41,11 +72,23 @@ function unlock() {
   outLP = ctx.createBiquadFilter(); outLP.type = 'lowpass'; outLP.frequency.value = 18000; outLP.connect(amb);
   outBus = ctx.createGain(); outBus.connect(outLP);
   musG = ctx.createGain(); musG.gain.value = 0; musG.connect(master);
-  const mn = bgmName();
-  load(mn).then((b) => { // 先解音乐，再解环境声和短音（解码排队，音乐排第一个）
+  const mn = bgmName(), carry = readCarry();
+  const morning = load(mn);
+  if (carry === null) morning.then((b) => { if (b) music = musicLoop(mn, b, 0.05, 1); });
+  else load('bgm-day2').then(async (oldBuffer) => {
+    const outgoing = oldBuffer && musicLoop('bgm-day2', oldBuffer, carry, 1);
+    music = outgoing;
+    const b = await morning;
     if (!b) return;
-    const s = ctx.createBufferSource(); s.buffer = b; s.loop = true; s.loopStart = 0.05; s.loopEnd = b.duration - 0.05; // 同环境声：跳过 mp3 首尾补的静音；文件首尾已交叉淡化
-    s.connect(musG); s.start(0, 0.05); music = { src: s, name: mn };
+    if (!outgoing) { music = musicLoop(mn, b, 0.05, 1); return; }
+    const start = ctx.currentTime + 5, end = start + 14;
+    const incoming = musicLoop(mn, b, 0.05, 0, start);
+    outgoing.gain.gain.setValueAtTime(1, start);
+    outgoing.gain.gain.linearRampToValueAtTime(0, end);
+    incoming.gain.gain.setValueAtTime(0, start);
+    incoming.gain.gain.linearRampToValueAtTime(1, end);
+    outgoing.src.onended = () => { outgoing.src.disconnect(); outgoing.gain.disconnect(); music = incoming; };
+    outgoing.src.stop(end);
   });
   for (const n of Object.keys(LOOPS)) load(n).then((b) => {
     if (!b) return;

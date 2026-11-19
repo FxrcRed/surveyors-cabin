@@ -266,23 +266,49 @@ function addHalo(light, g, name) {
     x.fillStyle = gr; x.fillRect(0, 0, 64, 64); haloTex = new THREE.CanvasTexture(c);
   }
   const [size, a, out, all] = HALO_OPT[name] || HALO_DEF;
-  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: haloTex, color: HALO_COLOR, blending: THREE.AdditiveBlending, transparent: true, depthWrite: false, depthTest: false, fog: false }));
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: haloTex, color: HALO_COLOR, blending: THREE.AdditiveBlending, transparent: true, depthWrite: false, depthTest: !!out, fog: false }));
   sp.visible = false; sp.raycast = () => {}; sp.name = 'lamp_halo'; sp.renderOrder = 10; scene.add(sp); // 挂在场景下：提灯拿在手里时不在小屋模型下面
   let mesh = null; g.traverse((o) => { if (!mesh && o.isMesh) mesh = o; });
   halos.push({ sp, light, g, mesh, size, a, out, all, power: LAMPS[name].power, vis: -1, seen: 1 });
 }
 const _hv = new THREE.Vector3(), _hc = new THREE.Vector3(), sstep = (a, b, x) => smooth01((x - a) / (b - a));
-const haloRay = new THREE.Raycaster(), haloT = { i: 0, t: 0, at: 0, solid: [] }; haloRay.firstHitOnly = true;
+const haloRay = new THREE.Raycaster(), haloT = { i: 0, t: 0, at: 0, solid: [], forest: [] }; haloRay.firstHitOnly = true;
+// Forest batches have only translation at the group level. Test each tree's horizontal
+// envelope first, then its real triangles. Instance matrices also track fog compaction.
+const haloTree = new THREE.Mesh(), haloMatrix = new THREE.Matrix4(), haloHits = [];
+export function forestBlocksRay(raycaster, maxDistance = raycaster.far) {
+  const origin = raycaster.ray.origin, direction = raycaster.ray.direction;
+  const dx = direction.x * maxDistance, dz = direction.z * maxDistance, length2 = dx * dx + dz * dz;
+  for (const batch of haloT.forest) {
+    if (!batch.visible || !batch.count) continue;
+    const geo = batch.geometry;
+    if (!geo.boundingBox) geo.computeBoundingBox();
+    const b = geo.boundingBox, radius = Math.hypot(Math.max(-b.min.x, b.max.x), Math.max(-b.min.z, b.max.z));
+    const M = batch.instanceMatrix.array, offset = batch.position;
+    haloTree.geometry = geo; haloTree.material = batch.material;
+    for (let i = 0; i < batch.count; i++) {
+      const j = i * 16, x = M[j + 12] + offset.x - origin.x, z = M[j + 14] + offset.z - origin.z;
+      const t = length2 ? THREE.MathUtils.clamp((x * dx + z * dz) / length2, 0, 1) : 0;
+      const r2 = radius * radius * Math.max(M[j] ** 2 + M[j + 2] ** 2, M[j + 8] ** 2 + M[j + 10] ** 2);
+      if ((x - t * dx) ** 2 + (z - t * dz) ** 2 > r2) continue;
+      batch.getMatrixAt(i, haloMatrix);
+      haloTree.matrixWorld.multiplyMatrices(batch.matrixWorld, haloMatrix);
+      haloHits.length = 0; haloTree.raycast(raycaster, haloHits);
+      if (haloHits.some((hit) => hit.distance <= maxDistance)) return true;
+    }
+  }
+  return false;
+}
 function haloSeen(h, d) { // 灯→眼睛之间有没有不透明的东西（只算小屋和场景里的网格，人不算）
-  haloRay.set(_hv, _hc.clone().divideScalar(d)); haloRay.near = 0.05; haloRay.far = d - 0.1;
+  haloRay.layers.mask = camera.layers.mask; haloRay.set(camera.position, haloRay.ray.direction.copy(_hc).multiplyScalar(-1 / d)); haloRay.near = 0.05; haloRay.far = d - 0.1;
   for (const x of haloRay.intersectObjects(haloT.solid, false)) {
     const m = x.object.material; if (m && m.transparent) continue;
     let o = x.object; while (o && o !== h.g) o = o.parent; if (!o) return 0; }
-  return 1;
+  return h.out && forestBlocksRay(haloRay) ? 0 : 1;
 }
 function updateHalos(GONE) { // 每帧，innerCull 之后：GONE = innerCull 藏东西用的包围球
   const now = performance.now(), dt = Math.min(0.1, (now - (haloT.t || now)) / 1000); haloT.t = now;
-  if (now - haloT.at > 500) { haloT.at = now; haloT.solid = shared.meshes.filter(shared.isShown); }
+  if (now - haloT.at > 500) { haloT.at = now; haloT.solid = shared.meshes.filter(shared.isShown); haloT.forest = scene.children.filter((o) => o.isInstancedMesh && (o.name === 'forest' || o.name === 'nearTrunk')); }
   const pick = halos.length ? haloT.i++ % halos.length : -1; // 每帧只给一盏灯打射线（约 6 次/秒/盏），亮度平滑过去
   const cp = camera.position, f = scene.fog, inHouse = Math.abs(cp.x) < 2.17 && Math.abs(cp.z) < 2.17 && cp.y < 5.2; // 小屋原木墙外皮 ±2.17
   const day = 1 / (1 + hemi.intensity), fogK = Math.min(1, Math.max(0.8, 45 / f.far)), HELD = shared.HELD_LAYER; // 屋外：白天、空气清时晕得淡（散射跟雾浓成正比）
@@ -294,8 +320,8 @@ function updateHalos(GONE) { // 每帧，innerCull 之后：GONE = innerCull 藏
     if (k <= 0.004) { sp.visible = false; h.vis = -1; return; }
     light.getWorldPosition(_hv); _hc.copy(cp).sub(_hv); const d = Math.max(_hc.length(), 1e-3);
     const held = !!h.mesh && h.mesh.layers.isEnabled(HELD) && !h.mesh.layers.isEnabled(0); // 提在手里：离眼睛 0.7m，缩小、画在手那一遍里
-    if (held) h.seen = 1; else if (hi === pick || h.vis < 0) h.seen = haloSeen(h, d);
-    h.vis = h.vis < 0 ? h.seen : h.vis + (h.seen - h.vis) * Math.min(1, dt * 8); // 刚亮 / 刚露出来时直接取当前结果
+    if (held) h.seen = 1; else if (h.out || hi === pick || h.vis < 0) h.seen = haloSeen(h, d);
+    h.vis = h.vis < 0 || (h.out && !h.seen) ? h.seen : h.vis + (h.seen - h.vis) * Math.min(1, dt * 8); // 刚亮 / 刚露出来时直接取当前结果
     const s = held ? h.size * 0.4 : h.size;
     sp.position.copy(_hv); sp.scale.setScalar(s);
     sp.layers.set(held ? HELD : 0);
@@ -592,7 +618,8 @@ function setupNoren() {
     // 绑带：压扁的环（扁圆环面，竖向缩成 1.4cm 宽的带子），围在束口外；放下时缩到 1e-3（不切 visible）
     const tie = new THREE.Mesh(new THREE.TorusGeometry(1, 0.1, 8, 40).rotateX(Math.PI / 2), tieMat);
     tie.position.set(xc, NOREN.tie, zc); tie.castShadow = tie.receiveShadow = true;
-    tie.userData.half = Math.abs(zi - zo) / 2;
+    tie.userData.wallZ = zo; tie.userData.boundZ = zc; tie.userData.sign = sgn;
+    tie.userData.noHL = true;
     g.add(tie); shared.meshes.push(tie); // 挂在图层下，点它也能放下门帘
     noren.ties.push(tie);
   }
@@ -609,12 +636,15 @@ function setupNoren() {
         p[i + 2] = z + (c.zc + c.sgn * (s - 0.5) * wb * (1 - 0.3 * pinch * k) - z) * q;
       }
       a.needsUpdate = true;
-      c.m.geometry.computeVertexNormals(); c.m.geometry.computeBoundingBox(); c.m.geometry.computeBoundingSphere(); // 包围球给点选、视锥裁剪用
+      c.m.geometry.computeVertexNormals(); c.m.geometry.computeBoundingBox(); c.m.geometry.computeBoundingSphere(); c.m.geometry.boundsTree?.refit(); // 包围球给点选、视锥裁剪用
     }
     for (const t of noren.ties) { // 带子跟着束口宽度收紧，后半程才长出来
-      const v = THREE.MathUtils.smoothstep(k, 0.35, 1), hz = t.userData.half + (wb * 0.35 + 0.004 - t.userData.half) * k;
-      if (v <= 0) { t.scale.setScalar(1e-3); continue; }
-      t.scale.set(depth * 0.6 + 0.012, 0.07 * v, hz);
+      const v = THREE.MathUtils.smoothstep(k, 0, 1), u = t.userData;
+      t.visible = v > 0.001;
+      t.rotation.x = (1 - v) * u.sign * Math.PI / 2;
+      t.position.z = THREE.MathUtils.lerp(u.wallZ, u.boundZ, v);
+      t.position.y = yt - (1 - v) * 0.09;
+      t.scale.set((depth * 0.6 + 0.012) * v, 0.07 * v, (wb * 0.35 + 0.004) * v);
     }
   };
   apply(0);
