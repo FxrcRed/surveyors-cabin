@@ -540,7 +540,7 @@ function pickLook(p) {
 }
 function updateLook(p, dt) {
   if (!p.neck || !p.head || !p.acts.Climb_Ladder_Loop) return; // 只有女调查员（有爬梯动作的）东张西望
-  const ok = !p.player && !p.seat && p.cur && LOOK_CLIPS.has(p.cur.getClip().name);
+  const ok = !p.player && !p.seat && p.cur && (p.reading || LOOK_CLIPS.has(p.cur.getClip().name));
   if (ok && (p.lookT -= dt) < 0) { p.lookT = 2 + Math.random() * 3; p.look = pickLook(p); }
   let wy = 0, wp = 0;
   if (ok && p.look) {
@@ -641,10 +641,15 @@ function updatePoint(p, dt) {
     if (bones.some((b) => !b)) { p.point = null; return; }
     g.joints = bones.slice(0, 2).map((bone, i) => ({ bone, tip: bones[i + 1], rest: new THREE.Quaternion() }));
   }
-  const weight = THREE.MathUtils.smoothstep(g.time, 0, 0.6) * (1 - THREE.MathUtils.smoothstep(g.time, 3.2, 4));
+  const reading=g.reading;
+  const lift=reading ? THREE.MathUtils.smoothstep(g.time,.43,1.18)*(1-THREE.MathUtils.smoothstep(g.time,2.91,3.6)) : 1;
+  const weight = lift * THREE.MathUtils.smoothstep(g.time, 0, 0.6) * (1 - THREE.MathUtils.smoothstep(g.time, 3.2, 4));
   for (const { bone, tip, rest } of g.joints) {
     rest.copy(bone.quaternion);
-    aimBone(bone, tip.getWorldPosition(_dk[0]), g.target);
+    const target=reading ? p.root.localToWorld(bone===g.joints[0].bone
+      ? _dk[4].set(-.29,1.23,.23)
+      : _dk[4].set(-.13,1.62,.38)) : g.target;
+    aimBone(bone, tip.getWorldPosition(_dk[0]), target);
     bone.quaternion.slerp(rest, 1 - weight);
     bone.updateMatrixWorld(true);
   }
@@ -714,10 +719,51 @@ function carryInit(p) {
   }
   p.carryRig = { arm, ref, grip, all: [...arm, ...grip.map(([b]) => b)], on: null };
 }
+// The winter cuff follows the same three joints as the coat. Carrying the
+// lantern bends the elbow enough to expose the inside of the low-poly sleeve.
+function winterSleeve(p,c) {
+  const sides=12, radii=[.082,.083,.09,.086,.071,.062,.064,.058];
+  if (!c.fabric) {
+    const geometry=new THREE.BufferGeometry(), indices=[];
+    geometry.setAttribute('position',new THREE.BufferAttribute(new Float32Array(sides*radii.length*3),3).setUsage(THREE.DynamicDrawUsage));
+    const colors=[];
+    for(let j=0;j<radii.length;j++) for(let k=0;k<sides;k++) {
+      const a=j*sides+k,b=j*sides+(k+1)%sides;
+      if(j+1<radii.length) indices.push(a,b,a+sides,b,b+sides,a+sides);
+      const value=(j===6?.80:1)*(.94+.06*Math.cos(k*2.6));
+      colors.push(value,value,value);
+    }
+    geometry.setAttribute('color',new THREE.Float32BufferAttribute(colors,3));
+    geometry.setIndex(indices);
+    const m=new THREE.MeshStandardMaterial({color:COAT_SLEEVE,vertexColors:true,side:THREE.DoubleSide,roughness:.96});
+    const mesh=c.fabric=new THREE.Mesh(geometry,m);mesh.name='Winter coat elbow and cuff';
+    mesh.frustumCulled=false; p.root.add(mesh);
+    c.joints=c.arm.map(()=>new THREE.Vector3());
+  }
+  const mesh=c.fabric; mesh.visible=true;
+  const [shoulder,elbow,wrist]=c.joints;
+  c.arm.forEach((bone,i)=>p.root.worldToLocal(bone.getWorldPosition(c.joints[i])));
+  const pos=mesh.geometry.attributes.position;
+  const first=_dk[0].subVectors(elbow,shoulder).normalize(),second=_dk[1].subVectors(wrist,elbow).normalize();
+  for(let j=0;j<radii.length;j++) {
+    const f=[.26,.70,.96,.09,.52,.80,.90,.96][j], upper=j<3;
+    const center=_dk[2].lerpVectors(upper?shoulder:elbow,upper?elbow:wrist,f);
+    const tangent=_dk[3].lerpVectors(first,second,[0,.1,.4,.67,.94,1,1,1][j]).normalize();
+    const side=_dk[4].set(1,0,0).addScaledVector(tangent,-tangent.x).normalize();
+    const back=_dk[5].crossVectors(tangent,side).normalize();
+    for(let k=0;k<sides;k++){
+      const angle=2*Math.PI*k/sides,r=radii[j],v=_dk[6].copy(center)
+        .addScaledVector(side,r*.92*Math.cos(angle)).addScaledVector(back,r*Math.sin(angle));
+      pos.setXYZ(j*sides+k,v.x,v.y,v.z);
+    }
+  }
+  pos.needsUpdate=true;mesh.geometry.computeVertexNormals();
+}
 function unCarry(p) {
   const c = p.carryRig; if (!c || !c.on) return;
   for (const b of c.all) b.quaternion.copy(b.userData.carryQ);
   c.arm[0].scale.copy(c.arm[0].userData.carryS);
+  if (c.fabric) c.fabric.visible=false;
   c.on = null;
 }
 function carryFix(p) {
@@ -731,6 +777,15 @@ function carryFix(p) {
   c.arm.forEach((b, i) => { _cq.copy(b.quaternion); b.quaternion.copy(c.ref[i]).slerp(_cq, CARRY.keep); });
   const up = c.arm[0]; p.root.getWorldDirection(_cfw); // 往外张开：绕身体朝前的轴转负角 = 往他的右边（面朝 +Z 时右边是 -X）
   up.updateWorldMatrix(true, false); setWorldQ(up, _cq.setFromAxisAngle(_cfw, -CARRY.out).multiply(up.getWorldQuaternion(_dkq[0])));
+  if (p.carry === 'walkLamp') {
+    // Lift the elbow and bring the lantern ahead of the hip; preserve the
+    // animated shoulder and all of the original skinned sleeve.
+    const target = p.root.localToWorld(_dk[3].set(-.25,1.49,.61));
+    aimBone(up, c.arm[2].getWorldPosition(_dk[0]), target);
+    const wristTarget=p.root.localToWorld(_dk[4].set(-.27,1.55,.64));
+    aimBone(c.arm[1], c.arm[2].getWorldPosition(_dk[0]), wristTarget);
+    if (p.coat?.some(o=>o.visible)) winterSleeve(p,c);
+  }
   for (const [b, q] of c.grip) b.quaternion.copy(q);
 }
 

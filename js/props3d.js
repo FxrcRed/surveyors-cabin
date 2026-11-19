@@ -150,7 +150,7 @@ function leatherCanvas(W, H, seed, kind) {
     for (let i = 0; i < 18; i++) { x.fillStyle = `rgba(110,74,36,${0.05 + R() * 0.1})`; x.beginPath(); x.arc(lx + R() * lw, ly + R() * lh, 2 + R() * 9, 0, 7); x.fill(); }
     x.strokeStyle = 'rgba(70,44,20,.5)'; x.lineWidth = 1; x.strokeRect(lx + 0.5, ly + 0.5, lw - 1, lh - 1);
     x.strokeStyle = 'rgba(40,24,10,.8)'; x.lineWidth = 2; x.strokeRect(lx + 5, ly + 5, lw - 10, lh - 10);
-    x.fillStyle = 'rgba(38,22,10,.92)'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.font = `${Math.round(w * 0.085)}px "IM Fell English SC", Georgia, serif`; x.fillText('FIELD LOG', w / 2, ly + lh / 2);
+    x.fillStyle = 'rgba(38,22,10,.92)'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.font = `${Math.round(w * 0.085)}px "IM Fell English SC", Georgia, serif`; x.fillText(lang()==='zh'?'测绘日志':'FIELD LOG', w / 2, ly + lh / 2);
     x.strokeStyle = gold; x.lineWidth = 2; x.beginPath(); x.moveTo(w * 0.3, h * 0.64); x.lineTo(w * 0.7, h * 0.64); x.moveTo(w * 0.38, h * 0.67); x.lineTo(w * 0.62, h * 0.67); x.stroke();
     const rx = w * (0.55 + R() * 0.15), ry = h * (0.72 + R() * 0.1), rr = w * 0.13; // 杯底的水渍：一圈深色的环，环里稍浅
     x.strokeStyle = 'rgba(16,7,2,.22)'; x.lineWidth = 3; x.beginPath(); x.ellipse(rx, ry, rr, rr * 0.93, 0.3, 0.4, 6.0); x.stroke();
@@ -158,7 +158,7 @@ function leatherCanvas(W, H, seed, kind) {
     for (let i = 0; i < 9; i++) { const y0 = R() * h; x.strokeStyle = `rgba(12,5,1,${0.2 + R() * 0.2})`; x.lineWidth = 0.7 + R(); x.beginPath(); x.moveTo(2 + R() * 4, y0); x.quadraticCurveTo(9, y0 + (R() - 0.5) * 20, 14 + R() * 6, y0 + (R() - 0.5) * 30); x.stroke(); } // 靠书脊的折痕
   } else if (kind === 'spine') {
     for (const f of [0.1, 0.3, 0.7, 0.9]) { const y = h * f; x.fillStyle = 'rgba(14,6,2,.5)'; x.fillRect(0, y - 6, w, 12); x.fillStyle = 'rgba(190,140,86,.28)'; x.fillRect(0, y - 6, w, 3); x.fillStyle = gold; x.fillRect(0, y - 1, w, 2); }
-    x.save(); x.translate(w / 2, h * 0.5); x.rotate(Math.PI / 2); x.fillStyle = 'rgba(205,176,108,.8)'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.font = `${Math.round(w * 0.34)}px "IM Fell English SC", Georgia, serif`; x.fillText('FIELD LOG', 0, 0); x.restore();
+    x.save(); x.translate(w / 2, h * 0.5); x.rotate(Math.PI / 2); x.fillStyle = 'rgba(205,176,108,.8)'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.font = `${Math.round(w * 0.34)}px "IM Fell English SC", Georgia, serif`; x.fillText(lang()==='zh'?'测绘日志':'FIELD LOG', 0, 0); x.restore();
     for (let i = 0; i < 160; i++) { x.fillStyle = `rgba(40,20,8,${0.4 + R() * 0.5})`; x.fillRect(w * (0.25 + R() * 0.5), h * (0.32 + R() * 0.36), 0.6 + R() * 1.6, 0.6 + R() * 2.5); } // 金字磨掉一半
     for (let i = 0; i < 26; i++) { const y = R() * h; x.strokeStyle = `rgba(10,4,1,${0.25 + R() * 0.3})`; x.lineWidth = 0.4 + R() * 0.6; x.beginPath(); x.moveTo(R() * w * 0.3, y); x.lineTo(w * (0.6 + R() * 0.4), y + (R() - 0.5) * 3); x.stroke(); } // 来回翻开的横向细裂
   }
@@ -328,11 +328,18 @@ export function makeBook() {
     leaves.push({ g, geo, mf, mb, base: geo.attributes.position.array.slice() });
   }
   scene.add(root); shared.layers.set('field_log', root); indoorShade(root);
-  book = { root, cover, spine: sp, leaves, key: '', A: { open: 0, cover: 0, l: new Array(NLEAF).fill(0) } };
+  book = { root, cover, covers:[[front,hi?512:256,hi?720:360,41,'front'],[spineM,128,512,49,'spine']], spine: sp, leaves, key: '', A: { open: 0, cover: 0, l: new Array(NLEAF).fill(0) } };
   applyBook();
 }
+export function refreshBookLanguage(text) {
+  if (!book) return;
+  const zh=lang()==='zh'; fillPages(zh?text.zh:text.en,zh);
+  for (const [mat,w,h,seed,kind] of book.covers) {
+    mat.map?.dispose(); mat.map=tex(leatherCanvas(w,h,seed,kind)); mat.needsUpdate=true;
+  }
+}
 function fillPages(txt, zh) { // 把整段文字按页贴到各叶的正反面
-  const key = (zh ? 'z' : 'e') + txt.length; if (book.key === key) return; book.key = key;
+  const key = (zh ? 'z' : 'e') + txt; if (book.key === key) return; book.key = key;
   const pages = paginate(txt, zh);
   book.leaves.forEach((L, i) => {
     for (const [mat, no, flip] of [[L.mf, 2 * i + 1, false], [L.mb, 2 * i + 2, true]]) {

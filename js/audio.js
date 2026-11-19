@@ -30,6 +30,12 @@ const bgmName = () => 'bgm-day' + Math.min(3, Math.max(1, shared.game?.day || 1)
 // A day change rebuilds the scene by reloading the page. Carry the outgoing
 // loop position in this tab only, and consume it once on the next morning.
 const carryKey = 'cabin.music.day2To3';
+export function fadeEndingMusic(hold, fade) {
+  if (!music || !ctx) return;
+  const gain=music.gain.gain, now=ctx.currentTime;
+  gain.cancelScheduledValues(now); gain.setValueAtTime(gain.value,now+hold);
+  gain.linearRampToValueAtTime(0,now+hold+fade);
+}
 export function fadeMusicForMorning(seconds) {
   if (!music || music.name !== 'bgm-day2') return;
   const level = music.gain.gain, now = ctx.currentTime;

@@ -82,6 +82,8 @@ if (navigator.webdriver || /[?&]nolock\b/.test(location.search)) { let el = null
   #card.side { left: 50%; top: auto; bottom: max(16px, 4vh); transform: translateX(-50%); width: max-content; max-width: min(640px, calc(100vw - 32px)); max-height: none; overflow: visible; padding: 0; background: none; border: 0; border-radius: 0; pointer-events: none; text-align: center; text-wrap: balance; text-shadow: 0 0 2px rgba(0,0,0,.95), 0 1px 4px rgba(0,0,0,.9), 0 0 16px rgba(0,0,0,.7); -webkit-mask-image: none; mask-image: none; } /* 纸、书飞到眼前（js/props3d.js LAY）：纸居中当主角，卡片变成纸下面的字幕，不要框（11-11 Fable A2，同开场字幕 #subs）；点哪都是点遮罩，关法不变 */
   body:has(#card.side:not([hidden])) :is(#quest, #prog, #fpHud .help, #skyL, #mmap, #langBtn) { opacity: 0; pointer-events: none; } /* 纸下面只留字幕：任务行、操作说明、左下时刻 / 遗稿、语言按钮先让开（手机上字幕宽到压住它们） */
   #card.side :is(h2, .row, .x, p.story), #card.side.book p.zh { display: none; } #card.side p { margin: 0; } #card.side p.lead { font-size: var(--fs-xs); opacity: .72; } html[data-lang] #card.side p.zh { margin-top: 4px; padding-top: 0; border-top: 0; font-size: var(--fs-s); line-height: 1.75; } /* 只留说明行和译文：英文版纸上的字就是原文，书页上的字已是当前语言 */
+  #card.side.watch { padding: 8px 15px; background: rgba(18,15,12,.86); border-radius: 3px; color: #fff7e5; z-index: 24; }
+  #card.side.watch p.lead { opacity: 1; margin: 0; }
   #card h2 { margin: 0 28px 0 0; font-weight: normal; font-size: var(--fs-l); line-height: 1.25; letter-spacing: .3px; }
   #card .area { display: block; margin-top: 3px; font-size: var(--fs-xs); letter-spacing: .6px; opacity: .72; }
   #card .area .zh { margin-left: 2px; letter-spacing: 1px; }
@@ -559,9 +561,9 @@ import { SimplifyModifier } from 'three/addons/modifiers/SimplifyModifier.js';
 import { scene, sun, hemi, renderer, camera, controls, $, lang, esc, lbl, PR_MAX, RM } from './js/core.js';
 import { shared, share } from './js/state.js';
 import { terrain, terrainH, terrainSlope, sstep, makeGroundGeometry, applyTerrain, setBrook, brookAt, brookCutD, groundSpan, BROOK_WL, BROOK_BANK } from './js/terrain.js';
-import { paperMesh, agedPaper, handwrite, makeBook, inspectTick, inspecting, inspectBusy, inspectKind, inspectStart, inspectRelease, inspectDuo, sigDraw, inspectWatch, watchModel } from './js/props3d.js';
+import { paperMesh, agedPaper, handwrite, makeBook, inspectTick, inspecting, inspectBusy, inspectKind, inspectStart, inspectRelease, inspectDuo, sigDraw, inspectWatch, watchModel, refreshBookLanguage } from './js/props3d.js';
 import { WX_ZH, sky, skyEl, skyU, cloudLum, indoorU, indoorShade, PANELS, wallU, updateSky, sunPace } from './js/time-of-day.js';
-import { audioTick, audioPreload, fadeMusicForMorning, carryMusicToMorning, audioStep, audioRung, setIce, sfx, sfxToggle, wheelGroan } from './js/audio.js';
+import { audioTick, audioPreload, fadeMusicForMorning, fadeEndingMusic, carryMusicToMorning, audioStep, audioRung, setIce, sfx, sfxToggle, wheelGroan } from './js/audio.js';
 import { updateBirds } from './js/birds.js';
 import { LOG } from './js/playlog.js';
 import { volfog, volDraw, volTick, volShift, FOG_LAYER } from './js/volfog.js';
@@ -1016,82 +1018,41 @@ async function loadTree0(url, all) { // → [{ geometry, material }]，底部中
   const c = b.getCenter(new THREE.Vector3()), k = 1 / (b.max.y - b.min.y);
   parts.forEach((p) => { p.geometry.translate(-c.x, -b.min.y, -c.z).scale(k, k, k); if (!p.trunk && !all) { p.geometry.computeBoundingBox(); p.material.userData.crB.value = p.geometry.boundingBox.min.y; } }); // 树冠最低点（抬冠底用，见 crownMaterial）
   if (all && /\/bush[13]\.glb$/.test(url)) {
-    const width = (b.max.x - b.min.x) * k, depth = (b.max.z - b.min.z) * k;
-    const geometry = shrubCrown(width, depth, url.endsWith('bush3.glb') ? 1.7 : 0.4);
-    for (const part of parts) { part.geometry.dispose(); part.material.dispose(); }
-    parts.splice(0, parts.length, { geometry, material: shrubMaterial(), trunk: false });
+    for (const { geometry } of parts) softenShrubTips(geometry);
   }
   parts.radius = Math.max(b.max.x - b.min.x, b.max.z - b.min.z) / 2 * k; // 树冠半径 / 树高，避开小屋时用
   if (!all) { const tk = parts.find((p) => p.trunk), r = tk && !/dead/.test(url) && roundTrunk(tk.geometry); if (r) tk.geometry.userData.round = r.geo; // 近处换圆柱树干（nearTrunks）；枯树整棵是树皮，不换
     for (const p of parts) if (!p.trunk) crownRim(p.geometry, r ? r.axes : undefined); }
   return parts;
 }
-// Snow rests on distinct sprays of foliage; the forked stems show through the gaps.
-function shrubCrown(width, depth, phase) {
-  const parts = [], up = new THREE.Vector3(0, 1, 0);
-  function add(geo, stem) {
-    if (geo.index) geo = geo.toNonIndexed();
-    geo.deleteAttribute('uv');
-    if (stem) geo.computeVertexNormals();
-    else {
-      // Keep some softness between adjoining facets under a mantle of snow.
-      const smooth = geo.attributes.normal.clone(), normal = new THREE.Vector3(), flat = new THREE.Vector3();
-      geo.computeVertexNormals();
-      for (let i = 0; i < smooth.count; i++) {
-        normal.fromBufferAttribute(smooth, i).lerp(flat.fromBufferAttribute(geo.attributes.normal, i), 0.35).normalize();
-        geo.attributes.normal.setXYZ(i, normal.x, normal.y, normal.z);
+// Move only acute leaf tips toward the edge opposite them. Weld coincident
+// corners for this calculation so a split normal cannot open a seam.
+function softenShrubTips(geometry) {
+  const pos = geometry.attributes.position, index = geometry.index;
+  const points = [], ids = [], keys = new Map(), shifts = new Map();
+  for (let i = 0; i < pos.count; i++) {
+    const v = new THREE.Vector3().fromBufferAttribute(pos, i);
+    const key = v.toArray().map(x => Math.round(x * 100000)).join(',');
+    if (!keys.has(key)) { keys.set(key, points.length); points.push(v); }
+    ids.push(keys.get(key));
+  }
+  const at = i => ids[index ? index.getX(i) : i];
+  for (let i = 0; i < (index ? index.count : pos.count); i += 3) {
+    for (let k = 0; k < 3; k++) {
+      const id = at(i + k), v = points[id];
+      const a = points[at(i + (k + 1) % 3)].clone().sub(v);
+      const b = points[at(i + (k + 2) % 3)].clone().sub(v);
+      if (a.lengthSq() && b.lengthSq() && a.angleTo(b) < 0.48) {
+        const offset = a.add(b).multiplyScalar(0.10).clampLength(0, 0.055);
+        if (!shifts.has(id) || offset.lengthSq() > shifts.get(id).lengthSq()) shifts.set(id, offset);
       }
     }
-    geo.setAttribute('aStem', new THREE.Float32BufferAttribute(new Float32Array(geo.attributes.position.count).fill(stem), 1));
-    parts.push(geo);
   }
-  function branch(a, b, radius) {
-    const delta = b.clone().sub(a);
-    const geo = new THREE.CylinderGeometry(radius * 0.68, radius, delta.length(), 5, 1, true);
-    geo.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(up, delta.normalize()));
-    const mid = a.clone().lerp(b, 0.5);
-    add(geo.translate(mid.x, mid.y, mid.z), 1);
+  for (let i = 0; i < ids.length; i++) {
+    const shift = shifts.get(ids[i]);
+    if (shift) pos.setXYZ(i, pos.getX(i) + shift.x, pos.getY(i) + shift.y, pos.getZ(i) + shift.z);
   }
-  const at = (a, r, y) => new THREE.Vector3(Math.cos(a) * r * width, y, Math.sin(a) * r * depth);
-  for (let i = 0; i < 3; i++) {
-    const a = phase + i * 2.13, root = at(a, 0.035, -0.12), fork = at(a, 0.14, 0.20 + 0.04 * i);
-    branch(root, fork, 0.031);
-    for (const side of [-1, 1]) {
-      const ang = a + side * 0.46;
-      const tip = at(ang, side < 0 ? 0.31 : 0.23, side < 0 ? 0.34 + i * 0.045 : 0.58 + (i % 2) * 0.14);
-      branch(fork, tip, 0.021);
-      const spray = new THREE.IcosahedronGeometry(1, 1), P = spray.attributes.position;
-      for (let j = 0; j < P.count; j++) {
-        const x = P.getX(j), y = P.getY(j), z = P.getZ(j);
-        const ripple = 1 + 0.14 * Math.sin(3 * Math.atan2(z, x) + a) * (1 - y*y);
-        P.setXYZ(j, x * ripple, y + 0.15 * x - 0.17 * x*x, z * ripple);
-      }
-      spray.scale(width * (side < 0 ? 0.21 : 0.22), side < 0 ? 0.16 : 0.22, depth * 0.185);
-      spray.rotateZ(side * 0.18).rotateY(-ang).translate(tip.x, tip.y + 0.035, tip.z);
-      add(spray, 0);
-    }
-  }
-  const geo = mergeGeometries(parts); geo.computeBoundingSphere(); return geo;
-}
-function shrubMaterial() {
-  const m = new THREE.MeshLambertMaterial({ color: 0xffffff });
-  m.onBeforeCompile = (sh) => {
-    sh.uniforms.uSnow = cover.uSnow; sh.uniforms.uBushB = BUSH_B;
-    sh.vertexShader = 'attribute float aStem; varying float vStem, vFacingUp;\n' + sh.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>
-      mat3 basis = mat3(instanceMatrix);
-      vec3 scaledNormal = normal / vec3(dot(basis[0],basis[0]),dot(basis[1],basis[1]),dot(basis[2],basis[2]));
-      vFacingUp = normalize(mat3(modelMatrix) * basis * scaledNormal).y;
-      vStem = aStem;`);
-    sh.fragmentShader = 'uniform float uSnow; uniform vec3 uBushB; varying float vStem,vFacingUp;\n' + sh.fragmentShader.replace('#include <color_fragment>', `#include <color_fragment>
-      float snow = uSnow * smoothstep(-0.42, 0.72, vFacingUp) * mix(0.92, 0.34, vStem);
-      // Three decodes the instance palette to linear RGB before this shader.
-      vec3 needles = mix(diffuseColor.rgb, vec3(0.116,0.162,0.118), 0.58);
-      diffuseColor.rgb = mix(mix(needles,vec3(0.105,0.069,0.044),vStem),vec3(0.82,0.85,0.90),snow);`)
-      .replace('#include <emissivemap_fragment>', `#include <emissivemap_fragment>
-        totalEmissiveRadiance += uBushB * uSnow * (1.0-smoothstep(-0.6,0.55,vFacingUp)) * vec3(0.23,0.26,0.25);`);
-    fogLayer(sh);
-  };
-  m.customProgramCacheKey = () => 'shrub-forks'; return m;
+  geometry.computeVertexNormals(); geometry.computeBoundingSphere();
 }
 // 近处树干换圆柱（11-13 美术，用户：近处树干别是多边形）：原树干是六棱柱（平面法线）。按原模型每一圈（同一高度的顶点）量圆心和外接半径，做 18 边、按圆算法线的圆柱，
 // 半径 ×1.04 把六棱柱整个包住——原树干照旧画（被盖在里面），实例矩阵、count 都不动。pines.glb 一个模型几棵树：按连通块分开，每块一根
@@ -1725,16 +1686,25 @@ float bF(vec2 p) { return 0.6 * bN(p) + 0.4 * bN(p * 2.7 + 5.2); }
   float iceE = abs(bA) - (bW - iceW * (0.7 + 0.6 * bN(vec2(bS * 2.1, bA * 3.0 + 5.0))));
   float ice = smoothstep(-0.03, 0.03, iceE) * step(0.001, iceW), thin = smoothstep(-0.16, -0.02, iceE) * (1.0 - ice) * step(0.001, iceW);
   diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.03, 0.045, 0.055), 0.6 * smoothstep(0.15, 0.75, uSnow)); // 雪天水面压暗少一点、偏蓝灰（原来像一条刚铲过雪的柏油路）
-  vec2 fq = vec2(bA * 1.6, bS * 0.55 - uT * 0.9); // 波纹顺流漂
+  float channel = clamp(1.0 - abs(bA) / max(0.1,bW), 0.0, 1.0);
+  float bend = bN(vec2(bS * 0.28, bA * 0.67));
+  vec2 fq = vec2(bA * 1.6 + bend * 0.7, bS * 0.55 - uT * 0.9); // 波纹顺流漂
   float fl = bF(fq), streak = smoothstep(0.62, 0.85, bF(vec2(bA * 3.5, bS * 0.18 - uT * 0.35))); // 顺流拉长的浅色水纹
   diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.05, 0.035, 0.022), 0.6 * smoothstep(bW - 0.3, bW, abs(bA))); // 近岸浅水透出褐色河床
-  diffuseColor.rgb = mix(diffuseColor.rgb * (0.8 + 0.4 * fl) + 0.05 * streak, vec3(0.14, 0.17, 0.2), thin * 0.7);
+  diffuseColor.rgb = mix(diffuseColor.rgb * (0.8 + 0.4 * fl) + vec3(.065,.085,.092) * streak * (.3 + .7 * channel), vec3(0.14, 0.17, 0.2), thin * 0.7);
+  // Broken ribbons of reflected sky travel down the current. The thalweg
+  // wanders between banks, leaving slack water near the snow shelf.
+  float course = bA - .21 * sin(bS * .41) - .12 * sin(bS * 1.07);
+  float travel = bS - uT * (.66 + .25 * channel);
+  float swell = bF(vec2(course * 2.8 + .32 * sin(travel * 1.42), travel * .86));
+  float glint = smoothstep(.49,.73,swell) * smoothstep(.17,.62,channel);
+  diffuseColor.rgb += vec3(.115,.155,.18) * glint * (1.0-ice);
   float downstream = bS - uWheel.x;
   if (downstream > -0.6 && downstream < 1.8 && abs(bA) < 0.85) {
     float ripple = length(vec2(bA * 1.6, downstream - 0.12));
-    float crests = smoothstep(.55, .96, cos(ripple * 26.0 - uWheel.y * 8.0));
+    float crests = smoothstep(.55, .96, cos(ripple * 22.0 + 5.0 * fl - uWheel.y * 8.0));
     float spread = (1.0 - smoothstep(.18,1.6,ripple)) * smoothstep(-.6,.05,downstream);
-    diffuseColor.rgb += vec3(.08,.105,.11) * spread * crests * uWheel.z * (1.0 - ice);
+    diffuseColor.rgb += vec3(.08,.105,.11) * (.35 + .65 * fl) * spread * crests * uWheel.z * (1.0 - ice);
   }
   diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.6, 0.66, 0.72) * (0.9 + 0.1 * bN(vec2(bA * 9.0, bS * 2.0))), ice);`)
         .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\n  roughnessFactor = mix(mix(roughnessFactor, 1.0, smoothstep(0.4, 0.7, bN(vec2(bA * 5.0, bS * 0.8 - uT * 0.6)))), 0.45, ice);') // 11-04 r4 #6：太阳高光按顺流漂的噪声一段段打散（原来两岸各一道连续的细白线，像车道线）
@@ -1744,7 +1714,7 @@ float bF(vec2 p) { return 0.6 * bN(p) + 0.4 * bN(p * 2.7 + 5.2); }
     normal = normalize((viewMatrix * vec4(normalize(vec3(-gw.x, 1.0, -gw.y)), 0.0)).xyz); }`)
         .replace('#include <fog_fragment>', `{ float fr = pow(1.0 - clamp(dot(normal, normalize(vViewPosition)), 0.0, 1.0), 4.0);
 #ifdef USE_FOG
-    gl_FragColor.rgb = mix(gl_FragColor.rgb, mix(vec3(0.035, 0.05, 0.025), fogColor, 0.15 + 0.45 * uSnow), fr * 0.6 * (1.0 - ice)); // 斜看映出的多半是两岸的树（暗绿），一点天色（雪天两岸白，多映一点；11-04 r4 #6：晴天原来映 30% 天色，整条溪成灰带）
+    gl_FragColor.rgb = mix(gl_FragColor.rgb, mix(vec3(0.035, 0.05, 0.025), fogColor, 0.15 + 0.45 * uSnow), fr * (0.47 - 0.18 * glint) * (1.0 - ice)); // 斜看映出的多半是两岸的树（暗绿），一点天色（雪天两岸白，多映一点；11-04 r4 #6：晴天原来映 30% 天色，整条溪成灰带）
 #endif
     gl_FragColor.a = vB.w; }
 #include <fog_fragment>`);
@@ -1779,10 +1749,36 @@ float bF(vec2 p) { return 0.6 * bN(p) + 0.4 * bN(p * 2.7 + 5.2); }
     const wheel = BROOK.wheel = new THREE.Mesh(mergeGeometries(wp), W.planks); wheel.position.y = ay; wheel.receiveShadow = true; g.add(wheel); // 会转：不投影（阴影不每帧重画）
     { const rag = new THREE.Group(), y0 = r - 0.12; rag.name = 'd2_rag'; // 第 2 天夜里缠在一片叶子上的红布（同标桩的布，wheelJam 挑哪片、显出来）：本地 +y = 叶片朝外
       const TL = r - 0.18 + (r - 0.02) * Math.cos(WHEEL.stopA) + 0.06; // 布尾长：从挂点垂到水面下一点
-      const wrap = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.2, 0.07).translate(hs * 0.07, y0 + 0.02, 0), RAG.mat), tail = new THREE.Mesh(new THREE.PlaneGeometry(0.07, TL, 1, 6).translate(0, -TL / 2, 0), RAG.tail); // 缠在叶片靠岸（小棚那头）的一端（11-13 评审 F7：原来在中间，提灯照不到）
-      tail.position.set(hs * 0.15, y0 + 0.1, 0); tail.rotation.set(-WHEEL.stopA, Math.PI / 2, 0); // 叶片停在 stopA 时布尾正好竖直挂进水里、面朝岸
+      // A biased strip wound twice around the paddle's rectangular cross-section.
+      const verts = [], uv = [], indices = [], loops = 10;
+      const profile = [[-.141,-.022],[.141,-.022],[.155,-.014],[.155,.014],[.141,.022],[-.141,.022],[-.155,.014],[-.155,-.014]];
+      for (let i = 0; i <= loops * 2; i++) {
+        const phase = i / loops * profile.length, k = Math.floor(phase), t = phase-k;
+        const a = profile[k % 8], b = profile[(k+1) % 8];
+        const x = hs * (-.011 + .162*i/(loops*2));
+        for (const edge of [-1,1]) {
+          verts.push(x+.034*edge, y0+THREE.MathUtils.lerp(a[0],b[0],t), THREE.MathUtils.lerp(a[1],b[1],t));
+          uv.push((edge+1)/2, i/loops);
+        }
+        if(i) { const j=2*i; indices.push(j-2,j-1,j,j,j-1,j+1); }
+      }
+      const cloth = new THREE.BufferGeometry();
+      cloth.setAttribute('position',new THREE.Float32BufferAttribute(verts,3)); cloth.setAttribute('uv',new THREE.Float32BufferAttribute(uv,2)); cloth.setIndex(indices); cloth.computeVertexNormals();
+      const wrap = new THREE.Mesh(cloth, RAG.mat);
+      const tail = new THREE.Mesh(new THREE.PlaneGeometry(.064,TL,4,14).translate(0,-TL/2,0), RAG.tail);
+      const tp = tail.geometry.attributes.position;
+      for(let i=0;i<tp.count;i++) { const f=-tp.getY(i)/TL; tp.setZ(i, .012*Math.sin(f*9)*f+.004*Math.sin(tp.getX(i)*140)); }
+      tail.geometry.computeVertexNormals();
+      tail.position.set(hs * 0.15, y0 - .141, -.022); tail.rotation.set(-WHEEL.stopA, Math.PI / 2, 0); // 叶片停在 stopA 时布尾正好竖直挂进水里、面朝岸
       rag.add(wrap, tail); rag.visible = false; wheel.add(rag); layers.set('d2_rag', rag); meshes.push(wrap, tail); BROOK.rag = rag; }
-    { const fr = BROOK.drift = new THREE.Mesh(new THREE.PlaneGeometry(0.3, 0.55, 2, 3).rotateX(-Math.PI / 2), RAG.mat); fr.visible = false; G.add(fr); BROOK.wi = i; BROOK.lvlAt = lvlAt; } // 顺水漂下来的那块布（WHEEL.drift）：不是图层、点不到，漂到水轮就换成缠在叶片上的 d2_rag
+    { const cloth=new THREE.PlaneGeometry(.17,.68,5,16).rotateX(-Math.PI/2);
+      const v=cloth.attributes.position;
+      for(let j=0;j<v.count;j++) {
+        const x=v.getX(j),z=v.getZ(j),f=(z+.34)/.68;
+        v.setXYZ(j,x*(.72+.28*Math.sin(f*Math.PI))+.035*Math.sin(f*7),.018+.030*Math.cos(x*39+f*5)+.022*Math.sin(f*8),z+.011*Math.sin(x*93)*f*f);
+      }
+      cloth.computeVertexNormals();
+      const fr = BROOK.drift = new THREE.Mesh(cloth, RAG.mat); fr.visible = false; G.add(fr); BROOK.wi = i; BROOK.lvlAt = lvlAt; } // 顺水漂下来的那块布（WHEEL.drift）：不是图层、点不到，漂到水轮就换成缠在叶片上的 d2_rag
     const sp = [new THREE.CylinderGeometry(0.035, 0.035, 2 * (w + 0.35), 6).rotateZ(Math.PI / 2).translate(0, ay, 0)], sx = hs * (w + 1.5), sy = gy + terrainH(x + tz * sx, z - tx * sx);
     for (const e of [-1, 1]) { const y0 = top - 0.3, y1 = ay + 0.08; sp.push(new THREE.BoxGeometry(0.12, y1 - y0, 0.12).translate(e * (w + 0.35), (y0 + y1) / 2, 0)); } // 两根桩，埋进岸里
     const bearingX = hs * (w + 0.35), housingX = sx - hs * 0.3;
@@ -1852,21 +1848,28 @@ function updateWheel(dt) {
   const untie = BROOK.untying;
   if (untie) {
     untie.time += dt;
-    const u = Math.min(1, untie.time / 0.85), loosen = THREE.MathUtils.smoothstep(u, 0, 0.42), pull = THREE.MathUtils.smoothstep(u, 0.32, 1);
-    BROOK.rag.scale.set(1 + 0.16 * loosen, 1 - 0.36 * pull, 1 + 0.27 * loosen);
+    const u = Math.min(1, untie.time / 1.65), loosen = THREE.MathUtils.smoothstep(u, 0, 0.42), pull = THREE.MathUtils.smoothstep(u, 0.32, 1);
+    const [wrap, tail] = BROOK.rag.children;
+    const peel = THREE.MathUtils.smoothstep(u, .12, .72);
+    wrap.geometry.setDrawRange(0, Math.max(0, Math.ceil((1-peel)*20))*6);
+    tail.rotation.z = untie.sign * (.72*loosen - .25*pull);
+    tail.position.x = untie.sign * (.15 - .16*peel);
     BROOK.rag.position.x = untie.x + untie.sign * 0.62 * pull;
-    BROOK.rag.position.y = 0.13 * Math.sin(u * Math.PI);
+    BROOK.rag.position.y = 0.16 * pull;
     if (u >= 1) {
       BROOK.rag.visible = false; BROOK.untying = null;
       BROOK.run = { stop: false, a0: BROOK.ang, T: WHEEL.start, t: 0 }; wheelGroan(true);
-      if (selected === 'd2_rag' && untie.showCard) cardOpen();
+      BROOK.run.showCard = untie.showCard;
     }
   }
   const R = BROOK.run;
   if (R) { R.t += dt; const u = Math.min(1, R.t / R.T);
     if (R.stop) { BROOK.ang = R.a0 + R.d * (1 - (1 - u) * (1 - u)); BROOK.spin = 1 - u; } // 匀减速
     else { BROOK.ang = R.a0 + WHEEL.w * R.T * u * u / 2; BROOK.spin = u; } // 匀加速
-    if (u >= 1) BROOK.run = null; }
+    if (u >= 1) {
+      BROOK.run = null;
+      if (!R.stop) { showQuest(); if (R.showCard && selected === 'd2_rag') cardOpen(); }
+    } }
   else if (BROOK.spin > 0) BROOK.ang += WHEEL.w * dt;
   BROOK.wake.value.y = BROOK.ang; BROOK.wake.value.z = BROOK.spin;
   W.rotation.x = -BROOK.ang; // 底下的叶片顺流走
@@ -1902,7 +1905,7 @@ function nightDev(r) { // 第 2 天夜里出门：院子里随便走；提着灯
   const out = Math.hypot(r.x, r.z) - D2.yard; if (out <= 0) return 0;
   if (!gear.lantern) return out * D2.lostAt / DARK_WALK;
   let d = out; const P = BROOK.wirePts;
-  if (P && game.found.has('wheel0')) { const w = wheelAt(); d = Math.min(d, Math.hypot(r.x - w.x, r.z - w.z) - WHEEL.lane);
+  if (P && (game.found.has('wheel0') || game.found.has('log2'))) { const w = wheelAt(); d = Math.min(d, Math.hypot(r.x - w.x, r.z - w.z) - WHEEL.lane);
     for (let i = 1; i < P.length; i++) { const [ax, az] = P[i - 1], [bx, bz] = P[i], vx = bx - ax, vz = bz - az, t = THREE.MathUtils.clamp(((r.x - ax) * vx + (r.z - az) * vz) / (vx * vx + vz * vz || 1), 0, 1); d = Math.min(d, Math.hypot(r.x - ax - vx * t, r.z - az - vz * t) - WHEEL.lane); } }
   return Math.max(0, d) * D2.lostAt / WHEEL.dark;
 }
@@ -1910,17 +1913,29 @@ function nightDev(r) { // 第 2 天夜里出门：院子里随便走；提着灯
 function brookClear() {
   const m4 = new THREE.Matrix4(), zero = new THREE.Matrix4().makeScale(0, 0, 0), gone = new Set(), q = (x, z) => brookAt(x + terrain.ox, z + terrain.oz);
   const wet = (x, z, r) => { const b = q(x, z); return b.d < b.w + r; }, A = BROOK.wireA;
+  // Leave room for a person between the porch and the generator. Remove a
+  // shrub's render instance and its collision footprint together.
+  const approach = new Set();
+  if (A) {
+    const startZ = 3.6, dz = A.z - startZ, length2 = A.x * A.x + dz * dz;
+    for (let i = 0; i < SHRUB_XZ.length; i += 3) {
+      const [x, z, radius] = SHRUB_XZ.slice(i, i + 3);
+      const t = THREE.MathUtils.clamp((A.x * x + dz * (z - startZ)) / length2, 0, 1);
+      if (Math.hypot(x - t * A.x, z - startZ - t * dz) < radius + 1.15)
+        approach.add(Math.fround(x) + ',' + Math.fround(z));
+    }
+  }
   const V = !x3.shifted && BROOK.view, Lp = LAMPS.entry_porch_lamp.pos, sight = new Set(), key = (x, z) => Math.fround(x) + ',' + Math.fround(z); // 解布处 → 门廊灯这条视线上的树（树冠按宽度算）连树干一起去掉：修好后回头看得见灯亮（11-13 评审 F6：原来被树挡住，修前修后画面亮度 23.0 / 23.1）
   if (V) for (const o of scene.children) if (o.isInstancedMesh && o.name === 'forest') { const bb = o.geometry.boundingBox || (o.geometry.computeBoundingBox(), o.geometry.boundingBox), hw = (bb.max.x - bb.min.x) / 2, vx = Lp[0] - V.x, vz = Lp[2] - V.z, vv = vx * vx + vz * vz;
     for (let i = 0; i < o.count; i++) { o.getMatrixAt(i, m4); if (!m4.elements[5]) continue; const x = m4.elements[12], z = m4.elements[14], t = THREE.MathUtils.clamp(((x - V.x) * vx + (z - V.z) * vz) / vv, 0, 1);
       if (Math.hypot(x - V.x - vx * t, z - V.z - vz * t) < hw * Math.hypot(m4.elements[0], m4.elements[1], m4.elements[2]) * 0.75 + 0.4) sight.add(key(x, z)); } }
   for (const o of scene.children) if (o.isInstancedMesh && /^(forest|floor)$/.test(o.name)) { let ch = false;
     for (let i = 0; i < o.count; i++) { o.getMatrixAt(i, m4); const x = m4.elements[12], z = m4.elements[14];
-      if (m4.elements[5] && (wet(x, z, o.name === 'floor' ? 1.6 : 1.1) || (o.name === 'forest' && A && Math.hypot(x - A.x, z - A.z) < 3) || (o.name === 'forest' && sight.has(key(x, z))))) { o.setMatrixAt(i, zero); gone.add(Math.fround(x) + ',' + Math.fround(z)); ch = true; } } // 水轮小棚 3m 内也不留树（11-04 复测 ENV5：棚压在两棵大松树的帽檐底下，电线一出棚就擦着树冠）
+      if (m4.elements[5] && (wet(x, z, o.name === 'floor' ? 1.6 : 1.1) || (o.name === 'forest' && A && Math.hypot(x - A.x, z - A.z) < 3) || (o.name === 'forest' && (sight.has(key(x, z)) || approach.has(key(x, z)))))) { o.setMatrixAt(i, zero); gone.add(Math.fround(x) + ',' + Math.fround(z)); ch = true; } } // 水轮小棚 3m 内也不留树（11-04 复测 ENV5：棚压在两棵大松树的帽檐底下，电线一出棚就擦着树冠）
     if (ch) { o.instanceMatrix.needsUpdate = true; o.computeBoundingSphere(); } }
   for (let i = TREE_XZ.length - 2; i >= 0; i -= 2) if (gone.has(Math.fround(TREE_XZ[i]) + ',' + Math.fround(TREE_XZ[i + 1])) || wet(TREE_XZ[i], TREE_XZ[i + 1], 0.2)) TREE_XZ.splice(i, 2);
   for (let i = PITS.length - 3; i >= 0; i -= 3) if (gone.has(Math.fround(PITS[i]) + ',' + Math.fround(PITS[i + 1]))) PITS.splice(i, 3);
-  for (let i = SHRUB_XZ.length - 3; i >= 0; i -= 3) if (wet(SHRUB_XZ[i], SHRUB_XZ[i + 1], 1.1)) SHRUB_XZ.splice(i, 3);
+  for (let i = SHRUB_XZ.length - 3; i >= 0; i -= 3) if (gone.has(key(SHRUB_XZ[i], SHRUB_XZ[i + 1])) || wet(SHRUB_XZ[i], SHRUB_XZ[i + 1], 1.1)) SHRUB_XZ.splice(i, 3);
   window.__brookCut = gone.size; window.__brookSight = sight.size; // 调试
 }
 // 电线（环境评审 #11）：水轮小棚 → 附近的树（树干上钉白瓷绝缘子，离地约 3.2m）→ 小屋东墙；每段 ≤ 8.5m，按悬链线垂一点。树隔太远的地方立剥了皮的杆子
@@ -2224,7 +2239,7 @@ function floorMap() {
 async function plantForest(center, y) {
   const [pine, pines, autumn, dead] = await Promise.all(TREE_URLS.map(loadTree)); lastYield = performance.now(); // 等下载不算卡
   const rand = rng(7), f = lite ? 0.6 : 1, taken = [];
-  forestCenter = center; setupTerrain(center); window.cabin.terrain = { terrain, terrainH, terrainSlope, THICKETS, SHRUB_XZ, TREE_XZ, STEEP, pathClear, trailClear, brookWet }; // 调试 / navmap_out.py
+  forestCenter = center; setupTerrain(center); x3.fitGround?.(); window.cabin.terrain = { terrain, terrainH, terrainSlope, THICKETS, SHRUB_XZ, TREE_XZ, STEEP, pathClear, trailClear, brookWet }; // 调试 / navmap_out.py
   await maybeYield(); plant(pine, await pathSidePoints(rand, 360 * f, 2.2, taken), rand, 3.5, 8.5, y);          // 路两边：先种，占好位置（10-31：220 → 360，贴路细高云杉多种）
   await maybeYield(); plant(pines, await pathSidePoints(rand, 40 * f, 4, taken), rand, 4.5, 7, y);
   await maybeYield(); plant(autumn, await pathSidePoints(rand, 80 * f, 2.2, taken), rand, 3.5, 7.5, y);
@@ -2280,6 +2295,23 @@ async function plantForest(center, y) {
     D.push(...await walkPoints(r5, 8 * f, 3, 18, 2.5, dt, (x, z) => treeOk(x, z) && snag(x, z)), ...await ringPoints(r5, 4 * f, 9, 22, 2.5, center, dt, (x, z) => nearDoor(x, z) && snag(x, z)), ...await ringPoints(r5, 4 * f, 12, 20, 2.5, X, dt, snag)); // 枯立木（同幼树，不进 taken）
     await maybeYield(); Y.push(...await ringPoints(r5, 28 * f, 9, 26, 1.6, center, yt, (x, z) => nearDoor(x, z) && free(x, z)), ...await ringPoints(r5, 14 * f, 12, 20, 1.6, X, yt, free)); // 幼树（同上面，不进 taken）；门口树冠已排满，大树多半种不下（plant 里按树冠缩成 0）
     plant(pine, P, r5, 3.5, 9, y, true); plant([...dead], D, r5, 3, 6, y, true); /* 枯立木没有树冠：拷一份不带 radius 的，不和旁边的树冠互相避让（原来走廊 45 棵大多被缩成 0） */ plant(lodP, Y, r5, 0.9, 2.1, y, true); window.__plant5 = [P.length, D.length, Y.length]; } // 调试
+  // The day-three fork crosses two sparse pockets between the cabins.
+  // Plant small groups on the shoulders, leaving both footprint routes clear.
+  {
+    const rng3 = rng(3841), young = [], mature = [];
+    const routes = [trailCurve, trail3Curve].flatMap(curve =>
+      curve.getSpacedPoints(Math.ceil(curve.getLength())).map(p => [p.x,p.z]));
+    for (const [cx,cz] of [[26,-14],[49,-43]]) {
+      for (let i=0;i<90;i++) {
+        const a=rng3()*Math.PI*2, radius=4+9*rng3(), x=cx+radius*Math.cos(a), z=cz+radius*Math.sin(a);
+        if (nearAny(routes,x,z,3.6) || nearAny(taken,x,z,2.4) || nearAny(pathClear,x,z,3.8)) continue;
+        if (brookWet(x,z) || terrainSlope(x,z)>STEEP || lakeD(x,z)<WATER.lake[2]*1.2+4) continue;
+        if (TREE_XZ.some((v,j)=>!(j%2) && Math.hypot(x-v,z-TREE_XZ[j+1])<2.4)) continue;
+        const point=[x,z]; takeAt(taken,x,z); (i%3 ? young : mature).push(point);
+      }
+    }
+    plant(lodP, young, rng3, 2.4, 4.6, y, true); plant(pine, mature,rng3,4.2,7.1,y,true);
+  }
   await plantEdgeShrubs(); // 11-12：第 2 天踪迹两侧、第 1 天开场沿路的灌木加密（成丛）；放在 brookClear 前，溪里的会一起清掉
   brookClear();
   await chunkForest(); nearTrunkSetup();
@@ -2342,6 +2374,14 @@ loader.load('cabin.glb', async (gltf) => {
   T('merge');
   scene.add(model);
   setupToggles();
+  for (const [name,t] of toggles) if (ELECTRIC.test(name)) {
+    const saved = game.lights?.[name];
+    if (typeof saved === 'boolean' || (game.day>=2 && HOUSE_LAMPS.includes(name))) {
+      t.on = typeof saved === 'boolean' ? saved : true;
+      t.k = Number(t.on); for (const apply of t.parts) apply(t.k);
+    }
+  }
+  game.lightsReady = true;
   setupFire();
   for (const n of ['loft_gate', ...Object.keys(DOORS).filter((n) => DOORS[n].closeOnLoad)]) { const d = toggles.get(n); if (d) { d.on = true; d.k = 1; for (const p of d.parts) p(1); } } // 和故事一致：大门保持 Rhino 里敞开的样子、阁楼横杆放下；开着建模的柜门初始关上
   { const d = toggles.get('entry_porch_lamp'); if (d) d.on = true; } // 开场：门廊灯亮着
@@ -3138,7 +3178,7 @@ const game = (() => {
   const str = (a) => (Array.isArray(a) ? a.filter((k) => typeof k === 'string') : []); // 坏存档里混进数字、null、对象：只留字符串（不然 k.startsWith 报错，停在 84%）
   const seen = str(s && s.seen); // 第 1 天进过的房间 + 'stove' / 'desk'（刷新后旁白不重播、任务条不空、书记员不再领路）
   const g = { day: Math.min(3, Math.max(1, Math.floor(+(s && s.day)) || 1)), found: new Set(str(s && s.found)), night: false, dusk: false, wear: s && Array.isArray(s.wear) ? s.wear : null, // wear = [第几天, 穿着大衣, 提着灯]（gearSave）；day 夹到 1–3
-    seen: new Set(seen.filter((k) => k !== 'stove' && k !== 'desk' && k !== 'help')), stoveSeen: seen.includes('stove'), deskSeen: seen.includes('desk'), helpSeen: seen.includes('help'),
+    lights: s?.lights || null, seen: new Set(seen.filter((k) => k !== 'stove' && k !== 'desk' && k !== 'help')), stoveSeen: seen.includes('stove'), deskSeen: seen.includes('desk'), helpSeen: seen.includes('help'),
     snap: str(s && s.snap) }; // snap：站在 ✕ 门廊下那一刻的 found（进 ✕ 时存、选结局时更新），通关后「回到另一间屋的门廊下」载入它（r3 #15）
   g.entered = g.seen.size > 0;
   if (g.found.has('fire') && !g.found.has('page')) g.found.add('page'); // v2 之前的存档没有这页纸
@@ -3148,7 +3188,10 @@ const game = (() => {
   g.saved = g.found.size > 0; // 有存档：刷新时问「继续上次 / 重新开始」（resumeAsk）
   return g;
 })();
-function saveGame() { SAVE.set(JSON.stringify({ day: game.day, found: [...game.found], wear: game.wear, seen: [...game.seen, ...(game.stoveSeen ? ['stove'] : []), ...(game.deskSeen ? ['desk'] : []), ...(game.helpSeen ? ['help'] : [])], ...(game.snap.length ? { snap: game.snap } : {}) })); }
+function saveGame() {
+  if (game.lightsReady && !x3.on && !game.found.has('ended'))
+    game.lights = Object.fromEntries([...toggles].filter(([name])=>ELECTRIC.test(name)).map(([name,t])=>[name,t.on]));
+  SAVE.set(JSON.stringify({ day: game.day, found: [...game.found], wear: game.wear, lights: game.lights, seen: [...game.seen, ...(game.stoveSeen ? ['stove'] : []), ...(game.deskSeen ? ['desk'] : []), ...(game.helpSeen ? ['help'] : [])], ...(game.snap.length ? { snap: game.snap } : {}) })); }
 // Journal「第一天」：键 → [英标题, 中标题, 英, 中]，按这个顺序列出已找到的
 const DAY1_TEXT = {
   page: ['A Page on the Desk', '书桌上的一页纸', 'A page of inquiry notes, in the clerk\'s hand, lying on the desk before she had sat down to it: "The inspector lit the stove. In the firebox, a letter not burnt through."', '书桌上压着一页调查记录，是书记员的笔迹，可她还没坐下来写过：“稽查生了火。炉膛里有一封没烧完的信。”'],
@@ -3228,6 +3271,14 @@ function showQuest() {
   const remaining = DAY1_NEED.filter((key) => !game.found.has(key)).length;
   $('prog').innerHTML = game.day === 1 && !game.night && !opening && remaining > 0 && remaining < DAY1_NEED.length
     ? lbl(remaining === 1 ? 'One clue remains' : remaining + ' clues remain', '还剩 ' + remaining + ' 条线索') : '';
+  if (game.day === 2 && !opening) {
+    const total = DAY2_NEED.length, done = DAY2_NEED.filter(key => game.found.has(key)).length;
+    const left = total - done;
+    $('prog').innerHTML = lbl(
+      left ? `Clues ${done}/${total} · ${left} remaining` : `All ${total}/${total} clues found`,
+      left ? `调查线索 ${done}/${total} · 还剩 ${left} 条` : `调查线索 ${done}/${total} · 已找齐`);
+  }
+  if (game.day===2 && d2.logBlocked && !game.found.has('log2')) el.innerHTML=lbl('Step aside to let the clerk reach the bookcase.','请让开过道，让书记员走到书架前。');
   el.classList.toggle('end', k === 'end'); el.classList.toggle('on', !opening && !!el.innerHTML);
   $('jBtn').hidden = !game.found.has('journal'); // 遗稿：开局不出现，集齐第 1 天线索、弹过「解锁遗稿」才有
 }
@@ -3555,19 +3606,43 @@ function clerkSpot(w, about) { // 她站到哪个节点看得见 about（全部�
   for (const k of cand) { const e = new THREE.Vector3(k.x, k.y + hh, k.z); /* 同 headOf 的眼高 */ if (!L.every((t) => sees(e, t))) continue; const cost = Math.hypot(k.x - here.x, k.z - here.z) + (Math.abs(k.y - here.y) > 1 ? 6 : 0); if (!best || cost < best.cost) best = { ...k, cost }; }
   return best;
 }
+let paperReading = null;
+function returnDeskPaper() {
+  if (!paperReading) return;
+  const {sheet,home,rotation}=paperReading;
+  paperReading.actor.reading=false;
+  sheet.position.copy(home); sheet.quaternion.copy(rotation); paperReading=null;
+}
+function tickDeskPaper(dt) {
+  const r=paperReading;
+  if (!r) return;
+  if (!r.actor.root.visible || game.night || !r.actor.tasks.some(t => t===r.wait)) { returnDeskPaper(); return; }
+  const grip=r.actor.root.getObjectByName('middle_01_r');
+  if (!grip) { returnDeskPaper(); return; }
+  r.time+=dt;
+  const v=grip.getWorldPosition(new THREE.Vector3());
+  const forward=new THREE.Vector3(0,0,1).applyQuaternion(r.actor.root.quaternion);
+  v.addScaledVector(forward,.075); v.y+=.035;
+  const k=THREE.MathUtils.smoothstep(r.time,0,.48)*(1-THREE.MathUtils.smoothstep(r.time,3.15,3.65));
+  r.sheet.position.lerpVectors(r.home,v,k);
+  const read=new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0,1,0),r.actor.root.rotation.y);
+  read.multiply(new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(1,0,0),-.85));
+  r.sheet.quaternion.slerpQuaternions(r.rotation,read,k);
+  r.actor.look=r.sheet.position.toArray(); r.actor.lookT=.4;
+}
 function readPageTogether() {
-  const target = 'desk_page';
-  const daylight = () => game.day === 1 && !game.night;
-  // Wait for the paper to return to the desk before choosing a place to stand.
+  const target='desk_page', daylight=()=>game.day===1 && !game.night;
   whenSeen(target, () => {
-    const w = clerkHere(), page = worldTgt(target)?.pts[0];
-    const spot = w && page && clerkSpot(w, target);
-    if (!spot) return;
-    clerkDo((p) => [...walkTo(p, spot.n), ['face', page.x, page.z],
-      ['look', page.x, page.y, page.z, 1.4], ['call', () => {
-        if (daylight() && sees('player', target)) clerkSay(PAGE_SAYS, { about: target, walk: false });
-      }], ['call', (q) => { q.roam = 20; }]]);
-  }, { cond: () => !inspecting() && card.hidden, hold: 0.5, abort: () => !daylight() });
+    const sheet=layers.get(target); if (!sheet) return;
+    const page=sheet.position;
+    clerkDo(actor => [...walkTo(actor,'desk'),['face',page.x,page.z],
+      ['call', p => {
+        const wait=['wait',()=>!paperReading || paperReading.time>=3.65,5];
+        paperReading={actor:p,sheet,home:page.clone(),rotation:sheet.quaternion.clone(),time:0,wait};
+        p.play('PickUp_Table',.22); p.reading=true; p.point={reading:true,time:0};
+        return [wait,['call',()=>{returnDeskPaper(); if(daylight()) clerkSay(PAGE_SAYS,{hear:6,walk:false});}]];
+      }]]);
+  },{cond:()=>!inspecting() && card.hidden, hold:.5, abort:()=>!daylight()});
 }
 function clerkSay(text, o = {}) { // o：about、hear、walk（false = 看不见就不说，不走过去）、jump（插队）、hint（提示键）、miss（最后没说）
   const t0 = performance.now(), can = () => { const x = clerkHere(); return !!x && clerkCan(x, o); };
@@ -3681,7 +3756,8 @@ function chgSay(key, on) {
   if (n[3]) return open ? ['The clerk: "Did you light the lamp?"', '书记员：“灯是你开的？”'] : ['The clerk: "Did you put the lamp out?"', '书记员：“灯是你关的？”'];
   return open ? [`The clerk: "Did you open the ${n[0]}?"`, `书记员：“${n[1]}是你打开的？”`] : [`The clerk: "Did you shut the ${n[0]}?"`, `书记员：“${n[1]}是你关上的？”`];
 }
-function chgTouch(name) { // toggle 里调：玩家刚开 / 关了一样东西
+function chgTouch(name) {
+  if (game.lightsReady && ELECTRIC.test(name) && !x3.on) saveGame(); // toggle 里调：玩家刚开 / 关了一样东西
   const key = toggles.has(name) ? name : DOORS[name]?.parent;
   if (game.day === 1 && !game.night && name === 'slop_pail_lid' && !game.found.has('n:pail')) { game.found.add('n:pail'); saveGame(); } // F3 夜里记录那句（NOTE_ME）
   if (game.day !== 1 || game.night || !game.found.has('page') || !key || !chgNoun(key) || HOUSE_LAMPS.includes(key)) return; // 她领路时开的四盏灯不算（11-10 iPhone 试玩：轻触误关了灯，过一会儿自己亮回来、记录写「稽查把关掉的灯又打开了」，读成「她开过，老头又开一次」）；壁灯照旧
@@ -3721,10 +3797,13 @@ function planWander(p) {
 }
 // 没烧完的信：炉门里那条灰面（y 0.482；柴从 z −1.30 往里），一张纸片，后沿稍翘、斜着放；canvas 画纸色、炭笔字行、一边烧掉的焦边
 const LETTER = { at: [1.385, 0.495, -1.27], size: [0.14, 0.0875], rot: [-Math.PI / 2 + 0.14, 0, 0.35] }; // at：11-10 抬 7mm、往里 8mm（原来前半张压在炉门框下沿后面，蹲下看也只露一条）
+function paperLines(text,width=15) {
+  return text.split(/\n+/).flatMap(line=>line.match(new RegExp('.{1,'+width+'}','gu')) || ['']);
+}
 function makeLetter() { // 纸：js/props3d.js 的 paperMesh（纤维、霉点、折痕、卷边的几何）；这里写字、画烧焦的那一边。字是真的英文（卡片里那段），烧掉的一边把行尾吃了
   const m = paperMesh(...LETTER.size, { seed: 19, tone: '#c4b28a', cutout: true, curl: 0.003, crease: 0.002, folds: [['h', 0.5]], wrinkle: 14, draw(x, W0, H0, R) {
-    handwrite(x, ['Inspector —'], { x0: 62, y0: 88, size: 46, pitch: 0, ink: '40,32,26', R, slant: 0.06 }); // 抬头（r2 情节 #7）：三十年里唯一一封没寄的信，是写给你的
-    handwrite(x, ['…east-north-east, about four miles.', 'Beneath an old spruce the ground has', 'split… Marked ✕. This place is not fit'], { x0: 62, y0: 150, size: 46, pitch: 66, ink: '40,32,26', R, slant: 0.06 });
+    handwrite(x, [lang()==='zh'?'稽查先生：':'Inspector —'], { x0: 62, y0: 88, size: 46, pitch: 0, ink: '40,32,26', R, slant: 0.06 }); // 抬头（r2 情节 #7）：三十年里唯一一封没寄的信，是写给你的
+    handwrite(x, lang()==='zh'?['……东北偏东，约四英里。','老云杉下，地面裂开……','标作 ✕。此地不宜进入。']:['…east-north-east, about four miles.', 'Beneath an old spruce the ground has', 'split… Marked ✕. This place is not fit'], { x0: 62, y0: 150, size: 46, pitch: 66, ink: '40,32,26', R, slant: 0.06 });
     x.strokeStyle = 'rgba(40,32,26,.55)'; x.lineWidth = 3; x.lineCap = 'round'; x.beginPath(); x.moveTo(130, 372); x.bezierCurveTo(240, 360, 330, 392, 460, 366); x.stroke(); // 信末拖出去的一笔
     x.save(); x.scale(W0 / 256, H0 / 160); const W = 256, H = 160;
     const burn = []; // 烧掉的那一边：从上沿右边斜到下沿中间，往外鼓、锯齿（两层不同尺度的抖动，放大看是撕烧的毛边，不是折线）
@@ -3809,10 +3888,11 @@ setInterval(() => {
 window.cabinFire = FIRE; // 调试 / 无头测试
 function makePage() { // v2：书桌上那页调查记录（折过三折的纸 + 墨水手写），放在桌面 loft_desk 包围盒顶上、靠前一点；字是卡片里那两句，下面没写的地方留白
   const d = layers.get('loft_desk'); if (!d) return;
+  const paperZh=()=>pageTrace?paperLines(pageTrace[1]):[];
   const m = paperMesh(0.15, 0.2, { seed: 23, tone: '#d9cfb4', curl: 0.004, folds: [['h', 0.333], ['h', 0.667]], wrinkle: 10, draw(x, W, H, R) {
-    handwrite(x, ['Inquiry Notes, the First Day.'], { x0: 96, y0: 170, size: 60, pitch: 0, R });
+    handwrite(x, [lang()==='zh'?'调查记录，第一天。':'Inquiry Notes, the First Day.'], { x0: 96, y0: 170, size: 60, pitch: 0, R });
     x.strokeStyle = 'rgba(28,26,50,.7)'; x.lineWidth = 3.4; x.lineCap = 'round'; x.beginPath(); x.moveTo(94, 200); x.bezierCurveTo(300, 190, 560, 208, 860, 194); x.stroke(); // 标题底下一道墨线
-    handwrite(x, ['The inspector lit the stove.', 'In the firebox, a letter not', 'burnt through.', '', 'Stores counted; all in order.', 'Stove drawing well.', ...(pageTrace ? ['', ...pageTrace[0].split(/ (?=without)/)] : [])], { x0: 96, y0: 330, size: 52, pitch: 78, R });
+    handwrite(x, lang()==='zh'?['稽查生了火。','炉膛里有一封没烧完的信。','','盘过储备，都还齐整。','炉子的抽风很好。',...paperZh()]:['The inspector lit the stove.', 'In the firebox, a letter not', 'burnt through.', '', 'Stores counted; all in order.', 'Stove drawing well.', ...(pageTrace ? ['', ...pageTrace[0].split(/ (?=without)/)] : [])], { x0: 96, y0: 330, size: 52, pitch: 78, R });
     x.fillStyle = 'rgba(28,26,50,.5)'; x.beginPath(); x.arc(760, 1180, 5 + R() * 2, 0, 7); x.fill(); const g = x.createRadialGradient(742, 1170, 0, 742, 1170, 26); g.addColorStop(0, 'rgba(28,26,50,.35)'); g.addColorStop(1, 'rgba(28,26,50,0)'); x.fillStyle = g; x.fillRect(700, 1130, 90, 90); // 墨点
   } });
   m.rotation.set(-Math.PI / 2, 0, 0.25); document.fonts.load('italic 40px "IM Fell English"').then(() => m.userData.repaint());
@@ -3825,11 +3905,12 @@ function makeNotes() { // 11-11 Fable 评审 A2：第 1 夜她写的那页记录
   if (!layers.get('desk_page')) makePage(); const ghost = layers.get('desk_page'); if (!ghost) return;
   ghost.visible = false; const gm = ghost.children[0].material; gm.transparent = true; gm.depthWrite = false; // 淡影：只在飞出来时露面（js/props3d.js applyView 改 opacity）
   const paras = NOTES_CARD[3].split(String.fromCharCode(10, 10)).slice(2), wrap = (t) => { const o = []; let l = ''; for (const w of t.split(' ')) { if (l && (l + ' ' + w).length > 28) { o.push(l); l = w; } else l = l ? l + ' ' + w : w; } if (l) o.push(l); return o; };
+  const paperZh=()=>paperLines(NOTES_CARD[4].split('\n\n').slice(2).join('\n'));
   const extra = paras.flatMap((t, i) => [...(i ? [''] : []), ...wrap(t)]);
   const m = paperMesh(0.15, 0.2 + 0.0115 * (extra.length + 1), { seed: 31, tone: '#dcd2b8', curl: 0.004, folds: [['h', 0.5]], wrinkle: 6, draw(x, W, H, R) {
-    handwrite(x, ['Inquiry Notes, the First Day.'], { x0: 96, y0: 170, size: 60, pitch: 0, R });
+    handwrite(x, [lang()==='zh'?'调查记录，第一天。':'Inquiry Notes, the First Day.'], { x0: 96, y0: 170, size: 60, pitch: 0, R });
     x.strokeStyle = 'rgba(28,26,50,.7)'; x.lineWidth = 3.4; x.lineCap = 'round'; x.beginPath(); x.moveTo(94, 200); x.bezierCurveTo(300, 190, 560, 208, 860, 194); x.stroke();
-    handwrite(x, ['The inspector lit the stove.', 'In the firebox, a letter not', 'burnt through.', '', 'Stores counted; all in order.', 'Stove drawing well.', '', ...extra], { x0: 96, y0: 330, size: 52, pitch: 78, R }); // 前六行和 makePage 同字同位置
+    handwrite(x, lang()==='zh'?['稽查生了火。','炉膛里有一封没烧完的信。','','盘过储备，都还齐整。','炉子的抽风很好。',...paperZh()]:['The inspector lit the stove.', 'In the firebox, a letter not', 'burnt through.', '', 'Stores counted; all in order.', 'Stove drawing well.', '', ...extra], { x0: 96, y0: 330, size: 52, pitch: 78, R }); // 前六行和 makePage 同字同位置
   } });
   m.rotation.set(-Math.PI / 2, 0, 0.1); m.userData.h = 0.2 + 0.0115 * (extra.length + 1); document.fonts.load('italic 40px "IM Fell English"').then(() => m.userData.repaint());
   const g = new THREE.Group(); g.name = 'desk_notes'; g.position.copy(ghost.position); g.add(m); // 不进 meshes：点它等于点书桌（书桌本来就出这页的卡片）
@@ -3842,9 +3923,9 @@ function notesPage(head, paras, seed, minRows = 0, signed = false) { // 桌上�
   const wrap = (t) => { const o = []; let l = ''; for (const w of t.split(' ')) { if (l && (l + ' ' + w).length > 28) { o.push(l); l = w; } else l = l ? l + ' ' + w : w; } if (l) o.push(l); return o; };
   const rows = () => paras().flatMap((t, i) => [...(i ? [''] : []), ...wrap(t)]), h = 0.2 + 0.0115 * (Math.max(minRows, rows().length) - 6);
   const m = paperMesh(0.15, h, { seed, tone: '#dcd2b8', curl: 0.004, folds: [['h', 0.5]], wrinkle: 6, draw(x, W, H, R) {
-    handwrite(x, [head], { x0: 96, y0: 170, size: 60, pitch: 0, R });
+    handwrite(x, [lang()==='zh'?(seed===37?'调查记录，第二天。':'调查记录，第三天。'):head], { x0: 96, y0: 170, size: 60, pitch: 0, R });
     x.strokeStyle = 'rgba(28,26,50,.7)'; x.lineWidth = 3.4; x.lineCap = 'round'; x.beginPath(); x.moveTo(94, 200); x.bezierCurveTo(300, 190, 560, 208, 860, 194); x.stroke();
-    handwrite(x, rows(), { x0: 96, y0: 330, size: 52, pitch: 78, R });
+    handwrite(x, lang()==='zh'?paperLines(seed===37?GAME_TEXT.notes2[2]:GAME_TEXT.xNote[2]+' '+xNotesSay()[1]):rows(), { x0: 96, y0: 330, size: 52, pitch: 78, R });
     if (signed) sigDraw(x, { x0: SIG_AT.x, y0: H - SIG_AT.y, w: SIG_AT.w });
   } });
   m.rotation.set(-Math.PI / 2, 0, 0.1); m.userData.h = h; document.fonts.load('italic 40px "IM Fell English"').then(() => m.userData.repaint());
@@ -3970,15 +4051,20 @@ const basin = { ice: null, water: null, chips: null };
 function makeBasin() {
   const g = layers.get('entry_washstand'); if (!g || basin.ice) return;
   const ice = new THREE.MeshStandardMaterial({ color: 0xb2cbd2, roughness: 0.29, transparent: true, opacity: 0.88 }); // 偏蓝灰：白搪瓷盆里太白的冰看不出来
+  // Horizontal slice of wash_basin's inner wall at y=.903. Its four
+  // quarter circles have fixed centres, with straight sides between them.
   const rim = new THREE.Shape();
-  for (let i = 0; i < 36; i++) {
-    const a = 2 * Math.PI * i / 36, c = Math.cos(a), v = Math.sin(a);
-    const x = 0.135 * Math.sign(c) * Math.pow(Math.abs(c), 0.72);
-    const y = 0.065 * Math.sign(v) * Math.pow(Math.abs(v), 0.72) * (1 + 0.025 * Math.sin(5 * a));
-    if (i) rim.lineTo(x, y); else rim.moveTo(x, y);
+  for (let corner = 0; corner < 4; corner++) {
+    const cx = [0.135, -0.135, -0.135, 0.135][corner];
+    const cy = [0.05, 0.05, -0.05, -0.05][corner];
+    for (let j = 0; j <= 12; j++) {
+      const a = (corner + j / 12) * Math.PI / 2;
+      const x = cx + 0.0372 * Math.cos(a), y = cy + 0.0372 * Math.sin(a);
+      if (!corner && !j) rim.moveTo(x, y); else rim.lineTo(x, y);
+    }
   }
   rim.closePath();
-  const sheet = new THREE.ExtrudeGeometry(rim, { depth: 0.037, bevelSize: 0.0018, bevelThickness: 0.002, bevelSegments: 2 });
+  const sheet = new THREE.ExtrudeGeometry(rim, {depth: 0.001, bevelEnabled: false});
   sheet.rotateX(-Math.PI / 2);
   const surface = ice.clone(), rand = rng(317);
   surface.map = d2Canvas(256, 128, (ctx, w, h) => {
@@ -3998,10 +4084,10 @@ function makeBasin() {
   const uv = sheet.attributes.uv, pos = sheet.attributes.position;
   for (let i = 0; i < uv.count; i++) uv.setXY(i, pos.getX(i) / 0.28 + 0.5, pos.getZ(i) / 0.14 + 0.5);
   surface.color.setHex(0xd9e8ea);
-  basin.ice = new THREE.Mesh(sheet, [surface, ice]); basin.ice.position.set(-0.85, 0.866, 1.61);
+  basin.ice = new THREE.Mesh(sheet, [surface, ice]); basin.ice.position.set(-0.85, 0.902, 1.6123);
   const frost = new THREE.LineBasicMaterial({ color: 0xe5edf0, transparent: true, opacity: 0.57, depthWrite: false });
   for (const seam of [[[-0.106, -0.019], [-0.067, -0.011], [-0.055, 0.005], [-0.018, 0.012], [0.002, 0.034]], [[-0.055, 0.005], [-0.061, 0.026], [-0.081, 0.043]], [[0.095, -0.022], [0.076, -0.009], [0.054, -0.014]]]) {
-    const points = seam.map(([x, z]) => new THREE.Vector3(x, 0.0392, z));
+    const points = seam.map(([x, z]) => new THREE.Vector3(x, 0.0012, z));
     basin.ice.add(new THREE.Line(new THREE.BufferGeometry().setFromPoints(points), frost));
   }
   basin.water = new THREE.Mesh(new THREE.PlaneGeometry(0.275, 0.135), new THREE.MeshStandardMaterial({ color: 0x2c3a40, roughness: 0.05, transparent: true, opacity: 0.75 }));
@@ -4116,7 +4202,7 @@ for (const [n, c] of Object.entries(D2_CARDS)) { INFO[n] = [c[0], c[1], c[5]]; S
 function quest2() {
   const f = game.found;
   if (f.has('notes2')) return 'end2';
-  if (game.night) return game.dusk ? 'dusk' : f.has('wheel2') ? (BROOK.errand ? 'dusk' : 'night') : BROOK.dark ? (gear.lantern ? 'wheel' : 'wheelLamp') : 'dusk'; // errand：她起身去点提灯、还没坐回书桌（clerkLantern） // 她坐下以后、灯灭之前那几秒任务行空着（不先说「她在写」再改口）
+  if (game.night) return game.dusk || BROOK.untying || BROOK.run?.stop === false ? 'dusk' : f.has('wheel2') ? (BROOK.errand ? 'dusk' : 'night') : BROOK.dark ? (gear.lantern ? 'wheel' : 'wheelLamp') : 'dusk'; // errand：她起身去点提灯、还没坐回书桌（clerkLantern） // 她坐下以后、灯灭之前那几秒任务行空着（不先说「她在写」再改口）
   if (f.has('d2light')) return 'home2';
   return DAY2_NEED.every((k) => f.has(k)) ? (smokeUp() ? 'dusk2' : 'wait2') : DAY2_NEED.some((k) => f.has(k)) ? 'out1' : 'out'; // 四样齐了、烟还没起来：任务行空着、不提示（11-13 评审 F1：原来 12:38 就叫人看树梢，烟 17.2 点才有，看了是空的）
 }
@@ -4268,11 +4354,11 @@ function ragMat(sway) {
   const m = new THREE.MeshStandardMaterial({ color: '#a02818', roughness: 1, side: THREE.DoubleSide }); // 11-13 评审 F7：原来 #8a3a2a 偏褐，夜里提灯下看着像粉白条纹；红更足、浅条窄一些（色盲要的条纹留着）
   m.onBeforeCompile = (sh) => {
     Object.assign(sh.uniforms, { uRagT: RAG.t, uRagW: RAG.w });
-    sh.vertexShader = 'varying vec3 vRagW;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n vRagW = (modelMatrix * vec4(position, 1.0)).xyz;');
+    sh.vertexShader = 'varying vec3 vRagW;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\n vRagW = position;');
     if (sway) sh.vertexShader = 'uniform float uRagT, uRagW;\n' + sh.vertexShader.replace('#include <begin_vertex>', `#include <begin_vertex>
       { float k = clamp(-position.y / 0.3, 0.0, 1.0); k *= k; float ph = modelMatrix[3].x * 3.1 + modelMatrix[3].z;
         transformed.z += k * (0.03 + 0.012 * uRagW) * sin(uRagT * (2.2 + 0.25 * uRagW) + position.y * 10.0 + ph); transformed.x += k * 0.012 * sin(uRagT * 1.7 + ph * 1.3); }`);
-    sh.fragmentShader = 'varying vec3 vRagW;\n' + sh.fragmentShader.replace('#include <color_fragment>', '#include <color_fragment>\n diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.66, 0.58, 0.43), step(0.7, fract((vRagW.y + (vRagW.x + vRagW.z) * 0.7) * 30.0)));').replace('#include <fog_fragment>', `#ifdef USE_FOG
+    sh.fragmentShader = 'varying vec3 vRagW;\n' + sh.fragmentShader.replace('#include <color_fragment>', '#include <color_fragment>\n diffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.66, 0.58, 0.43), smoothstep(.56,.69,fract((vRagW.y + (vRagW.x + vRagW.z) * .7) * 14.0)));').replace('#include <opaque_fragment>', 'outgoingLight = max(outgoingLight, diffuseColor.rgb * vec3(.13,.16,.21));\n#include <opaque_fragment>').replace('#include <fog_fragment>', `#ifdef USE_FOG
       gl_FragColor.rgb = mix(gl_FragColor.rgb, fogColor, smoothstep(fogNear, fogFar, vFogDepth) * 0.5);
     #endif`);
   };
@@ -4488,8 +4574,27 @@ function day2Setup() {
   markTree(tree, ...MARK_TREES.blaze).then((r) => {
     const [cx, cz] = r.c; carveTrunk(tree, ...MARK_TREES.blaze);
     tree.userData.lookAtLocal = new THREE.Vector3(cx, 1.5, cz + r(1.5));
-    const ry = 1.05, rr = r(ry) + 0.008; tree.add(new THREE.Mesh(new THREE.CylinderGeometry(rr, rr, 0.06, 16, 1, true), RAG.mat).translateY(ry).translateX(cx).translateZ(cz)); // 跟标桩一样系条红布，雾里好认
-    for (const [a, l] of [[0.35, 0.3], [0.5, 0.24]]) { const t = ragTail(l, 0, ry, 0); t.position.set(cx + Math.sin(a) * rr, ry, cz + Math.cos(a) * rr); t.rotation.y = a; tree.add(t); }
+    // Wrap both edges on the facets of the actual scaled trunk mesh.
+    const trunk = tree.children.find(o => o.userData.markTrunk), ry = 1.05;
+    const surface = new THREE.Mesh(trunk.geometry, trunk.material);
+    trunk.getMatrixAt(0, surface.matrixWorld);
+    const ray = new THREE.Raycaster(), origin = new THREE.Vector3(), direction = new THREE.Vector3();
+    function tiePoint(angle, y) {
+      direction.set(Math.sin(angle), 0, Math.cos(angle));
+      origin.set(cx, y, cz).addScaledVector(direction, r(y) + 0.4);
+      ray.set(origin, direction.clone().negate());
+      const hit = ray.intersectObject(surface, false)[0];
+      return hit ? hit.point.addScaledVector(direction, 0.0025) : origin.set(cx,y,cz).addScaledVector(direction,r(y));
+    }
+    const band = new THREE.CylinderGeometry(1, 1, 0.06, 72, 1, true), bp = band.attributes.position;
+    for (let i = 0; i < bp.count; i++) {
+      const v = tiePoint(Math.atan2(bp.getX(i), bp.getZ(i)), ry + bp.getY(i));
+      bp.setXYZ(i, v.x, v.y, v.z);
+    }
+    band.computeVertexNormals(); tree.add(new THREE.Mesh(band, RAG.mat));
+    for (const [a, l] of [[0.35, 0.3], [0.5, 0.24]]) {
+      const tail = ragTail(l, 0, ry, 0); tail.position.copy(tiePoint(a, ry)); tail.rotation.y = a; tree.add(tail);
+    }
     for (const [y, a] of [[2.3, 2.2], [2.9, -1.4], [3.4, 0.9], [3.9, 3.6]]) { const d = new THREE.Vector3(Math.sin(a), -0.25, Math.cos(a)).normalize(), st = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.045, 0.5, 5), W.bark); // 枯枝桩
       st.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), d); st.position.copy(d).multiplyScalar(r(y) + 0.22).setY(y).add(new THREE.Vector3(cx, 0, cz)); tree.add(st); } });
   // 石堆：六块大小差一倍的扁板石摞到齐膝高，最底下那块半埋，块块顶上有雪，旁边散几块小石头
@@ -4504,17 +4609,30 @@ function day2Setup() {
     const P = [[0, 0], [0.05, 0], [0, 0.04], [-0.05, 0], [0, -0.04]].map(([a, b]) => hit(a, b));
     if (P.every(Boolean)) {
       const n = P[1].clone().sub(P[0]).cross(P[2].clone().sub(P[0])).normalize(); if (n.y < 0) n.negate();
-      const up = new THREE.Vector3(0, 0, -1).addScaledVector(n, n.z).normalize(), rt = up.clone().cross(n), lift = Math.max(...P.map((p) => p.clone().sub(P[0]).dot(n))) + 0.003;
+      const up = new THREE.Vector3(0, 0, -1).addScaledVector(n, n.z).normalize(), rt = up.clone().cross(n);
       const c = document.createElement('canvas'); c.width = 512; c.height = 340; const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4;
       const paint = () => { const x = c.getContext('2d'), R = rng(29), ink = '24,22,20'; x.clearRect(0, 0, 512, 340); x.strokeStyle = `rgba(${ink},.92)`; x.lineCap = 'round'; x.lineWidth = 11;
         x.beginPath(); x.moveTo(82, 74); x.lineTo(144, 150); x.moveTo(148, 70); x.lineTo(80, 152); x.moveTo(172, 112); x.bezierCurveTo(208, 106, 236, 114, 276, 108); x.moveTo(250, 86); x.lineTo(280, 108); x.lineTo(248, 132); x.stroke(); // ✕ 和箭头
-        handwrite(x, ['4 mi.'], { x0: 300, y0: 146, size: 76, pitch: 0, ink, R, slant: 0.05, bleed: 0.02 });
+        handwrite(x, [lang()==='zh'?'四英里':'4 mi.'], { x0: 300, y0: 146, size: lang()==='zh'?60:76, pitch: 0, ink, R, slant: 0.05, bleed: 0.02 });
         sigDraw(x, { x0: 170, y0: 168, w: 330, ink, lw: 0.024 });
         x.globalCompositeOperation = 'destination-out'; for (let i = 0; i < 2600; i++) { x.fillStyle = `rgba(0,0,0,${0.25 + R() * 0.6})`; x.fillRect(R() * 512, R() * 340, 1 + R() * 3, 1 + R() * 2); } x.globalCompositeOperation = 'source-over'; // 炭笔在粗石面上：断断续续
         t.needsUpdate = true; };
       paint(); document.fonts.load('italic 40px "IM Fell English"').then(paint);
-      const dm = new THREE.MeshStandardMaterial({ map: t, transparent: true, depthWrite: false, roughness: 1 }), d = new THREE.Mesh(new THREE.PlaneGeometry(0.125, 0.083), dm);
-      d.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(rt, up, n)); d.position.copy(P[0]).addScaledVector(n, lift); cairn.add(d);
+      // Project the charcoal itself onto the faceted crown. Omit triangles
+      // without support so the cross cannot protrude above the silhouette.
+      const inkSurface=new THREE.PlaneGeometry(.125,.083,12,8);
+      const vertices=inkSurface.attributes.position, supported=[], point=new THREE.Vector3();
+      for(let i=0;i<vertices.count;i++) {
+        point.copy(P[0]).addScaledVector(rt,vertices.getX(i)).addScaledVector(up,vertices.getY(i));
+        const stone=hit(point.x-top.position.x,point.z-top.position.z);
+        supported.push(!!stone);
+        if(stone) vertices.setXYZ(i,stone.x,stone.y+.0007,stone.z);
+      }
+      const ix=inkSurface.index.array, triangles=[];
+      for(let i=0;i<ix.length;i+=3) if(supported[ix[i]] && supported[ix[i+1]] && supported[ix[i+2]]) triangles.push(ix[i],ix[i+1],ix[i+2]);
+      inkSurface.setIndex(triangles); inkSurface.computeVertexNormals();
+      const dm=new THREE.MeshStandardMaterial({ map:t,transparent:true,depthWrite:false,roughness:1,polygonOffset:true,polygonOffsetFactor:-1 });
+      const d=new THREE.Mesh(inkSurface,dm); d.userData.repaint=paint; d.userData.noHL=true; cairn.add(d);
       d.onBeforeRender = () => { dm.opacity = 1 - 0.55 * THREE.MathUtils.smoothstep(cover.uSnow.value, 0.3, 0.9); };
     }
   }
@@ -4539,7 +4657,7 @@ function day2Setup() {
 }
 function makePrints(name, pts, side0 = 0.11) { // 一行靴印，沿 pts 连成的曲线走（和你的一样大，复用 printPool 的几何和材质）；side0 = 左右脚离中心线
   const route = new THREE.CatmullRomCurve3(pts), n = Math.floor(route.getLength() / 0.6), pp = printPool();
-  const im = new THREE.InstancedMesh(pp.im.geometry, pp.im.material, n), o = new THREE.Object3D();
+  const im = new THREE.InstancedMesh(pp.storyGeometry, pp.storyMaterial, n), o = new THREE.Object3D();
   let k = 0;
   for (let i = 0; i < n; i++) { const u = (i + 0.5) / n, p = route.getPointAt(u), t = route.getTangentAt(u), side = i % 2 ? 1 : -1, b = brookAt(p.x + terrain.ox, p.z + terrain.oz, 3);
     if (b.d < b.w + 0.1) continue; // 过溪踩的是踏石，水上没有脚印
@@ -4662,7 +4780,12 @@ function updateDay2(dt) {
   const w2 = people.get('person_woman'), saw = f.has('saw:yes') || f.has('saw:no');
   if (game.day === 2 && lampOn && !d2.clerkOut && w2 && !w2.player && !f.has('log2')) { d2.clerkOut = 'going'; clerkPorch(w2); } // 烟起来了，她出门站到门廊上看（11-11 用户：第 2 天她一直在屋里，没窗看不见烟，你在林子里也听不见她）
   if (lampOn && d2.clerkOut === true && !d2.lampSaid && !saw && sky.hour > 17.4 && (d2.sayT = (d2.sayT || 0) + dt) > 0.25) { d2.sayT = 0; // 她站在门廊上、看得见那柱烟、你在 12m 内（屋外正常说话的距离，11-11 world #14：原来 18m）才指给你看；你在林子里自己看见烟也照说，后面要你回她一句
-    if (clerkCan(w2, { hear: 12, about: SMOKE_SEE })) { d2.lampSaid = true; clerkSay(D2_SAYS.lamp, { hear: 12, about: SMOKE_SEE, jump: true, walk: false }); smokeCue(r); } }
+    if (clerkCan(w2, { hear: 12, about: SMOKE_SEE })) {
+      const [x,y,z] = SMOKE_SEE().at, pos = w2.root.position, yaw = Math.atan2(x-pos.x,z-pos.z);
+      if (Math.abs(angDiff(w2.root.rotation.y,yaw)) > .14) {
+        if (w2.tasks[0]?.[0] !== 'turn') { w2.S=null; w2.tasks=[['turn',yaw]]; }
+        w2.look=[x,y,z]; w2.lookT=2;
+      } else { d2.lampSaid = true; clerkSay(D2_SAYS.lamp, { hear: 12, about: SMOKE_SEE, jump: true, walk: false }); smokeCue(r); } } }
   if (game.day === 2 && lampOn && !f.has('d2light')) smokeGaze(dt);
   if (lampOn && d2.lampSaid && sky.hour > 17.4 && !f.has('saw:yes') && !f.has('saw:no') && !f.has('log2') && !fp.turn && !fp.cut && card.hidden && $('dlg').hidden && hears(w2, 12)) { if ((d2.askT = (d2.askT || 0) + dt) > 6.5) smokeAsk(); } // 她说完、镜头转过去看了一阵，才轮到你回话（你还在她跟前）
   if (game.day === 2 && d2.clerkOut === true && saw && f.has('d2light') && !f.has('log2') &&
@@ -4673,6 +4796,12 @@ function updateDay2(dt) {
     w2.tasks = [['face', ...SL.door[0]]];
   }
   if (f.has('d2light') && !f.has('log2') && !outdoors(r) && Math.abs(r.x) < 1.7 && Math.abs(r.z) < 1.7) { // 进了屋：她走到书架前翻开日志，卡片这才弹（11-11 world #2：原来你一进门就弹「回到屋里，书记员把日志翻到了中间」，她还在门廊上）
+    const step=w2?.tasks[0];
+    const blocked=!!(step?.[0]==='walk' && step.held && step.wait>3 && step.clearTime===0);
+    if (blocked!==!!d2.logBlocked) {
+      d2.logBlocked=blocked;
+      showQuest();
+    }
     if (!d2.logT || (!d2.logReady && !w2?.tasks.length && !w2?.after && performance.now() - d2.logT > 90000)) clerkLog2(); // 90 秒还没到（被挡住、被打断）：再走一遍，仍由她走到书架触发
     if (d2.logReady) {
       if (AUDIT) { const w = clerkHere(); worldAudit('fact', LOG2_CARD[3].slice(0, 60), { ok: !!w && Math.hypot(w.root.position.x - NAV.books[0], w.root.position.z - NAV.books[1]) < 1.2, clerkRoom: w && roomAt(w.root.position) }); } // 审计：卡片说「回到屋里，书记员把日志翻到了中间」，这一刻她真在书架前
@@ -4954,64 +5083,223 @@ function day3Setup() { // 小路尽头的老云杉 + 裂口 + 焦黑松针；✕
     d2.prints = makePrints('d2_prints', [new THREE.Vector3(D2.door[0], 0, D2.door[1]), at(0), at(2.5), ...via]); }
   { const k = [...game.found].find((k) => k.startsWith('twin:')); if (k) twinPrints(+k.slice(5)); } // 刷新：多出的那行照原处重建（在 plantForest 链尾之前建，applyX 跟着挪）
   addLogs(D3_LOGS); d3Scene();
-  const g = new THREE.Group(), W = woodMats();
-  markTree(g, ...MARK_TREES.spruce); // 林子里同一种云杉，最高最粗的一棵
-  // Sweeping exposed roots narrow into the burnt ground, with a thinner fork on each.
-  const roots = [], debris = [], R = rng(730);
-  function taper(parts, points, base, tip) {
-    const curve = new THREE.CatmullRomCurve3(points), steps = 10, sides = 7;
-    const geo = new THREE.TubeGeometry(curve, steps, 1, sides);
-    const pos = geo.attributes.position, center = new THREE.Vector3(), vertex = new THREE.Vector3();
-    for (let i = 0; i <= steps; i++) {
-      curve.getPointAt(i / steps, center);
-      const radius = THREE.MathUtils.lerp(base, tip, i / steps);
-      for (let j = 0; j <= sides; j++) {
-        const k = i * (sides + 1) + j;
-        vertex.fromBufferAttribute(pos, k).sub(center).multiplyScalar(radius).add(center);
-        pos.setXYZ(k, vertex.x, vertex.y, vertex.z);
+  const g = new THREE.Group();
+  const [p] = pathAt(D3.end), [incoming] = pathAt(D3.end - 8);
+  const forward = incoming.sub(p).setY(0).normalize();
+  const lateral = new THREE.Vector3(-forward.z, 0, forward.x);
+  const at = (s, side, y) => forward.clone().multiplyScalar(s).addScaledVector(lateral, side).setY(y);
+  const origin = new THREE.Vector3();
+  const surfaces = [];
+  let grounded = false;
+  function drape(o) {
+    const pos = o.geometry.attributes.position;
+    for (let j = 0; j < pos.count; j++) {
+      const rise = terrainH(p.x + pos.getX(j), p.z + pos.getZ(j)) - terrainH(p.x, p.z);
+      pos.setY(j, pos.getY(j) + rise * (1 - sstep(0.55, 1.4, pos.getY(j))));
+    }
+    pos.needsUpdate = true;
+    o.geometry.computeVertexNormals(); o.geometry.computeBoundingSphere();
+  }
+  function surface(positions, indices, mat, colors) {
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    if (colors) geo.setAttribute('color', new THREE.Float32BufferAttribute(colors, colors.length === positions.length ? 3 : 4));
+    geo.setIndex(indices); geo.computeVertexNormals();
+    const o = new THREE.Mesh(geo, mat); o.receiveShadow = true; o.userData.noHL = true;
+    g.add(o); meshes.push(o); surfaces.push(o); if (grounded) drape(o);
+    return o;
+  }
+  markTree(g, ...MARK_TREES.spruce).then(radius => {
+    const trunk = g.children.find(o => o.userData.markTrunk);
+    if (trunk.geometry.userData.round) trunk.geometry = trunk.geometry.userData.round;
+    // Bark of the scorched trunk stays visible to ground level. The snow is on the adjacent soil.
+    const bark = barkMaterial(), compile = bark.onBeforeCompile;
+    bark.onBeforeCompile = function(shader, renderer) {
+      compile.call(this, shader, renderer);
+      shader.fragmentShader = shader.fragmentShader.replace('uSnow * max(smoothstep(0.55', 'uSnow * smoothstep(1.4, 2.8, vBarkH) * max(smoothstep(0.55');
+    };
+    bark.customProgramCacheKey = () => 'old-spruce-bark';
+    trunk.material = bark;
+    origin.set(radius.c[0], 0, radius.c[1]);
+    const v = [], faces = [], spokes = 144;
+    // The basal flare and its branching ridges share one continuous bark surface.
+    const ridges = [[.26,2.12,.165,-.19],[.56,.86,.14,.16],[1.72,1.32,.24,.19],[2.56,1.84,.19,-.25],[3.61,1.12,.24,.13],[4.38,2.42,.15,.26],[4.82,.88,.15,-.20],[5.61,1.16,.19,-.14]];
+    const levels = [-.16,-.025,.035,.10,.18,.34,.59,.91,1.24,1.62];
+    for (let k = 0; k < levels.length; k++) {
+      const h = levels[k], spread = Math.pow(1 - sstep(-.18, 1.58, h), 2) * Math.exp(-Math.max(h,0) * 3.2);
+      for (let i = 0; i <= spokes; i++) {
+        const a = i / spokes * Math.PI * 2;
+        let ridged = 0;
+        for (const [heading, length, width, bend] of ridges) {
+          const delta = a - heading - bend * spread;
+          const angle = Math.atan2(Math.sin(delta), Math.cos(delta));
+          ridged += length * Math.exp(-angle * angle / (width * width));
+        }
+        const r = radius(Math.max(h,0)) * (1.10 - .18 * sstep(.9,1.62,h)) + spread * (.10 + ridged * .35);
+        v.push(origin.x + r * Math.cos(a), h, origin.z + r * Math.sin(a));
+        if (k && i) {
+          const n = k * (spokes + 1) + i, m = n - spokes - 1;
+          faces.push(m-1,n-1,m, m,n-1,n);
+        }
       }
     }
-    geo.computeVertexNormals(); parts.push(geo);
+    surface(v,faces,bark);
+    const rand = rng(7679), rootPos=[], rootFaces=[], soilPos=[], soilFaces=[], soilColors=[];
+    const barkMap = cabinMap('log_slab_bark_pine_v5');
+    const wood = propMat(barkMap, {rep:[1,1],color:0xc8b8a4,snow:.36});
+    const rootUvs=[];
+    function limb(points,width,height) {
+      const curve=new THREE.CatmullRomCurve3(points), count=16, sides=12;
+      const first=rootPos.length/3, soilFirst=soilPos.length/3;
+      for(let i=0;i<=count;i++) {
+        const t=i/count, ctr=curve.getPointAt(t), tan=curve.getTangentAt(t);
+        const norm=new THREE.Vector3(-tan.z,0,tan.x).normalize(), r=width*(1-t*.92);
+        const thick=height*(1-t*.93), soilEdge=(.17+.12*Math.sin(t*9+.8))*(1-t);
+        for(let j=0;j<=sides;j++) {
+          const a=j/sides*Math.PI*2, relief=1+.055*Math.sin(a*3+.5)+.035*Math.sin(a*5+t*2);
+          const q=ctr.clone().addScaledVector(norm,Math.cos(a)*r*relief);
+          q.y+=Math.sin(a)*thick*relief;q.toArray(rootPos,rootPos.length);
+          rootUvs.push(j/sides*1.25,curve.getLength()*t*.94);
+          if(i&&j){const n=first+i*(sides+1)+j,m=n-sides-1;rootFaces.push(m-1,n-1,m,m,n-1,n);}
+        }
+        for(let j=0;j<5;j++) {
+          const q=ctr.clone().addScaledVector(norm,(j-2)*.5*(r+soilEdge));q.y=.017;
+          q.toArray(soilPos,soilPos.length);
+          const color=new THREE.Color(j===2?0x51483c:0x877c6e);
+          soilColors.push(color.r,color.g,color.b,j===0||j===4?0:(j===2?.68:.32)*(1-t));
+          if(i&&j){const n=soilFirst+i*5+j,m=n-5;soilFaces.push(m-1,m,n-1,m,n,n-1);}
+        }
+      }
+    }
+    for(const [a,length,,bend] of ridges) {
+      const axis=new THREE.Vector3(Math.cos(a+bend*.8),0,Math.sin(a+bend*.8)), perp=new THREE.Vector3(-axis.z,0,axis.x);
+      const L=length*.91, r=radius(.1), kink=(rand()>.5?1:-1)*(.18+rand()*.22), sink=rand()*.035;
+      const pt=(dist,off,y)=>origin.clone().addScaledVector(axis,r+dist).addScaledVector(perp,off).setY(y);
+      const split=pt(L*.54,kink*.47,.032-sink);
+      limb([pt(-.32,0,.16),pt(.22,kink*.18,.14),pt(L*.35,kink*.70,.079),split,pt(L*.71,-kink*.3,-.046),pt(L*.87,-kink*.5,.012),pt(L,-kink*.81,-.072)],.16+rand()*.073,.12+rand()*.052);
+      if(length>1.25) limb([split,pt(L*.62,kink*.78,.032),pt(L*.72,kink*1.47,.046),pt(L*.85,kink*2.03,-.036)],.076,.062);
+    }
+    const branches=surface(rootPos,rootFaces,wood);
+    branches.geometry.setAttribute('uv',new THREE.Float32BufferAttribute(rootUvs,2));
+    surface(soilPos,soilFaces,new THREE.MeshStandardMaterial({vertexColors:true,transparent:true,depthWrite:false,side:THREE.DoubleSide,roughness:1}),soilColors);
+    buildFissure();
+  });
+  function buildFissure() {
+    // A tapered fracture opens downhill from a sheltered side of the root flare towards the approaching walker.
+    const R = rng(3709), line = [[.26,.13,.025],[.52,.30,.075],[.86,.53,.15],[1.12,.47,.21],[1.46,.60,.25],
+      [1.76,.52,.23],[2.10,.32,.195],[2.40,.38,.16],[2.72,.17,.18],[3.12,.06,.13],[3.40,-.12,.09],
+      [3.71,-.10,.072],[3.93,-.27,.048],[4.24,-.28,.027],[4.46,-.43,.003]];
+    const steps = [];
+    for (let k=1;k<line.length;k++) {
+      const a=line[k-1], b=line[k], count=Math.ceil((b[0]-a[0])/.09);
+      for (let j=0;j<count;j++) {
+        const t=j/count, lerp=(u,v)=>THREE.MathUtils.lerp(u,v,t);
+        steps.push([lerp(a[0],b[0]),lerp(a[1],b[1]) + (R()-.5)*.029,lerp(a[2],b[2])]);
+      }
+    }
+    steps.push(line[line.length-1]);
+    const pos=[],idx=[],colors=[],bankUV=[],tint=new THREE.Color();
+    const push=(s,d,h,col,variation,alpha)=>{
+      at(s,d,h).add(origin).toArray(pos,pos.length);
+      tint.setHex(col).multiplyScalar(variation).toArray(colors,colors.length); colors.push(alpha);bankUV.push(s*.91,d*1.1);
+    };
+    for (let i=0;i<steps.length;i++) {
+      const [s,d,w]=steps[i], loft=Math.min(1,w/.16), scale=.88+R()*.22;
+      const chipped=.72+.45*Math.sin(s*5.1+.7), left=w*(.91+.17*Math.sin(s*4.5)),right=w*(.79+.2*Math.cos(s*4.2));
+      const overhang = Math.sin(s*4+.6)>.48;
+      const rows=[
+        [-left-.18*loft,-.008,0xd3d8da,0],[-left-.073*loft,.045*loft,0xd1d5d3,.40],
+        [-left-.017*loft,.075*loft*chipped,0xcececa,.92],[-left,.079*loft*chipped,overhang?0xc3c7c6:0x968c7f,1],
+        [-left*.96,.050*loft,overhang?0x615e5a:0x5e5144,1],[-left*.83,.040*loft,0x41382e,1],
+        [-left*.51,.023,0x262523,1],[0,.019,0x16191a,1],[right*.60,.023,0x211f1e,1],
+        [right*.89,.033*loft,0x4b423a,1],[right,.052*loft,0x776d60,1],
+        [right+.008*loft,.050*loft,0xb3b4af,.88],[right+.055*loft,.041*loft,0xc6cbc9,.44],[right+.13*loft,-.006,0xd3d6d5,0]];
+      for (let k=0;k<rows.length;k++) {
+        const [offset,h,col,alpha]=rows[k];push(s,d+offset,h,col,(k<4||k>10)?1:scale,alpha);
+        if(i&&k){const n=i*rows.length+k,m=n-rows.length;idx.push(m-1,m,n-1,m,n,n-1);}
+      }
+    }
+    const banks=surface(pos,idx,new THREE.MeshStandardMaterial({vertexColors:true,transparent:true,side:THREE.DoubleSide,roughness:1}),colors);
+    const shale = d2Canvas(256,256,(ctx,w,h)=>{
+      const pixels=ctx.createImageData(w,h), grain=rng(249);
+      for(let j=0;j<h;j++)for(let i=0;i<w;i++){
+        const ripple=vnoise(i*.047,j*.067)*.6+vnoise(i*.11,j*.19)*.4;
+        const level=211+27*ripple+17*grain();
+        pixels.data.set([level,level,level,255],4*(j*w+i));
+      }
+      ctx.putImageData(pixels,0,0);
+    });
+    shale.wrapS=shale.wrapT=THREE.RepeatWrapping;
+    banks.geometry.setAttribute('uv',new THREE.Float32BufferAttribute(bankUV,2));
+    banks.material.map=shale;banks.renderOrder=1;
+    // Small remnants of collapsed crust preserve the direction of the shelf that broke away.
+    const blocks=[],blockFaces=[],blockColors=[];
+    for(const ix of [5,7,14,23,33]) {
+      const [s,d,w]=steps[ix], side=ix%3?1:-1, n=blocks.length/3, shape=[];
+      const radius=(.032+R()*.054)*Math.min(1,w/.12);
+      for(let j=0;j<5;j++){
+        const a=(j+.55*R())*Math.PI*2/5, span=.52+R()*.48;
+        shape.push([Math.cos(a)*span,Math.sin(a)*span]);
+      }
+      for(let top=0;top<2;top++) for(const [u,v] of shape){
+        const angle=.58+.30*u, h=top?.035+angle*.045+v*.018:.019;
+        at(s+u*radius,d+side*(w*.79+v*radius*.72+top*.008),h).add(origin).toArray(blocks,blocks.length);
+        tint.setHex(top?(ix%3?0xb6b7b1:0xa8a79a):0x6e6a61).multiplyScalar(1+.09*v).toArray(blockColors,blockColors.length);
+      }
+      blockFaces.push(n+5,n+7,n+6,n+5,n+8,n+7,n+5,n+9,n+8);
+      for(let i=0;i<5;i++){const j=(i+1)%5;blockFaces.push(n+i,n+j,n+j+5,n+i,n+j+5,n+i+5);}
+    }
+    surface(blocks,blockFaces,new THREE.MeshStandardMaterial({vertexColors:true,roughness:1,side:THREE.DoubleSide}),blockColors);
+    // Discontinuous duff catches in the hollows between the roots and the broken bank.
+    const duff = d2Canvas(384,384,(ctx,w,h)=>{
+      const pixels=ctx.createImageData(w,h), peat=rng(3471);
+      for(let j=0;j<h;j++) for(let i=0;i<w;i++){
+        const x=i/(w-1)*3.3-.55, z=(1-j/(h-1))*3-1.55;
+        const n=vnoise(x*4.5+2,z*5+.7), speck=peat();
+        const ridge = (x0,z0,rx,rz,lean) => {
+          const u=(x-x0)/rx, v=(z-z0-lean*(x-x0))/rz;
+          return 1-u*u-v*v;
+        };
+        const traps=Math.max(ridge(.56,-.40,.68,.25,-.25),ridge(1.10,.72,.77,.29,.15),ridge(.18,.73,.37,.38,-.32),ridge(1.83,.55,.54,.15,-.40));
+        const edge=traps+1.45*(n-.5)+.55*(vnoise(x*13,z*15)-.5);
+        const strength=sstep(-.18,.29,edge)*(.12+.70*sstep(.22,.81,n+.16*speck));
+        const grain=18*n+27*speck;
+        pixels.data.set([65+grain,57+grain,47+grain,strength*255],4*(j*w+i));
+      }
+      ctx.putImageData(pixels,0,0);
+    });
+    const pts=[],duffFaces=[],uvs=[];
+    for(let i=0;i<=12;i++)for(let j=0;j<=12;j++) {
+      at(i/12*3.3-.55,j/12*3-1.55,.016).add(origin).toArray(pts,pts.length);uvs.push(i/12,j/12);
+      if(i&&j){const n=i*13+j;duffFaces.push(n-14,n-13,n-1,n-13,n,n-1);}
+    }
+    const duffMesh=surface(pts,duffFaces,new THREE.MeshStandardMaterial({map:duff,transparent:true,roughness:1,depthWrite:false,side:THREE.DoubleSide}));
+    duffMesh.geometry.setAttribute('uv',new THREE.Float32BufferAttribute(uvs,2));
+    // Broken banks trap needles in pockets. Leave bare stretches of wind-scoured snow between them.
+    const litter=[], faces=[], shades=[];
+    const addChip=(s,d,len,width,h,angle,col)=>{
+      const n=litter.length/3, c=Math.cos(angle),sn=Math.sin(angle);
+      for(const [u,v,e] of [[-len,0,0],[0,-width,0],[len*.8,0,0],[0,width,0],[0,0,.004]]) {
+        at(s+u*c-v*sn,d+u*sn+v*c,h+e).add(origin).toArray(litter,litter.length);
+        tint.setHex(col).multiplyScalar(.85+R()*.28).toArray(shades,shades.length);
+      }
+      faces.push(n,n+4,n+1,n+1,n+4,n+2,n+2,n+4,n+3,n+3,n+4,n);
+    };
+    for(let i=0;i<180;i++) {
+      const [s,d,w]=steps[Math.floor(R()*steps.length)], side=R()<.58?1:-1;
+      if(Math.sin(s*5+side*2)+R()<.13) continue;
+      const offset=.12+R()**2*.30;
+      addChip(s,d+side*(w+offset),.018+R()*.044,.002+R()**2*.006,.018,R()*3.14,[0x554333,0x40342c,0x736354,0x544b45][Math.floor(R()*4)]);
+    }
+    surface(litter,faces,new THREE.MeshStandardMaterial({vertexColors:true,roughness:1,side:THREE.DoubleSide}),shades);
+    g.userData.lookAtLocal = at(1.85,.47,.075).add(origin);
   }
-  for (let i = 0; i < 8; i++) {
-    const a = i * Math.PI / 4 + R() * 0.35, length = 1.35 + R() * 0.85;
-    const at = (r, h, angle) => new THREE.Vector3(r * Math.cos(angle), h, r * Math.sin(angle));
-    const fork = at(length * 0.64, 0.10, a + 0.12);
-    taper(roots, [at(0.16, 0.62, a), at(0.55, 0.23, a - 0.08), fork, at(length, 0.045, a)], 0.25, 0.014);
-    taper(roots, [fork, at(length * 0.8, 0.075, a + 0.23), at(length, 0.035, a + 0.34)], 0.065, 0.009);
-  }
-  const rootMesh = new THREE.Mesh(mergeGeometries(roots), W.root);
-  rootMesh.castShadow = rootMesh.receiveShadow = true; g.add(rootMesh);
-  for (let i = 0; i < 38; i++) {
-    const a = R() * Math.PI * 2, r = 0.85 + Math.sqrt(R()) * 2.6;
-    const start = new THREE.Vector3(Math.cos(a) * r, 0.053, Math.sin(a) * r);
-    const b = R() * Math.PI * 2, len = 0.12 + R() * 0.36;
-    const tip = start.clone().add(new THREE.Vector3(Math.cos(b) * len, 0.012, Math.sin(b) * len));
-    const mid = start.clone().lerp(tip, 0.52); mid.y += R() * 0.025;
-    taper(debris, [start, mid, tip], 0.012, 0.002);
-    taper(debris, [mid, mid.clone().lerp(tip, 0.5).add(new THREE.Vector3(0.025, 0.013, -0.035)), tip.clone().add(new THREE.Vector3(0.05, 0.02, -0.07))], 0.006, 0.001);
-  }
-  const twigs = new THREE.Mesh(mergeGeometries(debris), W.root);
-  twigs.userData.noHL = true; g.add(twigs);
-  const flat = (geo, mat, y, off) => { mat.polygonOffset = true; mat.polygonOffsetFactor = mat.polygonOffsetUnits = off; const m = new THREE.Mesh(geo, mat); m.rotation.x = -Math.PI / 2; m.position.y = y; m.userData.noHL = true; g.add(m); return m; }; // noHL：贴地的方片不描边（11-04 复测 ENV6：悬停老云杉时焦黑那张 7.6m 方片描出一圈白方框，雪化了才看得出）
-  const burnt = d2Canvas(256, 256, (x, w) => { const R = rng(37), im = x.createImageData(w, w); // 焦黑的松针：边按两层噪声软软地进出（11-04 复测 ENV3：原来 40 边形 + 一圈圆点，像像素画、雪天像迷彩），里面是散乱的针
-    for (let j = 0; j < w; j++) for (let i = 0; i < w; i++) { const u = i / w * 2 - 1, v = j / w * 2 - 1, r = Math.hypot(u, v), e = 0.7 + 0.16 * vnoise(u * 2.2 + 3, v * 2.2 - 1) + 0.07 * vnoise(u * 7 - 2, v * 7 + 4);
-      const a = (1 - sstep(e - 0.1, e + 0.03, r)) * (0.8 + 0.2 * vnoise(u * 20, v * 20)), k = (j * w + i) * 4; im.data.set([28, 22, 18, Math.round(242 * a)], k); }
-    x.putImageData(im, 0, 0);
-    x.lineCap = 'round'; for (let i = 0; i < 700; i++) { const a = R() * 6.283, d = 100 * Math.sqrt(R()), px = 128 + Math.cos(a) * d, py = 128 + Math.sin(a) * d, b = R() * 3.14; x.strokeStyle = R() < 0.5 ? 'rgba(70,48,30,.8)' : 'rgba(10,8,6,.85)'; x.lineWidth = 1.2; x.beginPath(); x.moveTo(px, py); x.lineTo(px + Math.cos(b) * 6, py + Math.sin(b) * 6); x.stroke(); } });
-  flat(new THREE.PlaneGeometry(7.6, 7.6), new THREE.MeshStandardMaterial({ map: burnt, transparent: true, depthWrite: false, roughness: 1 }), 0.02, -3);
-  const rift = d2Canvas(64, 256, (x, w, h) => { x.fillStyle = '#655448'; x.beginPath(); x.moveTo(w / 2, 0); // 裂口：中线弯弯曲曲、宽窄不匀（11-04 复测 ENV3：原来 16px 一折的等距锯齿，像像素画）
-    const c = (y) => w / 2 + 7 * Math.sin(y * 0.05 + 1) + 3 * Math.sin(y * 0.19), hw = (y) => (2 + 9 * Math.sin(Math.PI * y / h)) * (0.65 + 0.35 * Math.sin(y * 0.41) * Math.sin(y * 0.13 + 2));
-    for (let y = 0; y <= h; y += 4) x.lineTo(c(y) - hw(y), y);
-    for (let y = h; y >= 0; y -= 4) x.lineTo(c(y) + 0.8 * hw(y), y); x.fill();
-    x.fillStyle = '#130e0c'; x.beginPath();
-    for (let y = 0; y <= h; y += 4) x.lineTo(c(y) - 0.65 * hw(y), y);
-    for (let y = h; y >= 0; y -= 4) x.lineTo(c(y) + 0.52 * hw(y), y);
-    x.fill(); });
-  flat(new THREE.PlaneGeometry(2.55, 5.8), new THREE.MeshBasicMaterial({ map: rift, transparent: true, depthWrite: false, color: '#fff' }), 0.04, -4).position.set(1.48, 0.04, 0.4);
-  g.userData.lookAtLocal = new THREE.Vector3(1.48, 0.04, 0.4);
-  const [p] = pathAt(D3.end);
-  x3.spruce = d2Add('d3_spruce', g, p.x, p.z); x3.home = [p.x, p.z];
+  x3.spruce = d2Add('d3_spruce', g, p.x, p.z); x3.home = [p.x,p.z];
+  x3.fitGround = () => {
+    if (!grounded) { grounded = true; for (const mesh of surfaces) drape(mesh); }
+    g.position.y = ground.position.y + terrainH(p.x,p.z);
+  };
+
   const lamp = makePlume(65, true); // ✕ 那间屋门廊下往西南偏西看（实测 259°）：自家烟囱的烟在树梢上（挪世界后自家在 -XSHIFT，这柱烟不跟着挪，所以直接放在那儿）
   { const hx = 2.42 - XSHIFT.x, hz = -1.52 - XSHIFT.y - 4, hd = Math.hypot(hx, hz), hb = Math.min(Math.atan2(hx, hz), Math.atan2(D3.spruceX[0], D3.spruceX[1] - 4) - 0.4); // 从门廊 (0, 4) 看，自家烟囱只比院子西南的老云杉偏 7°，整柱烟在它树冠后面：方位往西挪到离老云杉 ≥ 0.4 rad（23°，比自家实际方位偏西 15°）
     x3.light = d2Add('x_light', lamp, Math.sin(hb) * hd, 4 + Math.cos(hb) * hd); } lamp.position.y = ground.position.y + 4; lamp.visible = false;
@@ -5129,11 +5417,12 @@ function ending(kind) { LOG && LOG.ev('end', `结局 ${kind}`); LOG && LOG.ev('d
   const all = X_NEED.every((k) => game.found.has(k)), hidden = kind === 'back' && all, page = kind === 'stay' && all; // 四处齐：回去 = 提灯，留下 = 那页纸
   if (fp && !x3.leaving && !x3.sit) stopFP(); // 走回去、坐下：留在第一人称里淡黑（stopFP 会把镜头飞回鸟瞰）
   d2.veil = true; veilEl.style.transition = 'opacity 1.6s'; veilEl.style.zIndex = 30; veilEl.style.opacity = 1;
+  fadeEndingMusic(1.6,1.7);
   setTimeout(() => {
     game.snap = x3.leaving?.snap || endFree(); game.found.add('end_' + kind); if (hidden) game.found.add('end_hidden'); if (page) game.found.add('end_page'); game.found.add('ended'); PAST.add(['end_' + kind, ...(hidden ? ['end_hidden'] : []), ...(page ? ['end_page'] : [])]); // 快照更新到选结局这一刻（进 ✕ 后又找到的也带上）；PAST：二周目记得看过的结局
     game.found.add('endshow:' + (hidden ? 'hidden' : page ? 'page' : kind)); saveGame(); // 还没放的结局：记在存档里（不用 sessionStorage，存不进也读得到；中途关掉下次打开接着放），放完 endShotStart 里删
     location.reload();
-  }, 1900);
+  }, 3500);
 }
 // —— 结局画面（11-10，动机评审 #5 #6、美术评审「结局只有黑底文字」）：回到自家，天刚黑，从院子西南角的树影里看小屋：门廊灯亮着，东北偏东的树梢上那柱烟还在升；「留下」时书记员站在门廊东头望着它。
 // 镜头用 fly 慢慢推近，结局文字一段一页压在画面下三分之一，点「继续」翻页，放完才出「遗稿齐了」。机位照宣传图 b-night 那个角度（用户认可过），时刻 18.3：树是黑剪影（日落时树发棕，不用），烟还衬得出来（入夜就看不见了）
@@ -5369,9 +5658,9 @@ function mapBase() { // 不带记号的底图：做旧的纸、等高线、山�
   if (trailCurve) { const P = trailCurve.getSpacedPoints(80).map((p) => mapP(p.x, p.z)); route(P, 'rgba(90,140,70,.35)', 7, []); route(P, GREEN, 3, [2, 6]); }
   // 注记：湖、路、踪迹（斜体，沿线摆）
   const label = (t, x, z, ang = 0, size = 22, col = INK + '.92)') => { const [a, b] = mapP(x, z); g.save(); g.translate(a, b); g.rotate(ang); g.fillStyle = col; g.font = `italic ${size}px "IM Fell English", Georgia, serif`; g.textAlign = 'center'; g.fillText(t, 0, 0); g.restore(); };
-  if (WATER.lake) label('The Lake', lx, lz + lr * 0.05, -0.03, 24, RED);
-  if (pathCurve) { const p = pathCurve.getPointAt(0.42), q = pathCurve.getPointAt(0.46); label('Cobble Road', p.x, p.z - 6, Math.atan2(q.z - p.z, q.x - p.x), 19, RED); }
-  if (trailCurve) { const p = trailCurve.getPointAt(0.5), q = trailCurve.getPointAt(0.54); label('Forest Trail', p.x, p.z - 7, Math.atan2(q.z - p.z, q.x - p.x), 18, RED); }
+  if (WATER.lake) label(lang()==='zh'?'湖泊':'The Lake', lx, lz + lr * 0.05, -0.03, 24, RED);
+  if (pathCurve) { const p = pathCurve.getPointAt(0.42), q = pathCurve.getPointAt(0.46); label(lang()==='zh'?'卵石路':'Cobble Road', p.x, p.z - 6, Math.atan2(q.z - p.z, q.x - p.x), 19, RED); }
+  if (trailCurve) { const p = trailCurve.getPointAt(0.5), q = trailCurve.getPointAt(0.54); label(lang()==='zh'?'林间踪迹':'Forest Trail', p.x, p.z - 7, Math.atan2(q.z - p.z, q.x - p.x), 18, RED); }
   // 罗盘：右上角，N 朝上；三层环、八芒星
   const cx = W - 84, cy = 86; g.strokeStyle = g.fillStyle = INK + '.8)'; g.lineWidth = 1.5;
   for (const r of [46, 40, 28]) { g.beginPath(); g.arc(cx, cy, r, 0, 7); g.stroke(); }
@@ -5379,11 +5668,11 @@ function mapBase() { // 不带记号的底图：做旧的纸、等高线、山�
   g.font = '22px "IM Fell English SC", Georgia, serif'; g.textAlign = 'center'; g.fillText('N', cx, cy - 52);
   // 标题牌：左上角，双线框
   const tx = 26, ty = 24, tw = 330, th = 84; g.fillStyle = 'rgba(214,190,140,.55)'; g.fillRect(tx, ty, tw, th); g.strokeStyle = INK + '.75)'; g.lineWidth = 2.5; g.strokeRect(tx, ty, tw, th); g.lineWidth = 1; g.strokeRect(tx + 6, ty + 6, tw - 12, th - 12);
-  g.fillStyle = INK + '.88)'; g.textAlign = 'center'; g.font = '25px "IM Fell English SC", Georgia, serif'; g.fillText('The Northern Woods', tx + tw / 2, ty + 40); g.font = 'italic 17px "IM Fell English", Georgia, serif'; g.fillText('surveyed for the Imperial Survey Office', tx + tw / 2, ty + 64);
+  g.fillStyle = INK + '.88)'; g.textAlign = 'center'; g.font = '25px "IM Fell English SC", Georgia, serif'; g.fillText(lang()==='zh'?'北境林地':'The Northern Woods', tx + tw / 2, ty + 40); g.font = 'italic 17px "IM Fell English", Georgia, serif'; g.fillText(lang()==='zh'?'帝国测绘局测绘':'surveyed for the Imperial Survey Office', tx + tw / 2, ty + 64);
   // 比例尺：左下角，三格黑白相间
   const sx = 36, sy = H - 54, sw = 46; g.font = '14px "IM Fell English", Georgia, serif'; g.textAlign = 'center';
   for (let i = 0; i < 3; i++) { g.fillStyle = i % 2 ? 'rgba(58,38,18,.1)' : INK + '.8)'; g.fillRect(sx + i * sw, sy, sw, 6); } g.strokeStyle = INK + '.8)'; g.lineWidth = 1.2; g.strokeRect(sx, sy, sw * 3, 6);
-  g.fillStyle = INK + '.8)'; [0, 1, 2, 3].forEach((v, i) => g.fillText(String(v * 50), sx + i * sw, sy - 6)); g.fillText('yards', sx + sw * 3 + 28, sy + 6);
+  g.fillStyle = INK + '.8)'; [0, 1, 2, 3].forEach((v, i) => g.fillText(String(v * 50), sx + i * sw, sy - 6)); g.fillText(lang()==='zh'?'码':'yards', sx + sw * 3 + 28, sy + 6);
   // 外框：双线；整张四周烧黄发暗（盖在最上面）
   g.strokeStyle = INK + '.7)'; g.lineWidth = 3; g.strokeRect(10, 10, W - 20, H - 20); g.lineWidth = 1; g.strokeRect(16, 16, W - 32, H - 32);
   const vg = g.createRadialGradient(W / 2, H / 2, H * 0.34, W / 2, H / 2, W * 0.66); vg.addColorStop(0, 'rgba(80,52,22,0)'); vg.addColorStop(1, 'rgba(80,52,22,.55)'); g.fillStyle = vg; g.fillRect(0, 0, W, H);
@@ -5394,9 +5683,9 @@ function mapPaint(c, xHouse) { // 底图 + 记号：家里那张红圈在小屋�
   const b = mapBase(); c.width = b.width; c.height = b.height; const g = c.getContext('2d'); g.drawImage(b, 0, 0); g.scale(b.width / MAP.W, b.width / MAP.W);
   const [hx, hz] = mapP(0, 0), [xx, xz] = xHouse ? [hx, hz] : mapP(...mapXat());
   g.lineCap = 'round'; g.strokeStyle = '#9c2a18';
-  if (!xHouse) { g.lineWidth = 4.5; g.beginPath(); g.ellipse(hx, hz, 19, 15, -0.3, 0.3, Math.PI * 2.15); g.stroke(); g.fillStyle = 'rgba(138,30,18,.9)'; g.font = 'italic 19px "IM Fell English", Georgia, serif'; g.textAlign = 'center'; g.fillText('The Cabin', hx + 4, hz + 38); }
+  if (!xHouse) { g.lineWidth = 4.5; g.beginPath(); g.ellipse(hx, hz, 19, 15, -0.3, 0.3, Math.PI * 2.15); g.stroke(); g.fillStyle = 'rgba(138,30,18,.9)'; g.font = 'italic 19px "IM Fell English", Georgia, serif'; g.textAlign = 'center'; g.fillText(lang()==='zh'?'小屋':'The Cabin', hx + 4, hz + 38); }
   g.lineWidth = 5.5; g.beginPath(); g.moveTo(xx - 15, xz - 14); g.lineTo(xx + 14, xz + 15); g.moveTo(xx + 15, xz - 15); g.lineTo(xx - 14, xz + 14); g.stroke(); // 红墨水两笔 ✕，笔画略不对称
-  g.fillStyle = 'rgba(128,28,16,.92)'; g.font = 'italic 24px "IM Fell English", Georgia, serif'; g.textAlign = 'left'; g.save(); g.translate(xx + 22, xz - 10); g.rotate(-0.06); g.fillText('Do Not Enter', 0, 0); g.restore();
+  g.fillStyle = 'rgba(128,28,16,.92)'; g.font = 'italic 24px "IM Fell English", Georgia, serif'; g.textAlign = 'left'; g.save(); g.translate(xx + 22, xz - 10); g.rotate(-0.06); g.fillText(lang()==='zh'?'勿入':'Do Not Enter', 0, 0); g.restore();
   return c;
 }
 function mapWall() { // 墙上那张：换成画出来的图（材质先克隆，别动共用的）
@@ -5458,6 +5747,12 @@ function setLang(l) {
   try { localStorage.setItem('cabin.lang', l); } catch (e) { /* 存不了就只管这次 */ }
   document.title = l === 'zh' ? '无名测绘员的遗稿' : 'The Surveyor\'s Cabin';
   for (const o of skyEl.speed.options) o.textContent = l === 'zh' ? `一天 ${o.value / 60} 分钟` : `A day in ${o.value / 60} min`;
+  if (window.cabin) {
+    for (const name of ['desk_notes','desk_page','stove_letter','d2_cairn'])
+      layers.get(name)?.traverse(o=>o.userData.repaint?.());
+    refreshBookLanguage(bookText()); mapBase.c=null; mmDraw.home=null; mmDirty=true; mapWall();
+    showQuest();
+  }
   if (cardData && !card.hidden) drawCard();
   if (noteData && $('note').classList.contains('on')) showNote(noteData);
   if (hovered) tip.textContent = nameOf(infoOf(hovered));
@@ -5576,6 +5871,10 @@ function drawHighlight() {
 // 预热：屋里的物件在屋外被视锥剔除，第一次画到时才编译/上传（原来还有透射缓冲第一次创建）→ 第一次进屋中途卡一下。
 // 加载页揭开前从每个房间视角真实渲染一帧（隐藏的物件也临时显示，雨雪、雪板等第一次出现也不卡）
 async function prewarm() {
+  // Prepare the owner's near-camera fabric shader while the loader is open.
+  // Entering first person should only change its uniform, without compiling.
+  const owner=people.get('person_man');
+  if(owner) { owner.eyeClip ||= {value:0}; firstPersonCloth(owner); }
   printPool(); breathSprite(); // 脚印、呼气的材质一起预编译（第一次下雪走路时才建会卡一下）
   // Rhino 导出的灯罩玻璃、灯泡、水、火苗带 transmission：画面里只要有一个，three.js 每帧就把整个场景（含森林）多画一遍到透射缓冲 → 改成普通半透明
   scene.traverse((o) => {
@@ -5589,6 +5888,22 @@ async function prewarm() {
   for (const r of ROOMS) {
     camera.position.set(...r.pos); camera.lookAt(...r.tgt); camera.fov = r.fov || INSIDE_FOV; camera.updateProjectionMatrix();
     renderer.render(scene, camera);
+  }
+  // Volumetric fog first becomes visible through the opening door. Rendering
+  // the cabin into its linear target needs a separate set of GPU programs.
+  if (volfog.on) {
+    const target=new THREE.WebGLRenderTarget(8,8,{type:THREE.HalfFloatType});
+    const previous=renderer.getRenderTarget();
+    try {
+      renderer.setRenderTarget(target);
+      await renderer.compileAsync?.(scene,camera);
+      for (const room of ROOMS) {
+        camera.position.set(...room.pos);camera.lookAt(...room.tgt);
+        renderer.render(scene,camera);
+      }
+    } finally {
+      renderer.setRenderTarget(previous);target.dispose();
+    }
   }
   for (const o of hidden) o.visible = false;
   // 手和袖子只在 drawHeld 那一遍画，上面的视角画不到：藏回去之后（灯数和真玩时一样）照真实流程画一遍，袖子两种材质（穿没穿大衣）都画
@@ -5633,7 +5948,7 @@ function cardOpen() { // 电脑第一人称：不放开鼠标（UX1），视角�
   if (document.pointerLockElement && !(fp && !touchFP)) document.exitPointerLock();
   $('roomList').classList.add('shut'); // 触屏房间列表收起，别叠在卡片上
   card.hidden = cardBg.hidden = false; drawCard(); cardAt = performance.now(); cardAuto = cardAt - userPickAt > 150; holdNote();
-  card.classList.toggle('side', !!inspecting()); card.classList.toggle('duo', inspectDuo()); card.classList.toggle('book', inspecting() === 'field_log'); drawCard(); // 纸、书飞到眼前：卡片变成纸下面的字幕（11-11 Fable A2）；side 定了再画一遍，字幕里的译文不分段
+  card.classList.toggle('watch', inspecting() === 'watch'); card.classList.toggle('side', !!inspecting()); card.classList.toggle('duo', inspectDuo()); card.classList.toggle('book', inspecting() === 'field_log'); drawCard(); // 纸、书飞到眼前：卡片变成纸下面的字幕（11-11 Fable A2）；side 定了再画一遍，字幕里的译文不分段
 }
 cardBg.addEventListener('click', (e) => { if ((touchFP || e.pointerType === 'touch' || card.classList.contains('side')) && performance.now() - cardAt > 400) select(null); }); // 纸飞到眼前（字幕没有 ×）：看模型里鼠标点外面也关 // 触屏：点卡片外面也能关（UX8）
 const inspectOn = () => !navigator.webdriver || window.cabinFly || /[?&]fly/.test(location.search); // 无头测试（webdriver）默认不飞，原来的流程脚本要求点了立刻出卡片；测飞行：页面里设 window.cabinFly = true
@@ -5645,6 +5960,9 @@ function select(name, direct) {
   // The entry point also serves touch navigation and saved pending interactions.
   // The drifting or already removed rag is not a stopped paddle to untie.
   if (name === 'd2_rag' && (!wheelDown() || !BROOK.rag?.visible || BROOK.spin > 0.01)) return;
+  if (!direct && canReturnLantern(name)) { returnLantern(); return; }
+  if (paperReading && name === 'desk_page') return;
+  if (name && !direct && inspecting() && !card.hidden) { select(null); return; }
   if (name === 'bedside_watch') name = 'bedside_drawer';
   if (name && !direct && gearCan(name) && new THREE.Box3().setFromObject(layers.get(gearOf(name) === 'coat' ? 'entry_coat' : name)).distanceToPoint(camera.position) < 2 && gearTake(name)) return; // 第 2、3 天门口点大衣 / 提灯 = 拿（同 E；触屏是走过去再点）
   if (name && game.day === 1 && !game.night && !game.found.has('page') && !name.startsWith('desk_drawer') && infoOf(name)?.[0] === 'Writing Desk, Chair & Wall Lamp' && layers.get('desk_page')?.visible) name = 'desk_page'; // 白天还没看那页纸：点书桌本身也是看纸（评审④ v2 #3：手机上纸只有 42×11px）
@@ -5660,7 +5978,7 @@ function select(name, direct) {
   }
   const prev = selected; selected = name; paint(prev); paint(name);
   if (!card.hidden && card.classList.contains('clue')) clueFly();
-  const was = !card.hidden; card.classList.remove('clue', 'side', 'duo', 'book'); card.hidden = cardBg.hidden = true;
+  const was = !card.hidden; card.classList.remove('clue', 'side', 'duo', 'book', 'watch'); card.hidden = cardBg.hidden = true;
   if (!name) { showNote(null); if (was && fp && !touchFP && !document.pointerLockElement) canvas.requestPointerLock?.()?.catch?.(() => {}); return; } // 第一人称关卡片（点 × 是用户手势）：接着锁回鼠标
   if (people.has(name)) wakePerson(name); // 点人物：起来活动一圈
   const pa = card.querySelector('#playAs'); pa.hidden = !people.has(name) || name === 'person_woman' || lite || !!fp; // 游戏里玩家只当老稽查，书记员是同伴 // 触屏还没做摇杆，先不给
@@ -5959,7 +6277,7 @@ function handPose(k) { // 手在世界里的位置、朝向；k < 1 往下沉出
   return { p: p.applyQuaternion(camera.quaternion).add(camera.position), q: camera.quaternion.clone().multiply(WALL_CARRY[held?.name]?.fist || HAND.rot) };
 }
 function holdPose(h) { // 握在手里 ↔ 拿到眼前翻看（k = inspect）
-  const hp = handPose(1), info = h.info;
+  const hp = handPose(WALL_CARRY[h.name] ? handK : 1), info = h.info;
   const pose = WALL_CARRY[h.name];
   const Q = pose ? camera.quaternion.clone().multiply(pose.prop) : hp.q.clone().multiply(HAND.tilt).multiply(info.rg);
   const X = hp.p.clone().sub(_hv.copy(pose?.anchor || info.gp).sub(info.c0).applyQuaternion(Q));
@@ -6016,6 +6334,7 @@ function fpUse() { // E：坐着 → 起身；对着座位 → 坐下；否则�
   fpTake();
 }
 function fpTake() {
+  if (canReturnLantern(aim)) { returnLantern(); return; }
   if (!held && reachable(aim) && gearTake(aim)) return; // 第 2、3 天门口的大衣、提灯
   if (held) {
     if (held.mode !== 'hold') return;
@@ -6082,7 +6401,7 @@ window.cabinGear = gear; gear.take = (n) => gearTake(n); // 调试
 // 11-10：拿、挂大衣和提灯不再旁白复述（原 GEAR_SAYS 三句 + GEAR_HANG：「你从钉子上取下大衣」等），只留音效 sfx('pick') / sfx('place')
 const GEAR_RAIL = { // 衣帽架空了：换名字和说明（交互 r2 UX4、叙事 r2 #5）；名字同 X_CARDS.xcoat，✕ 那间照样算 xcoat
   coat: ['Coat Rail', 'Entry', 'The greatcoat\'s peg is bare: you have it on.', '挂大衣的钉子空了，大衣穿在你身上。'],
-  both: ['Coat Rail', 'Entry', 'The pegs are bare: the greatcoat is on your back, the lantern in your hand.', '钉子上空了：大衣穿在你身上，提灯在你手里。'],
+  both: ['Coat Rail', 'Entry', 'The pegs are bare: the greatcoat is on your back, the lantern in your hand. Use the peg to hang it back up.', '钉子上空了：大衣穿在你身上，提灯在你手里。碰一下挂钩就能挂回去。'],
   gone: ['Coat Rail', 'Entry', 'The pegs are bare. The greatcoat and the lantern went with you.', '钉子上空了。大衣和提灯，你都带走了。'], // 「留下」结局（endHome）
   orbitCoat: ['Coat Rail', 'Entry', "The greatcoat's peg is bare: the inspector has it with him.", '挂大衣的钉子空了，大衣在稽查身上。'], // 鸟瞰（不在第一人称）
   orbitBoth: ['Coat Rail', 'Entry', 'The pegs are bare. The inspector has the greatcoat and the lantern with him.', '钉子上空了。大衣和提灯，稽查带在身上。'],
@@ -6131,13 +6450,23 @@ function gearTake(name, quiet) { // → true = 拿了（不再出卡片 / 说明
   if (hovered) tip.textContent = nameOf(infoOf(hovered)); // 准星还对着衣帽架：名字马上换成空衣帽架
   return true;
 }
-function gearHang() { // 挂回原处
-  if (gear.coat) { const c = layers.get('entry_coat'); if (c) c.visible = true; setOutfit(gear.who || 'person_man', 'base'); }
-  if (gear.lantern) {
+function placeLanternOnHook() {
     const g = layers.get('entry_lantern'), t = toggles.get('entry_lantern');
     if (gear.home) gear.home.attach(g); g.position.set(0, 0, 0); g.quaternion.identity(); g.visible = true; heldLayer(g, false); gear.lay = false; g.traverse((o) => { if (o.isMesh) o.castShadow = true; });
     if (t) t.on = false;
-  }
+    gear.lantern = false; gear.sw.p = null;
+}
+function canReturnLantern(name) {
+  if (name !== 'entry_coat_rail' || !fp || held || gear.anim || !gear.lantern || !gearDay()) return false;
+  return new THREE.Box3().setFromObject(layers.get(name)).distanceToPoint(camera.position) < REACH;
+}
+function returnLantern() {
+  placeLanternOnHook(); shadowDirty = true; fp.solidT = 0;
+  gearSave(); showQuest(); sfx('place'); select(null);
+}
+function gearHang() { // 挂回原处
+  if (gear.coat) { const c = layers.get('entry_coat'); if (c) c.visible = true; setOutfit(gear.who || 'person_man', 'base'); }
+  if (gear.lantern) placeLanternOnHook();
   gear.coat = gear.lantern = false; shadowDirty = true; if (fp) fp.solidT = 0; gearSave();
 }
 function gearPose() { // 画面右下角露出上半截；只跟着转身、不跟着抬头低头（挂着的提灯总是竖的）；k < 1 沉出画面（手里拿着别的东西时让开）
@@ -6151,6 +6480,7 @@ const GEAR_YAW = 0;
 function updateGear(dt) {
   if (fp && !morn && gearDay() && !gear.coat && outdoors(fp.p.root.position)) { gearTake('entry_coat', true); sfx('pick'); } // 没穿大衣就出了门：顺手披上（只留音效）。提灯不替你拿（11-12 用户：夜里、进雾要提灯，拿不拿是你的事）
   const outside = fp && outdoors(fp.p.root.position);
+  if (fp?.p.coat && !fp.p.coatClipped) { firstPersonCloth(fp.p); fp.p.coatClipped=true; }
   if (fp?.gearWasOutside && game.day === 2 && game.found.has('d2light') && !wheelDown() && (gear.coat || gear.lantern) && !outside) { gearFinish(); gearHang(); sfx('place'); } // 傍晚回到屋里 / 修好水轮回来
   if (fp) fp.gearWasOutside = outside;
   if (gear.anim && gear.anim.k === 'coat') coatAnim(dt);
@@ -6158,6 +6488,19 @@ function updateGear(dt) {
   const g = layers.get('entry_lantern'); g.visible = true; gearLayer(g, true);
   const coat = !!gear.anim && gear.anim.k === 'coat'; // 先提了灯再取大衣：灯沉出画面，手去拿大衣
   gear.k += ((held || !card.hidden || coat ? 0 : 1) - gear.k) * Math.min(1, dt * 7); // 卡片开着也沉出画面：手机上走到地上的线索前低头读卡，提灯会变大压到 EN（交互 r3 #7）
+  if (!held && !gear.anim && !fp.cut && fp.p.carryRig?.on === 'walkLamp') {
+    // The lamp uses the hand on the animated body, including its coat sleeve.
+    const finger = fp.p.root.getObjectByName('middle_01_r');
+    if (finger) {
+      finger.getWorldPosition(_gp); _gp.y -= ORBIT_GRIP.down;
+      const tilt = gearSwing(gear.sw, _gp, dt);
+      const yaw = fp.p.root.rotation.y + GEAR_YAW;
+      setPose(g, gear.c0, _hp.set(0,-LANT_HAND.up,0).applyQuaternion(tilt).add(_gp),
+        _hq2.setFromAxisAngle(_hY, yaw).premultiply(tilt));
+      if (hand) hand.visible = false;
+      return;
+    }
+  }
   const P = gearPose(), piv = _gp.copy(P.X); piv.y += LANT_HAND.up; gearStep(piv); // piv：提梁（拳心），提灯挂在它下面
   let q0 = P.Q; const A = gear.anim && gear.anim.k === 'lantern' ? gear.anim : null;
   if (A) { // 从钉子上摘下来（11-12 用户：拿装备的样子奇怪；原来灯自己 0.55 秒飞到右下角、没有手）：手伸到提梁 → 往上往外提离钉子 → 收到身前
@@ -6229,7 +6572,8 @@ function gearCarry() { // 提灯那条胳膊（characters.js carryFix）：第�
   const who = gear.who || 'person_man';
   for (const p of people.values()) {
     let c = null;
-    if (fp?.p === p && !fp.cut && (held || gear.anim || (gear.lantern && p.id === who))) c = 'fp';
+    if (fp?.p === p && !fp.cut && (held || gear.anim)) c = 'fp';
+    else if (fp?.p === p && !fp.cut && gear.lantern && p.id === who) c = 'walkLamp';
     else if (fp?.p !== p && gear.lantern && p.id === who && p.root.visible && CARRY_CLIPS.has(p.cur?.getClip().name)) c = 'hang';
     p.carry = c;
   }
@@ -6286,6 +6630,30 @@ function gearOrbit(dt) { // 鸟瞰：提灯提在他右手上（原来鸟瞰时�
   setPose(g, gear.c0, _gv.set(0, -LANT_HAND.up, 0).applyQuaternion(tilt).add(_gp), _hq2.copy(tilt).multiply(Q));
 }
 const ORBIT_GRIP = { k: 1.0, down: 0.03 }; // 中指根往下一点 ≈ 四指圈住的地方（carryFix 握拳后量）
+function firstPersonCloth(p) {
+  p.root.traverse(o => {
+    if (!o.isSkinnedMesh || !/Male_(Peasant|Ranger)_(Body|Arms)/.test(o.name) || o.userData.eyeClip) return;
+    // Body and coat materials are also used by the detached inspect hand.
+    const old=o.material, mat=old.clone(), compile=old.onBeforeCompile, key=old.customProgramCacheKey();
+    // Preserve the wrist and fingers even at a steep downward viewing angle.
+    // Clip only nearby coat/body panels that run through the owner's camera.
+    const geometry=o.geometry=o.geometry.clone(), ids=geometry.attributes.skinIndex, weights=geometry.attributes.skinWeight;
+    const keep=new Float32Array(ids.count), arm=o.skeleton.bones.map(b=>/^(hand|lowerarm|index|middle|ring|pinky|thumb).*_r$/.test(b.name));
+    for(let v=0;v<ids.count;v++) for(let j=0;j<4;j++)
+      if(arm[ids.getComponent(v,j)]) keep[v]+=weights.getComponent(v,j);
+    geometry.setAttribute('keepWrist',new THREE.BufferAttribute(keep,1));
+    mat.side=THREE.DoubleSide;
+    mat.onBeforeCompile=function(sh, renderer) {
+      compile.call(old,sh,renderer);
+      sh.vertexShader='attribute float keepWrist; varying float wristWeight;\n'+sh.vertexShader.replace('#include <begin_vertex>','#include <begin_vertex>\nwristWeight=keepWrist;');
+      sh.fragmentShader='varying float wristWeight;\n'+sh.fragmentShader;
+      sh.uniforms.eyeClip = p.eyeClip;
+      sh.fragmentShader='uniform float eyeClip;\n'+sh.fragmentShader.replace('#include <clipping_planes_fragment>',
+        '#include <clipping_planes_fragment>\nif (eyeClip > 0.0 && wristWeight < .18 && length(vViewPosition) < eyeClip) discard;');
+    };
+    mat.customProgramCacheKey=()=>key+'-eye-clip'; o.material=mat; o.userData.eyeClip=true;
+  });
+}
 function startFP(id) {
   const p = people.get(id);
   if (!p || fly || intro) return;
@@ -6295,6 +6663,7 @@ function startFP(id) {
   if (p.tasks.length && LAD.includes(p.tasks[0][0]) && i >= 0) p.tasks = p.tasks.slice(0, i + 1); // 她正在梯子上：先把这一段爬完（上到阁楼 / 下到地上），再交给玩家
   else p.tasks = fpRise(p); // 坐着的先起身（书桌椅要先拉开）
   p.player = true; p.hit.visible = false;
+  (p.eyeClip ||= {value:0}).value=.39; firstPersonCloth(p);
   p.root.traverse((o) => { if (FP.HIDE.test(o.name)) o.visible = false; });
   hand = p.hand || null; p.look = null;
   fp = { p, yaw: p.root.rotation.y, pitch: -0.15, keys: new Set(), solid: [], floors: [], solidT: 0, eye: null, paused: true, cut: null, crouch: false, bob: 0, bobA: 0, mv: false };
@@ -6312,6 +6681,7 @@ function stopFP() {
   gearFinish(); if (hand) hand.visible = false; // 握提灯的手只在第一人称画（原来退出后它留在 HELD_LAYER 上，鸟瞰里飘在半空）
   if (fp.cut) { fp.cut.dest = null; ladCutSkip(); } // 正在上下梯子：别把人留在半空
   const p = fp.p; fp = null;
+  if(p.eyeClip) p.eyeClip.value=0;
   p.player = false; p.hit.visible = true; p.next = 6; p.roam = 8; // 过一会儿走回自己的座位
   p.root.traverse((o) => { if (FP.HIDE.test(o.name)) o.visible = true; });
   if (document.pointerLockElement) document.exitPointerLock();
@@ -6356,7 +6726,7 @@ addEventListener('keydown', (e) => {
   if (!fp) return;
   if (e.key === 'Escape' && card.hidden) return; // Esc 不退出第一人称（UX1：关卡片时浏览器顺手放锁，再按一下就被踢回鸟瞰）；放锁后准星处出「点画面继续」，退出走右上「看模型」
   if (e.cabinClosed) return; // 这一下已经用来关弹窗 / 遗稿
-  if (!card.hidden && !touchFP) { fpCardKey(e); return; }
+  if (!card.hidden) { fpCardKey(e); return; }
   if (e.code === 'KeyE' && !e.repeat) { fpUse(); return; }
   if ((e.code === 'Enter' || e.code === 'Space') && !e.repeat && keyFree()) { e.preventDefault(); fpClick(); return; } // 只用键盘：Enter / 空格 = 左键（原来只有鼠标能点线索、开门）
   if (!fp.paused && fp.liveAt && !fpHud.classList.contains('seen') && /^(Key[WASD]|Arrow)/.test(e.code)) setTimeout(helpDone, Math.max(1500, 6000 - (performance.now() - fp.liveAt))); // 操作说明：真走起来、且锁住满 6 秒才收起（评审④ v2 #1：原来一锁指针就收，「WASD 走动」从来没显示过）
@@ -6365,7 +6735,7 @@ addEventListener('keydown', (e) => {
 addEventListener('keyup', (e) => { if (fp) fp.keys.delete(e.code); });
 function fpCardKey(e) { // 第一人称卡片开着：E、空格、Esc 关（E 只关不拿）；开满 0.5 秒（剧情自动弹出的 2 秒）后新按下的方向键关卡片并直接走（按住不放的不算）
   if (e.repeat) return;
-  if (e.code === 'KeyE' || e.code === 'Space' || e.code === 'Enter' || e.key === 'Escape') { e.preventDefault(); select(null); return; }
+  if (e.code === 'KeyE' || e.code === 'Space' || e.code === 'Enter' || e.key === 'Escape') { e.preventDefault(); e.stopImmediatePropagation(); e.cabinClosed=true; select(null); return; }
   if (/^(Key[WASD]|Arrow)/.test(e.code) && !fp.keys.has(e.code) && performance.now() - cardAt > (cardAuto ? 2000 : 500)) { select(null); fp.keys.add(e.code); } // 开卡片时还按着、没松开过的键不算；自动弹出的开满 2 秒
 }
 addEventListener('wheel', (e) => { if (fp && !touchFP && !card.hidden && !card.contains(e.target)) card.scrollTop += e.deltaY; }, { passive: true }); // 鼠标锁着时滚轮落在画布上：转给卡片
@@ -6524,8 +6894,18 @@ function printPool() {
   if (d2.pool) return d2.pool;
   const boot = (x, y) => { const a = Math.hypot(x / 0.62, (y + 0.28) / 0.6) - 1, b = Math.hypot(x / 0.5, (y - 0.54) / 0.36) - 1, k = 0.6, h = Math.min(1, Math.max(0, 0.5 + 0.5 * (b - a) / k)); return b * (1 - h) + a * h - k * h * (1 - h); };
   const im = new THREE.InstancedMesh(new THREE.PlaneGeometry(0.16, 0.34).rotateX(-Math.PI / 2), pitMat(48, 96, boot), 400);
+  const storyMaterial = im.material.clone(), storyGeometry = im.geometry.clone();
+  const born = new THREE.InstancedBufferAttribute(new Float32Array(400), 1);
+  im.geometry.setAttribute('snowBorn', born);
+  const snowAge = { value: 0 };
+  im.material.onBeforeCompile = shader => {
+    shader.uniforms.snowAge = snowAge;
+    shader.vertexShader = 'attribute float snowBorn; uniform float snowAge; varying float printAlpha;\n' +
+      shader.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\nprintAlpha = 1.0-smoothstep(2.0,75.0,snowAge-snowBorn);');
+    shader.fragmentShader = 'varying float printAlpha;\n' + shader.fragmentShader.replace('#include <alphamap_fragment>', '#include <alphamap_fragment>\ndiffuseColor.a *= printAlpha;');
+  };
   im.count = 0; im.frustumCulled = false; im.name = 'fp_prints'; im.renderOrder = 2; scene.add(im); OUTDOOR.push(im);
-  return (d2.pool = { im, i: 0, n: 0, o: new THREE.Object3D() });
+  return (d2.pool = { im, born, snowAge, storyMaterial, storyGeometry, i: 0, n: 0, o: new THREE.Object3D() });
 }
 function stepPrint(r, moving, st = fp) { r = r.position; // 野外雪地上每走 0.7m 留一个脚印，左右交替、朝走向；st 记各人上一步（lp）和左右脚（side）
   if (!moving || !outdoors(r) || cover.uSnow.value < 0.5) return;
@@ -6535,6 +6915,7 @@ function stepPrint(r, moving, st = fp) { r = r.position; // 野外雪地上每�
   if (d < 0.7) return;
   const P = printPool(), tx = dx / d, tz = dz / d, o = P.o; st.lp.copy(r); st.side = -st.side;
   o.position.set(r.x - tz * 0.11 * st.side, r.y + 0.02, r.z + tx * 0.11 * st.side); o.rotation.set(0, Math.atan2(-tx, -tz), 0); o.updateMatrix();
+  P.born.setX(P.i, P.snowAge.value); P.born.needsUpdate = true;
   P.im.setMatrixAt(P.i, o.matrix); P.i = (P.i + 1) % 400; P.im.count = P.n = Math.min(400, P.n + 1); P.im.instanceMatrix.needsUpdate = true;
 }
 const NOKEYS = new Set();
@@ -6660,7 +7041,7 @@ function sliceStart() {
   placeMan(m, ...SL.man, Math.PI); m.root.position.y = floorAt(...SL.man); m.roam = m.next = 1e9;
   if (w && game.entered) { placeMan(w, ...NAV.books, 0); w.root.position.y = floorAt(...NAV.books); w.tasks = [['face', -1.4, -1.15]]; w.roam = 25; w.next = 8; SL.w = 'in'; } // 刷新页面：进过屋了，她不再从门口领路开灯，直接站在书架前（领路走完也停在这里），之后照白天的样子转
   else if (w) { placeMan(w, ...SL.woman, Math.PI - 0.5); w.root.position.y = floorAt(...SL.woman); w.roam = w.next = 1e9; SL.w = 'porch'; }
-  if (game.entered) for (const n of HOUSE_LAMPS) { const l = toggles.get(n); if (l) { l.on = true; l.k = 1; for (const q of l.parts) q(1); } } // 刷新页面：进过屋的灯直接亮着
+  if (game.entered && !game.lights) for (const n of HOUSE_LAMPS) { const l = toggles.get(n); if (l) { l.on = true; l.k = 1; for (const q of l.parts) q(1); } } // 刷新页面：进过屋的灯直接亮着
   const dw = toggles.get('door_wood'); if (dw && game.entered) { dw.on = false; dw.ajar = dw.k = 0; for (const f of dw.parts) f(0); } // 刷新页面：进过屋了，门和她领路推开后一样敞着（虚掩着手机导览会卡在门口，r3 #1）
   else if (dw) { dw.on = true; if (dw.k > 0.5) dw.ajar = 0.75; } // 虚掩（on = false 是开）：留条缝，让玩家自己推开
   spin = false; fly = null; startFP('person_man'); if (!fp) return;
@@ -7171,10 +7552,10 @@ function updateDockIntro(now) {
   cp.y = Math.max(cp.y, THREE.MathUtils.lerp(cp.y, top + 0.8, w));
   look.lerp(_slD.copy(cp).add(new THREE.Vector3(0, 4 * Math.tan(SL_PITCH), -4)), 1 - sm(r, 0, 12)); // 最后 12m 视线慢慢抬到 SL_PITCH，停下时朝门（同 sliceStart）
   camera.lookAt(look); camera.fov = THREE.MathUtils.lerp(THREE.MathUtils.lerp(58, 62, h), fpFov(), 1 - sm(r, 0, 14)); camera.updateProjectionMatrix(); camera.updateMatrixWorld();
-  const hide = I.passed && g > -1.2; if (m.root.visible === hide) m.root.visible = !hide;
+  const hide = I.hidden || (I.passed && g > -1.2); I.hidden = hide; if (m.root.visible === hide) m.root.visible = !hide;
   if (!hide && r < 30) window.__introMinD = Math.min(window.__introMinD, cp.distanceTo(_slD.copy(mp).setY(mp.y + 1.55))); // 调试：镜头离他的头最近多远（他显示着的时候）
   const rem = Math.hypot(mp.x - SL.man[0], mp.z - SL.man[1]);
-  if (I.t >= I.TE && ((rem < 0.08 && m.tasks.length <= 1) || I.t - I.TE > 40)) endIntro(false);
+  if (I.t >= I.TE && ((rem < 0.08 && m.tasks.length <= 1) || I.t - I.TE > 2.0)) endIntro(false);
 }
 // 滑动平均（三角权重，半窗 W 点，两端窗口逐渐收窄所以首尾点不动）
 function smoothPts(raw, W) {
@@ -7445,7 +7826,8 @@ renderer.setAnimationLoop(() => {
   if (sceneReady) hideOutdoors(now);
   audioTick(dt, !!VOICE.a && !VOICE.a.paused, !!(intro || morn || SL.auto) || document.body.classList.contains('endshot'));
   updateBirds(dt);
-  gearCarry(); updatePeople(dt); gearOrbit(dt); lampSnow(); updateBreath(dt); // 人动完再把提灯挂到手上
+  if (d2.pool) d2.pool.snowAge.value += dt * Math.max(0, wx.cur.snow || 0);
+  gearCarry(); updatePeople(dt); tickDeskPaper(dt); gearOrbit(dt); lampSnow(); updateBreath(dt); // 人动完再把提灯挂到手上
   if (WATER.mat) WATER.mat.userData.u.uT.value = now / 1000;
   if (BROOK.wheel) { updateWheel(dt); BROOK.snow.value = sstep(0.3, 0.85, cover.uSnow.value); } // 水轮慢转（约 7 秒一圈），底下的叶片顺流走；土岸积雪跟地面差不多同时出现
   if (WATER.ice) { const I = WATER.ice, k1 = wx.name === 'Blizzard' ? 1 : 0; // 浮冰：暴雪时约 4 秒长出来，转晴时缩回去；看不到就不算
@@ -7520,7 +7902,8 @@ renderer.setAnimationLoop(() => {
   const sunD = sun.position.clone().sub(sun.target.position).normalize();
   const roofSig = (roofWx.sides ? roofWx.sides.reduce((a, S) => a + S.d * 7 + S.s, 0) : 0) + (roofWx.ridge ? roofWx.ridge.t * 13 : 0); // 屋脊雪塌掉时 d 不变，也要重画
   // 下雪时积雪一直在长，roofSig 每帧都变：积雪引起的重画最多 0.5 秒一次（原来每帧重画，单帧 303ms vs 12ms，2026-10-30）
-  if (shadowDirty || sunD.dot(shadowSun) < 0.99999 || (Math.abs(roofSig - shadowRoof) > 0.002 && now - shadowAt > 500)) {
+  const porchAction = SL.w === 'in' && fp && SL.liveT < 22 && Math.abs(camera.position.z-2)<9;
+  if ((porchAction && now-shadowAt>90) || shadowDirty || sunD.dot(shadowSun) < 0.99999 || (Math.abs(roofSig - shadowRoof) > 0.002 && now - shadowAt > 500)) {
     renderer.shadowMap.needsUpdate = true; shadowSun.copy(sunD); shadowRoof = roofSig; shadowDirty = false; shadowAt = now; volfog.sunDirty = true;
   }
   if (sceneReady) { innerCull(now); updateHalos(INNER.GONE); } // 灯的光晕要用 innerCull 这一帧藏了哪些（js/interact.js）
